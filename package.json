@@ -1,0 +1,24 @@
+{
+  "scripts": {
+    "seed": "node seeds/seed-n5.js",
+    "dev": "nodemon server.js",
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "bcrypt": "^6.0.0",
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "express-async-handler": "^1.2.0",
+    "jsonwebtoken": "^9.0.3",
+    "kuroshiro": "^1.2.0",
+    "kuroshiro-analyzer-kuromoji": "^1.1.0",
+    "mongodb": "^7.3.0",
+    "mongoose": "^9.7.0",
+    "node-cron": "^4.2.1",
+    "resend": "^6.12.4"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.14"
+  }
+}
