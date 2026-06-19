@@ -64,7 +64,6 @@ const StudySessionService = {
         );
 
         await session.save();
-        await StreakService.updateStreak(userId); // Streak'i güncelle
         return session;
     },
 

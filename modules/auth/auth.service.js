@@ -84,6 +84,10 @@ const AuthService = {
         const user = await User.findOne({ email });
         if (!user) throw new AppError('No user with that email', 404);
 
+        if (!user.isEmailVerified) {
+            throw new AppError('Please verify your email first', 403);
+        }
+
         const resetToken = crypto.randomBytes(20).toString('hex');
         user.resetPasswordToken = crypto
             .createHash('sha256')
@@ -139,8 +143,16 @@ const AuthService = {
         if (updates.surname) user.surname = updates.surname;
         if (updates.email) user.email = updates.email;
         if (updates.password) user.password = updates.password;
+        if (updates.dailyGoal) user.dailyGoal = updates.dailyGoal;
+        if (updates.fcmToken) user.fcmToken = updates.fcmToken;
+        if (updates.notificationSettings) {
+            user.notificationSettings = {
+                ...user.notificationSettings,
+                ...updates.notificationSettings
+            };
+        }
 
-        await user.save(); // pre-save hook çalışır, şifre hash'lenir
+        await user.save();
         return user;
     },
 

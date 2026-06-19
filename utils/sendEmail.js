@@ -1,10 +1,8 @@
-const { Resend } = require('resend');
-
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = require('../config/resend');
 
 const sendEmail = async ({ to, subject, html }) => {
     await resend.emails.send({
-        from: 'Kotoba <onboarding@resend.dev>',
+        from: process.env.EMAIL_FROM,
         to,
         subject,
         html

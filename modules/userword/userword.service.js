@@ -1,6 +1,10 @@
 const UserWord = require('../../models/UserWord');
 const Word = require('../../models/Word');
 const AppError = require('../../utils/AppError');
+const DailyWordPool = require('../../models/DailyWordPool');
+const StreakService = require('../streak/streak.service');
+const ProgressService = require('../progress/progress.service');
+const StudySessionService = require('../studysession/studysession.service');
 
 const NEW_WORD_DAILY_LIMIT = parseInt(process.env.NEW_WORD_DAILY_LIMIT) || 10;
 const REVIEW_DAILY_LIMIT = parseInt(process.env.REVIEW_DAILY_LIMIT) || 10;
@@ -37,11 +41,32 @@ const sm2 = (userWord, quality) => {
 const UserWordService = {
     async getTodayWords(userId, jlptLevel) {
         const today = new Date();
+        today.setHours(0, 0, 0, 0);
 
-        // Bugün tekrar edilecek kelimeler
-        const reviewWords = await UserWord.find({
+        // Bugün için havuz var mı kontrol et
+        let pool = await DailyWordPool.findOne({
             user: userId,
-            nextReviewDate: { $lte: today },
+            date: today,
+            jlptLevel
+        });
+
+        if (pool) {
+            // Havuz zaten var, sabit listeyi döndür
+            const reviewWords = await UserWord.find({
+                _id: { $in: pool.reviewWordIds }
+            }).populate('word');
+
+            const newWords = await Word.find({
+                _id: { $in: pool.newWordIds }
+            });
+
+            return { reviewWords, newWords };
+        }
+
+        // Havuz yok, yeni oluştur
+        const reviewWordsRaw = await UserWord.find({
+            user: userId,
+            nextReviewDate: { $lte: new Date() },
             status: { $in: ['learning', 'learned'] }
         })
         .populate({
@@ -53,17 +78,36 @@ const UserWordService = {
 
         const learnedWordIds = await UserWord.find({ user: userId }).distinct('word');
 
-        const newWords = await Word.find({
-            _id: { $nin: learnedWordIds },
-            ...(jlptLevel && { jlptLevel })
-        }).limit(NEW_WORD_DAILY_LIMIT);
+        // Rastgele yeni kelimeler
+        const newWordsRaw = await Word.aggregate([
+            {
+                $match: {
+                    _id: { $nin: learnedWordIds },
+                    ...(jlptLevel && { jlptLevel })
+                }
+            },
+            { $sample: { size: NEW_WORD_DAILY_LIMIT } }
+        ]);
 
-        return { reviewWords, newWords };
+        // Havuzu kaydet
+        await DailyWordPool.create({
+            user: userId,
+            date: today,
+            jlptLevel,
+            reviewWordIds: reviewWordsRaw.map(uw => uw._id),
+            newWordIds: newWordsRaw.map(w => w._id)
+        });
+
+        return { reviewWords: reviewWordsRaw, newWords: newWordsRaw };
     },
 
     async submitAnswer(userId, wordId, result) {
         const quality = qualityMap[result];
-        if (!quality) throw new AppError('Invalid result, use: easy, correct, empty, wrong', 400);
+        if (!quality) throw new AppError('Invalid result, use: correct, empty, wrong', 400);
+
+        // wordId gerçekten var mı kontrol et
+        const wordExists = await Word.findById(wordId);
+        if (!wordExists) throw new AppError('Word not found', 404);
 
         let userWord = await UserWord.findOne({ user: userId, word: wordId });
 
@@ -81,13 +125,24 @@ const UserWordService = {
 
         if (quality >= 3) {
             userWord.correctCount += 1;
-            userWord.status = repetitions >= 3 ? 'learned' : 'learning';
+            userWord.status = interval >= 21 ? 'learned' : 'learning';
         } else {
             userWord.wrongCount += 1;
             userWord.status = 'learning';
         }
 
         await userWord.save();
+
+        // İlk cevapta streak güncelle (kısmi ilerleme bile sayılsın)
+        await StreakService.updateStreak(userId);
+        await ProgressService.checkAndUnlockNextLevel(userId, wordExists.jlptLevel);
+
+        try {
+            await StudySessionService.updateSession(userId, result);
+        } catch (err) {
+            // Session yoksa sessizce geç, hata fırlatma
+        }
+
         return userWord;
     },
 
@@ -100,7 +155,39 @@ const UserWordService = {
         ]);
 
         return { total, learned, learning, review };
-    }
+    },
+
+    async getTodayMistakes(userId, page = 1, limit = 10) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+
+        const skip = (page - 1) * limit;
+
+        const [mistakes, total] = await Promise.all([
+            UserWord.find({
+                user: userId,
+                lastReviewDate: { $gte: today },
+                $expr: { $gt: ['$wrongCount', 0] }
+            })
+            .populate('word')
+            .sort({ wrongCount: -1 })
+            .skip(skip)
+            .limit(limit),
+
+            UserWord.countDocuments({
+                user: userId,
+                lastReviewDate: { $gte: today },
+                $expr: { $gt: ['$wrongCount', 0] }
+            })
+        ]);
+
+        return {
+            mistakes,
+            total,
+            page,
+            totalPages: Math.ceil(total / limit)
+        };
+    },
 };
 
 module.exports = UserWordService;

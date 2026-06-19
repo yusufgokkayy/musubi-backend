@@ -28,8 +28,21 @@ const ProgressService = {
     },
 
     async getProgress(userId) {
-        const progress = await Progress.find({ user: userId }).sort({ jlptLevel: -1 });
-        return progress;
+        const progress = await Progress.find({ user: userId }).sort({ jlptLevel: 1 });
+
+        const progressWithCount = await Promise.all(
+            progress.map(async (p) => {
+                const totalWords = await Word.countDocuments({ jlptLevel: p.jlptLevel });
+                return {
+                    jlptLevel: p.jlptLevel,
+                    isUnlocked: p.isUnlocked,
+                    completionRate: p.completionRate,
+                    totalWords
+                };
+            })
+        );
+
+        return progressWithCount;
     },
 
     async calculateCompletionRate(userId, jlptLevel) {

@@ -8,7 +8,14 @@ const HomeService = {
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const [todaySession, streak, progress, reviewCount] = await Promise.all([
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(0, 0, 0, 0);
+
+        const tomorrowEnd = new Date(tomorrow);
+        tomorrowEnd.setHours(23, 59, 59, 999);
+
+        const [todaySession, streak, progress, reviewCount, tomorrowReviews] = await Promise.all([
             // Bugünün session'ı
             StudySession.findOne({
                 user: userId,
@@ -26,6 +33,10 @@ const HomeService = {
                 user: userId,
                 nextReviewDate: { $lte: new Date() },
                 status: { $in: ['learning', 'learned'] }
+            }),
+            UserWord.countDocuments({
+                user: userId,
+                nextReviewDate: { $gte: tomorrow, $lte: tomorrowEnd }
             })
         ]);
 
@@ -47,7 +58,8 @@ const HomeService = {
                 isUnlocked: p.isUnlocked,
                 completionRate: p.completionRate
             })),
-            pendingReviews: reviewCount
+            pendingReviews: reviewCount,
+            tomorrowReviews  // bunu ekle
         };
     },
 

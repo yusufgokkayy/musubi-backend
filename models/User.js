@@ -44,6 +44,25 @@ const UserSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    dailyGoal: {
+        type: Number,
+        default: 20,
+        min: 5,
+        max: 50
+    },
+    notificationSettings: {
+        dailyReminder: { type: Boolean, default: true },
+        streakReminder: { type: Boolean, default: true },
+        wordLevelDown: { type: Boolean, default: true }
+    },
+    fcmToken: {
+        type: String,
+        select: false
+    },
+    timezone: {
+        type: String,
+        default: 'Europe/Istanbul'
+    },
     emailVerificationToken: String,
     emailVerificationExpire: Date,
     resetPasswordToken: String,

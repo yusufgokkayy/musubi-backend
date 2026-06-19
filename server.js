@@ -10,6 +10,8 @@ dotenv.config({ path: './config/.env' });
 
 connectDatabase();
 
+require('./config/firebase');
+
 const app = express();
 
 app.use(cors());

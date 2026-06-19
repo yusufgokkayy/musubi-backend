@@ -17,7 +17,13 @@ const UserWordController = {
     getUserStats: catchAsync(async (req, res) => {
         const data = await UserWordService.getUserStats(req.user.id);
         res.status(200).json({ success: true, data: data });
-    })
+    }),
+
+    getTodayMistakes: catchAsync(async (req, res) => {
+        const { page, limit } = req.query;
+        const result = await UserWordService.getTodayMistakes(req.user.id, page, limit);
+        res.status(200).json({ success: true, data: result });
+    }),
 };
 
 module.exports = UserWordController;
