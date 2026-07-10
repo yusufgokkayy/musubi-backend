@@ -1,10 +1,15 @@
+const mongoose = require('mongoose');
 const UserWord = require('../../models/UserWord');
 const Word = require('../../models/Word');
+const User = require('../../models/User');
 const AppError = require('../../utils/AppError');
 const DailyWordPool = require('../../models/DailyWordPool');
 const StreakService = require('../streak/streak.service');
 const ProgressService = require('../progress/progress.service');
 const StudySessionService = require('../studysession/studysession.service');
+const NotificationService = require('../notification/notification.service');
+const { startOfDayInTz } = require('../../utils/date.util');
+const logEvent = require('../../utils/event.util');
 
 const NEW_WORD_DAILY_LIMIT = parseInt(process.env.NEW_WORD_DAILY_LIMIT) || 10;
 const REVIEW_DAILY_LIMIT = parseInt(process.env.REVIEW_DAILY_LIMIT) || 10;
@@ -38,10 +43,20 @@ const sm2 = (userWord, quality) => {
     return { easeFactor, interval, repetitions, nextReviewDate };
 };
 
+// SM-2 durumundan 1-5 arası kelime seviyesi türetir.
+// Yanlış cevap repetitions'ı sıfırladığı için seviye otomatik 1'e düşer.
+const computeMasteryLevel = ({ repetitions, interval }) => {
+    if (repetitions === 0) return 1;   // hiç doğru cevap yok / az önce yanlış
+    if (interval >= 21) return 5;      // 'learned' eşiğiyle uyumlu
+    if (interval >= 10) return 4;
+    if (interval >= 6) return 3;       // 2. başarılı tekrar
+    return 2;                          // 1. başarılı tekrar
+};
+
 const UserWordService = {
     async getTodayWords(userId, jlptLevel) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const user = await User.findById(userId).select('dailyGoal timezone');
+        const today = startOfDayInTz(user?.timezone);
 
         // Bugün için havuz var mı kontrol et
         let pool = await DailyWordPool.findOne({
@@ -63,7 +78,14 @@ const UserWordService = {
             return { reviewWords, newWords };
         }
 
-        // Havuz yok, yeni oluştur
+        // Havuz yok, yeni oluştur.
+        // Havuz boyutunu kullanıcının günlük hedefi belirler (env limitleri fallback).
+        // Not: Havuz gün boyu sabittir; dailyGoal gün içinde değişirse yarın etkili olur.
+        const goal = user?.dailyGoal || (NEW_WORD_DAILY_LIMIT + REVIEW_DAILY_LIMIT);
+
+        // Tekrarlar öncelikli: hedefin en fazla %70'i tekrar
+        const reviewLimit = Math.ceil(goal * 0.7);
+
         const reviewWordsRaw = await UserWord.find({
             user: userId,
             nextReviewDate: { $lte: new Date() },
@@ -73,21 +95,27 @@ const UserWordService = {
             path: 'word',
             match: jlptLevel ? { jlptLevel } : {}
         })
-        .sort({ nextReviewDate: 1 })
-        .limit(REVIEW_DAILY_LIMIT);
+        // En eski vade önce; eşitlikte en kırılgan (düşük seviyeli) kelime kazanır —
+        // uzun aradan dönüşte kontenjan yetmezse sağlam hafızalı kelimeler bekleyebilir
+        .sort({ nextReviewDate: 1, masteryLevel: 1 })
+        .limit(reviewLimit);
 
         const learnedWordIds = await UserWord.find({ user: userId }).distinct('word');
 
-        // Rastgele yeni kelimeler
-        const newWordsRaw = await Word.aggregate([
-            {
-                $match: {
-                    _id: { $nin: learnedWordIds },
-                    ...(jlptLevel && { jlptLevel })
-                }
-            },
-            { $sample: { size: NEW_WORD_DAILY_LIMIT } }
-        ]);
+        // Kalan hedefi rastgele yeni kelimelerle doldur
+        const newLimit = Math.max(0, goal - reviewWordsRaw.length);
+        const newWordsRaw = newLimit > 0
+            ? await Word.aggregate([
+                {
+                    $match: {
+                        _id: { $nin: learnedWordIds },
+                        isCore: true,
+                        ...(jlptLevel && { jlptLevel })
+                    }
+                },
+                { $sample: { size: newLimit } }
+            ])
+            : [];
 
         // Havuzu kaydet
         await DailyWordPool.create({
@@ -97,6 +125,28 @@ const UserWordService = {
             reviewWordIds: reviewWordsRaw.map(uw => uw._id),
             newWordIds: newWordsRaw.map(w => w._id)
         });
+
+        logEvent(userId, 'daily_pool_created', {
+            jlptLevel,
+            reviewCount: reviewWordsRaw.length,
+            newCount: newWordsRaw.length,
+            goal
+        });
+
+        // Günün görevi bildirimi (havuz günde bir kez oluşur)
+        try {
+            const totalToday = reviewWordsRaw.length + newWordsRaw.length;
+            if (totalToday > 0) {
+                await NotificationService.create(userId, {
+                    type: 'daily_task',
+                    title: 'Bugünün Görevi',
+                    body: `Bugün ${totalToday} ezberlenecek kelime seni bekliyor!`,
+                    data: { totalWords: totalToday, jlptLevel }
+                });
+            }
+        } catch (err) {
+            // Bildirim hatası kelime akışını bozmasın
+        }
 
         return { reviewWords: reviewWordsRaw, newWords: newWordsRaw };
     },
@@ -123,6 +173,10 @@ const UserWordService = {
         userWord.nextReviewDate = nextReviewDate;
         userWord.lastReviewDate = new Date();
 
+        const previousLevel = userWord.masteryLevel || 1;
+        userWord.masteryLevel = computeMasteryLevel({ repetitions, interval });
+        const levelDropped = userWord.masteryLevel < previousLevel;
+
         if (quality >= 3) {
             userWord.correctCount += 1;
             userWord.status = interval >= 21 ? 'learned' : 'learning';
@@ -132,6 +186,24 @@ const UserWordService = {
         }
 
         await userWord.save();
+
+        if (levelDropped) {
+            try {
+                await NotificationService.create(userId, {
+                    type: 'word_level_down',
+                    title: 'Kelimenin Seviyesi Düştü',
+                    body: `${wordExists.kanji} (${wordExists.romaji}) kelimesinin seviyesi ${userWord.masteryLevel}. seviyeye düştü. Tekrar hatırla!`,
+                    data: {
+                        wordId: wordExists._id,
+                        kanji: wordExists.kanji,
+                        previousLevel,
+                        newLevel: userWord.masteryLevel
+                    }
+                });
+            } catch (err) {
+                // Bildirim hatası cevap akışını bozmasın
+            }
+        }
 
         // İlk cevapta streak güncelle (kısmi ilerleme bile sayılsın)
         await StreakService.updateStreak(userId);
@@ -143,23 +215,96 @@ const UserWordService = {
             // Session yoksa sessizce geç, hata fırlatma
         }
 
-        return userWord;
+        logEvent(userId, 'answer_submitted', {
+            wordId,
+            jlptLevel: wordExists.jlptLevel,
+            result,
+            masteryLevel: userWord.masteryLevel,
+            levelDropped
+        });
+
+        return { ...userWord.toObject(), levelDropped, previousLevel };
+    },
+
+    // Günlük cron: uzun süre tekrar edilmeyen kelimelerin GÖRÜNEN seviyesini
+    // kademeli düşürür. SM-2 alanlarına (interval/easeFactor/repetitions) asla
+    // dokunmaz — kullanıcı dönüp doğru cevap verdiği an seviye, SM-2 durumundan
+    // yeniden hesaplanıp anında geri zıplar. Kural: kelime vadesini kendi
+    // aralığının 2 katı kadar aşınca 1 seviye, sonraki her aralık katında 1
+    // seviye daha düşer (taban 1). İdempotent: hedef seviye SM-2 tabanından
+    // hesaplandığı için aynı gün tekrar çalışması ek düşüş yaratmaz.
+    async applyMasteryDecay() {
+        const DAY = 24 * 60 * 60 * 1000;
+        const now = Date.now();
+
+        const cursor = UserWord.find({
+            masteryLevel: { $gt: 1 },
+            $expr: {
+                $gte: [
+                    { $subtract: [new Date(now), '$nextReviewDate'] },
+                    { $multiply: [{ $max: ['$interval', 1] }, 2 * DAY] }
+                ]
+            }
+        }).cursor();
+
+        const updates = [];
+        const perUser = new Map();
+
+        for await (const uw of cursor) {
+            const overdueRatio = (now - uw.nextReviewDate.getTime()) / (Math.max(uw.interval, 1) * DAY);
+            const drops = Math.max(0, Math.floor(overdueRatio) - 1);
+            const baseLevel = computeMasteryLevel(uw);
+            const target = Math.max(1, baseLevel - drops);
+
+            if (target < uw.masteryLevel) {
+                updates.push({
+                    updateOne: {
+                        filter: { _id: uw._id },
+                        update: { $set: { masteryLevel: target } }
+                    }
+                });
+                const key = String(uw.user);
+                const entry = perUser.get(key) || { count: 0, sampleWordIds: [] };
+                entry.count += 1;
+                if (entry.sampleWordIds.length < 3) entry.sampleWordIds.push(uw.word);
+                perUser.set(key, entry);
+            }
+        }
+
+        if (updates.length > 0) await UserWord.bulkWrite(updates);
+
+        for (const [userId, info] of perUser) {
+            try {
+                await NotificationService.createDecaySummary(userId, info);
+            } catch (err) {
+                // Bildirim hatası decay akışını bozmasın
+            }
+        }
+
+        return { affectedWords: updates.length, affectedUsers: perUser.size };
     },
 
     async getUserStats(userId) {
-        const [total, learned, learning, review] = await Promise.all([
+        const [total, learned, learning, review, levelCounts] = await Promise.all([
             UserWord.countDocuments({ user: userId }),
             UserWord.countDocuments({ user: userId, status: 'learned' }),
             UserWord.countDocuments({ user: userId, status: 'learning' }),
-            UserWord.countDocuments({ user: userId, nextReviewDate: { $lte: new Date() } })
+            UserWord.countDocuments({ user: userId, nextReviewDate: { $lte: new Date() } }),
+            UserWord.aggregate([
+                { $match: { user: new mongoose.Types.ObjectId(userId) } },
+                { $group: { _id: { $ifNull: ['$masteryLevel', 1] }, count: { $sum: 1 } } }
+            ])
         ]);
 
-        return { total, learned, learning, review };
+        const byMasteryLevel = { 1: 0, 2: 0, 3: 0, 4: 0, 5: 0 };
+        levelCounts.forEach(l => { byMasteryLevel[l._id] = l.count; });
+
+        return { total, learned, learning, review, byMasteryLevel };
     },
 
     async getTodayMistakes(userId, page = 1, limit = 10) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const user = await User.findById(userId).select('timezone');
+        const today = startOfDayInTz(user?.timezone);
 
         const skip = (page - 1) * limit;
 

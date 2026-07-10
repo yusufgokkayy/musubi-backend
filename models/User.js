@@ -1,6 +1,5 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
 
 const UserSchema = new mongoose.Schema({
     name: {
@@ -15,16 +14,12 @@ const UserSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Please provide an email'],
         unique: true,
-        match: [/^[\w-\.]+@([\w-]+\.)+[\w-]{2,4}$/, 'Please provide a valid email']
+        match: [/^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$/, 'Please provide a valid email']
     },
     password: {
         type: String,
-        minlength: 6,
+        minlength: [8, 'Şifreniz çok kısa (en az 8 karakter olmalı)'],
         required: [true, 'Please provide a password'],
-        select: false
-    },
-        refreshToken: {
-        type: String,
         select: false
     },
     profile_image: {
@@ -77,14 +72,6 @@ UserSchema.pre('save', async function () {
     if (!this.isModified('password')) return;
     this.password = await bcrypt.hash(this.password, 10);
 });
-
-UserSchema.methods.generateJWT = function () {
-    return jwt.sign(
-        { id: this._id },
-        process.env.JWT_SECRET,
-        { expiresIn: process.env.JWT_EXPIRE }
-    );
-};
 
 UserSchema.methods.comparePassword = async function (enteredPassword) {
     return await bcrypt.compare(enteredPassword, this.password);

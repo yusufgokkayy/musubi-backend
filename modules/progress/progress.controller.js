@@ -7,15 +7,8 @@ const ProgressController = {
         res.status(200).json({ success: true, data: progress });
     }),
 
-    checkAndUnlock: catchAsync(async (req, res) => {
-        const { jlptLevel } = req.body;
-        const result = await ProgressService.checkAndUnlockNextLevel(req.user.id, jlptLevel);
-        res.status(200).json({ success: true, data: result });
-    }),
-
-    unlockByQuiz: catchAsync(async (req, res) => {
-        const { jlptLevel } = req.body;
-        const result = await ProgressService.unlockByQuiz(req.user.id, jlptLevel);
+    getDistribution: catchAsync(async (req, res) => {
+        const result = await ProgressService.getLevelDistribution(req.user.id, req.params.jlptLevel);
         res.status(200).json({ success: true, data: result });
     })
 };

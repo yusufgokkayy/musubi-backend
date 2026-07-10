@@ -1,45 +1,64 @@
-const express = require('express');
 const dotenv = require('dotenv');
-const connectDatabase = require('./config/db');
-const errorHandler = require('./middlewares/errorHandler');
-const cors = require('cors');
-const cron = require('node-cron');
-const StreakService = require('./modules/streak/streak.service');
-
 dotenv.config({ path: './config/.env' });
+
+const connectDatabase = require('./config/db');
+const cron = require('node-cron');
 
 connectDatabase();
 
 require('./config/firebase');
 
-const app = express();
+const app = require('./app');
+const StreakService = require('./modules/streak/streak.service');
+const NotificationService = require('./modules/notification/notification.service');
+const UserWordService = require('./modules/userword/userword.service');
 
-app.use(cors());
-
-app.use(express.json());
-
-app.use('/api/auth', require('./modules/auth/auth.routes'));
-app.use('/api/words', require('./modules/word/word.routes'));
-app.use('/api/userwords', require('./modules/userword/userword.routes'));
-app.use('/api/sessions', require('./modules/studysession/studysession.routes'));
-app.use('/api/progress', require('./modules/progress/progress.routes'));
-app.use('/api/streak', require('./modules/streak/streak.routes'));
-app.use('/api/home', require('./modules/home/home.routes'));
-
-// Her gece 00:01'de çalışır
-cron.schedule('1 0 * * *', async () => {
-    console.log('Streak reset çalışıyor...');
-    await StreakService.resetExpiredStreaks();
+// Her saat başı çalışır: her kullanıcının KENDİ saat diliminde günü geçmişse
+// serisi sıfırlanır (timezone-aware, idempotent)
+cron.schedule('5 * * * *', async () => {
+    try {
+        await StreakService.resetExpiredStreaks();
+    } catch (err) {
+        console.error('Streak reset hatası:', err.message);
+    }
 });
 
-app.use(errorHandler);
+// Her saat başı çalışır: yerel saati 19:00 olan kullanıcılara, o gün
+// çalışmamışlarsa seri hatırlatması/uyarısı oluşturur
+cron.schedule('10 * * * *', async () => {
+    try {
+        await NotificationService.generateDailyNotifications();
+    } catch (err) {
+        console.error('Bildirim üretim hatası:', err.message);
+    }
+});
 
-process.on('unhandledRejection', (err) => {
-    console.error('Unhandled Rejection:', err.message);
-    process.exit(1);
+// Günde bir: uzun süre tekrar edilmeyen kelimelerin görünen seviyesini
+// kademeli düşürür (SM-2 verisine dokunmaz, ilk doğru cevapta geri zıplar)
+cron.schedule('0 3 * * *', async () => {
+    try {
+        const result = await UserWordService.applyMasteryDecay();
+        if (result.affectedWords > 0) {
+            console.log(`Mastery decay: ${result.affectedWords} kelime, ${result.affectedUsers} kullanıcı`);
+        }
+    } catch (err) {
+        console.error('Mastery decay hatası:', err.message);
+    }
 });
 
 const PORT = process.env.PORT || 5000;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT} - ${process.env.NODE_ENV}`);
+});
+
+// Graceful shutdown: tek bir başıboş promise tüm sunucuyu anında düşürmesin;
+// açık istekler tamamlanır, sonra süreç kapanır
+process.on('unhandledRejection', (err) => {
+    console.error('Unhandled Rejection:', err);
+    server.close(() => process.exit(1));
+});
+
+process.on('SIGTERM', () => {
+    console.log('SIGTERM alındı, sunucu kapatılıyor...');
+    server.close(() => process.exit(0));
 });

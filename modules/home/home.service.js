@@ -2,18 +2,15 @@ const StudySession = require('../../models/StudySession');
 const Streak = require('../../models/Streak');
 const Progress = require('../../models/Progress');
 const UserWord = require('../../models/UserWord');
+const User = require('../../models/User');
+const { startOfDayInTz, addDays } = require('../../utils/date.util');
 
 const HomeService = {
     async getSummary(userId) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        tomorrow.setHours(0, 0, 0, 0);
-
-        const tomorrowEnd = new Date(tomorrow);
-        tomorrowEnd.setHours(23, 59, 59, 999);
+        const user = await User.findById(userId).select('timezone');
+        const today = startOfDayInTz(user?.timezone);
+        const tomorrow = addDays(today, 1);
+        const tomorrowEnd = addDays(today, 2);
 
         const [todaySession, streak, progress, reviewCount, tomorrowReviews] = await Promise.all([
             // Bugünün session'ı
@@ -36,7 +33,7 @@ const HomeService = {
             }),
             UserWord.countDocuments({
                 user: userId,
-                nextReviewDate: { $gte: tomorrow, $lte: tomorrowEnd }
+                nextReviewDate: { $gte: tomorrow, $lt: tomorrowEnd }
             })
         ]);
 

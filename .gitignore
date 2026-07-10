@@ -1,8 +1,19 @@
-# Dependencies
+# Bağımlılıklar
 node_modules/
 
-# Environment variables
+# Gizli bilgiler — asla commit etme
+config/.env
 .env
-
-test.html
 firebase-service-account.json
+
+# Harici kelime listesi (ayrı git klonu, seed için lokalde bulunmalı)
+jlpt-word-list/
+
+# İndirme cache'i (select-core ilk çalıştırmada yeniden indirir)
+seeds/data/
+
+# Araç / geçici dosyalar
+.claude/
+*.log
+.DS_Store
+test_code.txt

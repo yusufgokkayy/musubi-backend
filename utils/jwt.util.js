@@ -1,4 +1,5 @@
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const signAccessToken = (id) => {
     return jwt.sign({ id }, process.env.JWT_SECRET, {
@@ -7,7 +8,9 @@ const signAccessToken = (id) => {
 };
 
 const signRefreshToken = (id) => {
-    return jwt.sign({ id }, process.env.JWT_REFRESH_SECRET, {
+    // jti: aynı saniyede üretilen iki token'ın birebir aynı string olmasını
+    // engeller — cihaz oturumları token hash'iyle ayrıştığı için benzersizlik şart
+    return jwt.sign({ id, jti: crypto.randomUUID() }, process.env.JWT_REFRESH_SECRET, {
         expiresIn: process.env.JWT_REFRESH_EXPIRE || '7d'
     });
 };

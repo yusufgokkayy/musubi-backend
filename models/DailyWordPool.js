@@ -24,6 +24,7 @@ const DailyWordPoolSchema = new mongoose.Schema({
     }]
 });
 
-DailyWordPoolSchema.index({ user: 1, date: 1 }, { unique: true });
+// Kullanıcı aynı gün farklı JLPT seviyeleri için ayrı havuz oluşturabilir
+DailyWordPoolSchema.index({ user: 1, date: 1, jlptLevel: 1 }, { unique: true });
 
 module.exports = mongoose.model('DailyWordPool', DailyWordPoolSchema);

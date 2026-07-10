@@ -1,5 +1,5 @@
 const Streak = require('../../models/Streak');
-const StudySession = require('../../models/StudySession');
+const { startOfDayInTz, addDays, startOfTodayForUser } = require('../../utils/date.util');
 
 const StreakService = {
     async initializeStreak(userId) {
@@ -10,23 +10,15 @@ const StreakService = {
         let streak = await Streak.findOne({ user: userId });
         if (!streak) streak = await Streak.create({ user: userId });
 
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        // "Bugün" kullanıcının kendi saat dilimine göre hesaplanır
+        const today = await startOfTodayForUser(userId);
+        const yesterday = addDays(today, -1);
 
-        const yesterday = new Date(today);
-        yesterday.setDate(yesterday.getDate() - 1);
-
-        const lastStudy = streak.lastStudyDate
-            ? new Date(streak.lastStudyDate)
-            : null;
-
-        if (lastStudy) {
-            lastStudy.setHours(0, 0, 0, 0);
-
-            if (lastStudy.getTime() === today.getTime()) {
+        if (streak.lastStudyDate) {
+            if (streak.lastStudyDate >= today) {
                 // Bugün zaten güncellendi
                 return streak;
-            } else if (lastStudy.getTime() === yesterday.getTime()) {
+            } else if (streak.lastStudyDate >= yesterday) {
                 // Dün çalıştı, seri devam ediyor
                 streak.currentStreak += 1;
             } else {
@@ -53,16 +45,25 @@ const StreakService = {
         return streak;
     },
 
+    // Cron ile her saat başı çalışır: her kullanıcının KENDİ saat diliminde
+    // "dünden beri çalışmamış" olanların serisi sıfırlanır. İdempotent.
     async resetExpiredStreaks() {
-        // Cron ile her gece çalışır
-        const yesterday = new Date();
-        yesterday.setDate(yesterday.getDate() - 1);
-        yesterday.setHours(0, 0, 0, 0);
+        const streaks = await Streak.find({ currentStreak: { $gt: 0 } })
+            .populate('user', 'timezone');
 
-        await Streak.updateMany(
-            { lastStudyDate: { $lt: yesterday } },
-            { currentStreak: 0 }
-        );
+        for (const streak of streaks) {
+            try {
+                const today = startOfDayInTz(streak.user?.timezone);
+                const yesterday = addDays(today, -1);
+
+                if (!streak.lastStudyDate || streak.lastStudyDate < yesterday) {
+                    streak.currentStreak = 0;
+                    await streak.save();
+                }
+            } catch (err) {
+                console.error(`Streak reset hatası (${streak.user?._id}):`, err.message);
+            }
+        }
     }
 };
 

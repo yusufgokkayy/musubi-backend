@@ -1,9 +1,13 @@
 const Word = require('../../models/Word');
 const AppError = require('../../utils/AppError');
 
+// Kullanıcı girdisindeki regex özel karakterlerini etkisizleştirir (ReDoS/regex injection koruması)
+const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
 const WordService = {
-    async getAllWords({ jlptLevel, type, page = 1, limit = 20 }) {
-        const filter = {};
+    async getAllWords({ jlptLevel, type, page = 1, limit = 20, includeAll = false }) {
+        // Kütüphane varsayılan olarak aktif (core) kelime havuzunu gösterir
+        const filter = includeAll ? {} : { isCore: true };
         if (jlptLevel) filter.jlptLevel = jlptLevel;
         if (type) filter.type = type;
 
@@ -29,11 +33,13 @@ const WordService = {
     },
 
     async searchWords(query) {
+        const safeQuery = escapeRegex(String(query).slice(0, 100));
         const words = await Word.find({
+            isCore: true,
             $or: [
-                { kanji: { $regex: query, $options: 'i' } },
-                { romaji: { $regex: query, $options: 'i' } },
-                { meaning: { $regex: query, $options: 'i' } }
+                { kanji: { $regex: safeQuery, $options: 'i' } },
+                { romaji: { $regex: safeQuery, $options: 'i' } },
+                { meaning: { $regex: safeQuery, $options: 'i' } }
             ]
         }).limit(20);
         return words;

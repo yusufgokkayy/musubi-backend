@@ -1,0 +1,324 @@
+const QuizAttempt = require('../../models/QuizAttempt');
+const Word = require('../../models/Word');
+const Progress = require('../../models/Progress');
+const AppError = require('../../utils/AppError');
+const ProgressService = require('../progress/progress.service');
+const logEvent = require('../../utils/event.util');
+
+const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
+
+const QUIZ_CONFIG = {
+    levelup: { questionCount: 35, passThreshold: 85 },
+    placement: { questionCount: 12, passThreshold: 70 }
+};
+const COOLDOWN_DAYS = [3, 7, 14]; // 1., 2., 3.+ başarısız deneme
+const EXPIRY_MINUTES = 30;
+const MIN_QUESTIONS = 10;
+
+const shuffle = (arr) => {
+    const a = [...arr];
+    for (let i = a.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [a[i], a[j]] = [a[j], a[i]];
+    }
+    return a;
+};
+
+// Client'a cevap anahtarı sızdırmadan soru listesi
+const sanitizeQuestions = (questions) =>
+    questions.map((q, index) => ({
+        index,
+        format: q.format,
+        prompt: q.prompt,
+        choices: q.choices
+    }));
+
+const attemptResponse = (attempt) => ({
+    quizId: attempt._id,
+    type: attempt.type,
+    jlptLevel: attempt.jlptLevel,
+    passThreshold: QUIZ_CONFIG[attempt.type].passThreshold,
+    expiresAt: new Date(attempt.createdAt.getTime() + EXPIRY_MINUTES * 60 * 1000),
+    totalQuestions: attempt.questions.length,
+    questions: sanitizeQuestions(attempt.questions)
+});
+
+const QuizService = {
+    // Havuzdan rastgele, her denemede taze soru seti üretir
+    async generateQuestions(jlptLevel, count) {
+        const targets = await Word.aggregate([
+            { $match: { jlptLevel, isCore: true } },
+            { $sample: { size: count } }
+        ]);
+
+        if (targets.length < MIN_QUESTIONS) {
+            throw new AppError('Bu seviyede quiz için yeterli kelime yok', 400);
+        }
+
+        // Çeldirici havuzu: aynı seviyeden, hedef kelimeler hariç
+        const pool = await Word.aggregate([
+            { $match: { jlptLevel, isCore: true, _id: { $nin: targets.map(t => t._id) } } },
+            { $sample: { size: 80 } }
+        ]);
+
+        const questions = [];
+        for (const word of targets) {
+            const formats = ['meaning', 'reverse'];
+            if (word.kanji !== word.romaji) formats.push('reading'); // kana-only kelimede okunuş sorusu anlamsız
+            const format = formats[Math.floor(Math.random() * formats.length)];
+            const field = format === 'meaning' ? 'meaning' : format === 'reverse' ? 'kanji' : 'romaji';
+            const correct = word[field];
+
+            // Aynı tür öncelikli, benzersiz metinli 3 çeldirici
+            const sameType = pool.filter(p => p.type === word.type);
+            const otherType = pool.filter(p => p.type !== word.type);
+            const seen = new Set([correct]);
+            const distractors = [];
+            for (const cand of [...shuffle(sameType), ...shuffle(otherType)]) {
+                const val = cand[field];
+                if (!val || seen.has(val)) continue;
+                seen.add(val);
+                distractors.push(val);
+                if (distractors.length === 3) break;
+            }
+            if (distractors.length < 3) continue; // yeterli çeldirici yoksa soruyu atla
+
+            const choices = shuffle([correct, ...distractors]);
+            const prompt =
+                format === 'meaning' ? { kanji: word.kanji, romaji: word.romaji } :
+                format === 'reverse' ? { meaning: word.meaning } :
+                { kanji: word.kanji };
+
+            questions.push({
+                word: word._id,
+                format,
+                prompt,
+                choices,
+                correctIndex: choices.indexOf(correct)
+            });
+        }
+
+        if (questions.length < MIN_QUESTIONS) {
+            throw new AppError('Bu seviyede quiz için yeterli kelime yok', 400);
+        }
+        return questions;
+    },
+
+    // Süresi geçmiş in_progress denemeyi expire eder, geçerliyse döndürür
+    async resolveInProgress(userId, type, jlptLevel = null) {
+        const filter = { user: userId, type, status: 'in_progress' };
+        if (jlptLevel) filter.jlptLevel = jlptLevel;
+
+        const attempt = await QuizAttempt.findOne(filter).sort({ createdAt: -1 });
+        if (!attempt) return null;
+
+        if (Date.now() > attempt.createdAt.getTime() + EXPIRY_MINUTES * 60 * 1000) {
+            attempt.status = 'expired';
+            await attempt.save();
+            return null;
+        }
+        return attempt;
+    },
+
+    async startLevelup(userId, jlptLevel) {
+        const currentIndex = LEVELS.indexOf(jlptLevel);
+        if (currentIndex === -1) throw new AppError('Invalid level', 400);
+        if (currentIndex === LEVELS.length - 1) throw new AppError('N1 son seviye, atlanacak seviye yok', 400);
+
+        const current = await Progress.findOne({ user: userId, jlptLevel });
+        if (!current?.isUnlocked) throw new AppError('Bu seviye henüz kilitli', 403);
+
+        const next = await Progress.findOne({ user: userId, jlptLevel: LEVELS[currentIndex + 1] });
+        if (next?.isUnlocked) throw new AppError('Sonraki seviye zaten açık', 400);
+
+        // Cooldown: son başarısız denemenin beklemesi bitti mi?
+        const lastFailed = await QuizAttempt.findOne({
+            user: userId, type: 'levelup', jlptLevel, status: 'completed', passed: false
+        }).sort({ createdAt: -1 });
+
+        if (lastFailed?.nextAttemptAllowedAt && lastFailed.nextAttemptAllowedAt > new Date()) {
+            const err = new AppError('Sınav hakkın henüz yenilenmedi', 403);
+            err.nextAttemptAllowedAt = lastFailed.nextAttemptAllowedAt;
+            throw err;
+        }
+
+        // Yarım kalmış geçerli deneme varsa onu döndür (soru sızdırma avantajı yok, sorular zaten rastgele)
+        const existing = await QuizService.resolveInProgress(userId, 'levelup', jlptLevel);
+        if (existing) return attemptResponse(existing);
+
+        const questions = await QuizService.generateQuestions(jlptLevel, QUIZ_CONFIG.levelup.questionCount);
+        const attempt = await QuizAttempt.create({ user: userId, type: 'levelup', jlptLevel, questions });
+        logEvent(userId, 'quiz_started', { type: 'levelup', jlptLevel });
+        return attemptResponse(attempt);
+    },
+
+    // Merdiven mantığı: N5'ten başlar, her geçilen basamak bir sonraki seviyeyi açar
+    async startPlacement(userId) {
+        const completedPlacement = await QuizAttempt.findOne({
+            user: userId, type: 'placement', status: 'completed', passed: false
+        });
+        const unlockedCount = await Progress.countDocuments({ user: userId, isUnlocked: true });
+
+        if (completedPlacement || unlockedCount > LEVELS.length - 1) {
+            throw new AppError('Seviye belirleme sınavı tamamlanmış', 400);
+        }
+
+        // Basamak: son geçilen placement basamağının bir üstü, hiç yoksa N5
+        const lastPassed = await QuizAttempt.find({
+            user: userId, type: 'placement', status: 'completed', passed: true
+        }).sort({ createdAt: -1 }).limit(1);
+
+        let rung = 'N5';
+        if (lastPassed.length > 0) {
+            const idx = LEVELS.indexOf(lastPassed[0].jlptLevel);
+            if (idx === LEVELS.length - 1) throw new AppError('Seviye belirleme sınavı tamamlanmış', 400);
+            rung = LEVELS[idx + 1];
+        } else if (unlockedCount > 1) {
+            // Placement'a hiç girmemiş ama seviye açmış kullanıcı yerleştirme alamaz
+            throw new AppError('Seviye belirleme sınavı yalnızca yeni hesaplar için', 400);
+        }
+
+        const existing = await QuizService.resolveInProgress(userId, 'placement');
+        if (existing) return attemptResponse(existing);
+
+        const questions = await QuizService.generateQuestions(rung, QUIZ_CONFIG.placement.questionCount);
+        const attempt = await QuizAttempt.create({ user: userId, type: 'placement', jlptLevel: rung, questions });
+        logEvent(userId, 'quiz_started', { type: 'placement', jlptLevel: rung });
+        return attemptResponse(attempt);
+    },
+
+    async start(userId, { type, jlptLevel }) {
+        if (type === 'placement') return QuizService.startPlacement(userId);
+        if (type === 'levelup') return QuizService.startLevelup(userId, jlptLevel);
+        throw new AppError('Invalid quiz type, use: placement, levelup', 400);
+    },
+
+    async submit(userId, attemptId, answers) {
+        const attempt = await QuizAttempt.findOne({ _id: attemptId, user: userId });
+        if (!attempt) throw new AppError('Quiz not found', 404);
+        if (attempt.status !== 'in_progress') throw new AppError('Bu quiz zaten sonuçlanmış', 400);
+
+        if (Date.now() > attempt.createdAt.getTime() + EXPIRY_MINUTES * 60 * 1000) {
+            attempt.status = 'expired';
+            await attempt.save();
+            throw new AppError('Quiz süresi doldu, yeniden başlat', 400);
+        }
+
+        if (!Array.isArray(answers) || answers.length !== attempt.questions.length) {
+            throw new AppError(`answers dizisi ${attempt.questions.length} eleman olmalı`, 400);
+        }
+
+        const config = QUIZ_CONFIG[attempt.type];
+        let correctCount = 0;
+        const results = attempt.questions.map((q, i) => {
+            const isCorrect = answers[i] === q.correctIndex;
+            if (isCorrect) correctCount++;
+            return { index: i, yourAnswer: answers[i], correctIndex: q.correctIndex, correct: isCorrect };
+        });
+
+        const score = Math.round((correctCount / attempt.questions.length) * 100);
+        const passed = score >= config.passThreshold;
+
+        attempt.score = score;
+        attempt.passed = passed;
+        attempt.status = 'completed';
+        attempt.completedAt = new Date();
+
+        const response = {
+            score,
+            passed,
+            passThreshold: config.passThreshold,
+            correctCount,
+            totalQuestions: attempt.questions.length,
+            results
+        };
+
+        const currentIndex = LEVELS.indexOf(attempt.jlptLevel);
+        const nextLevel = currentIndex < LEVELS.length - 1 ? LEVELS[currentIndex + 1] : null;
+
+        if (passed && nextLevel) {
+            try {
+                const unlock = await ProgressService.unlockByQuiz(userId, attempt.jlptLevel);
+                response.unlockedLevel = unlock.level;
+            } catch (err) {
+                // Zaten açıksa sorun değil, quiz sonucu geçerli
+            }
+        }
+
+        if (attempt.type === 'levelup' && !passed) {
+            const lastFailed = await QuizAttempt.findOne({
+                user: userId, type: 'levelup', jlptLevel: attempt.jlptLevel,
+                status: 'completed', passed: false, _id: { $ne: attempt._id }
+            }).sort({ createdAt: -1 });
+
+            attempt.failCount = (lastFailed?.failCount || 0) + 1;
+            const days = COOLDOWN_DAYS[Math.min(attempt.failCount - 1, COOLDOWN_DAYS.length - 1)];
+            attempt.nextAttemptAllowedAt = new Date(Date.now() + days * 24 * 60 * 60 * 1000);
+
+            response.failCount = attempt.failCount;
+            response.cooldownDays = days;
+            response.nextAttemptAllowedAt = attempt.nextAttemptAllowedAt;
+        }
+
+        if (attempt.type === 'placement') {
+            // Geçtiyse ve üst basamak varsa merdiven devam eder; kaldıysa veya N1 geçildiyse biter
+            response.nextRung = passed && nextLevel ? nextLevel : null;
+            response.placementFinished = !response.nextRung;
+        }
+
+        await attempt.save();
+
+        logEvent(userId, 'quiz_completed', {
+            type: attempt.type,
+            jlptLevel: attempt.jlptLevel,
+            score,
+            passed,
+            unlockedLevel: response.unlockedLevel || null
+        });
+
+        return response;
+    },
+
+    // UI için: hangi seviyeye sınav açık, cooldown ne zaman bitiyor, placement hakkı var mı
+    async getStatus(userId) {
+        const progress = await Progress.find({ user: userId });
+        const unlockedMap = {};
+        progress.forEach(p => { unlockedMap[p.jlptLevel] = p.isUnlocked; });
+
+        const levels = {};
+        for (let i = 0; i < LEVELS.length - 1; i++) {
+            const level = LEVELS[i];
+            const nextUnlocked = unlockedMap[LEVELS[i + 1]] || false;
+
+            const lastFailed = await QuizAttempt.findOne({
+                user: userId, type: 'levelup', jlptLevel: level, status: 'completed', passed: false
+            }).sort({ createdAt: -1 });
+
+            const onCooldown = !!(lastFailed?.nextAttemptAllowedAt && lastFailed.nextAttemptAllowedAt > new Date());
+
+            levels[level] = {
+                unlocked: unlockedMap[level] || false,
+                nextLevelUnlocked: nextUnlocked,
+                canAttempt: (unlockedMap[level] || false) && !nextUnlocked && !onCooldown,
+                failCount: lastFailed?.failCount || 0,
+                nextAttemptAllowedAt: onCooldown ? lastFailed.nextAttemptAllowedAt : null
+            };
+        }
+
+        const placementDone = await QuizAttempt.exists({
+            user: userId, type: 'placement', status: 'completed', passed: false
+        });
+        const passedN1 = await QuizAttempt.exists({
+            user: userId, type: 'placement', status: 'completed', passed: true, jlptLevel: 'N1'
+        });
+        const unlockedCount = progress.filter(p => p.isUnlocked).length;
+        const hasPlacementHistory = await QuizAttempt.exists({ user: userId, type: 'placement' });
+
+        return {
+            placementAvailable: !placementDone && !passedN1 && (unlockedCount <= 1 || !!hasPlacementHistory),
+            levels
+        };
+    }
+};
+
+module.exports = QuizService;

@@ -1,14 +1,55 @@
 const User = require('../../models/User');
+const UserWord = require('../../models/UserWord');
+const Progress = require('../../models/Progress');
+const Streak = require('../../models/Streak');
+const StudySession = require('../../models/StudySession');
+const DailyWordPool = require('../../models/DailyWordPool');
+const Notification = require('../../models/Notification');
+const QuizAttempt = require('../../models/QuizAttempt');
+const DeviceSession = require('../../models/DeviceSession');
 const AppError = require('../../utils/AppError');
 const sendEmail = require('../../utils/sendEmail');
 const crypto = require('crypto');
 const ProgressService = require('../progress/progress.service');
 const StreakService = require('../streak/streak.service');
 const { signAccessToken, signRefreshToken, verifyRefreshToken } = require('../../utils/jwt.util');
+const Event = require('../../models/Event');
+const logEvent = require('../../utils/event.util');
+
+const MAX_SESSIONS_PER_USER = 5;
+
+const hashToken = (token) =>
+    crypto.createHash('sha256').update(token).digest('hex');
+
+// Yeni cihaz oturumu aç; kullanıcı başına en fazla 5 oturum (en eskisi düşer)
+const createSession = async (userId, refreshToken, deviceName) => {
+    const count = await DeviceSession.countDocuments({ user: userId });
+    if (count >= MAX_SESSIONS_PER_USER) {
+        const oldest = await DeviceSession.find({ user: userId })
+            .sort({ lastUsedAt: 1 })
+            .limit(count - MAX_SESSIONS_PER_USER + 1);
+        await DeviceSession.deleteMany({ _id: { $in: oldest.map(s => s._id) } });
+    }
+    await DeviceSession.create({
+        user: userId,
+        tokenHash: hashToken(refreshToken),
+        deviceName: deviceName || 'Bilinmeyen cihaz'
+    });
+};
+
+// Şifre değişimi/sıfırlama sonrası tüm oturumları kapatıp mevcut cihaz için
+// taze bir token çifti üretir
+const rotateAllSessions = async (userId, deviceName) => {
+    await DeviceSession.deleteMany({ user: userId });
+    const accessToken = signAccessToken(userId);
+    const refreshToken = signRefreshToken(userId);
+    await createSession(userId, refreshToken, deviceName);
+    return { accessToken, refreshToken };
+};
 
 
 const AuthService = {
-    async register({ name, surname, email, password }) {
+    async register({ name, surname, email, password, deviceName }) {
         const user = await User.create({ name, surname, email, password });
         await ProgressService.initializeProgress(user._id);
         await StreakService.initializeStreak(user._id);
@@ -22,7 +63,6 @@ const AuthService = {
 
         const accessToken = signAccessToken(user._id);
         const refreshToken = signRefreshToken(user._id);
-        user.refreshToken = refreshToken;
 
         await user.save();
 
@@ -38,11 +78,14 @@ const AuthService = {
             throw new AppError('Email gönderilemedi, tekrar deneyin', 500);
         }
 
+        await createSession(user._id, refreshToken, deviceName);
+        logEvent(user._id, 'register');
+
         return { user, accessToken, refreshToken, verificationToken };
     },
 
-    async login(email, password) {
-        const user = await User.findOne({ email }).select('+password +refreshToken');
+    async login(email, password, deviceName) {
+        const user = await User.findOne({ email }).select('+password');
         if (!user) throw new AppError('Invalid credentials', 401);
 
         const isMatch = await user.comparePassword(password);
@@ -51,8 +94,8 @@ const AuthService = {
         const accessToken = signAccessToken(user._id);
         const refreshToken = signRefreshToken(user._id);
 
-        user.refreshToken = refreshToken;
-        await user.save();
+        await createSession(user._id, refreshToken, deviceName);
+        logEvent(user._id, 'login', { deviceName });
 
         return {
             user,
@@ -66,23 +109,33 @@ const AuthService = {
         if (!refreshToken) throw new AppError('No refresh token', 401);
 
         const decoded = verifyRefreshToken(refreshToken);
-        const user = await User.findById(decoded.id).select('+refreshToken');
+        const session = await DeviceSession.findOne({
+            user: decoded.id,
+            tokenHash: hashToken(refreshToken)
+        });
 
-        if (!user || user.refreshToken !== refreshToken) {
-            throw new AppError('Invalid refresh token', 401);
-        }
+        if (!session) throw new AppError('Invalid refresh token', 401);
 
-        const accessToken = signAccessToken(user._id);
+        session.lastUsedAt = new Date();
+        await session.save();
+
+        const accessToken = signAccessToken(decoded.id);
         return { accessToken };
     },
 
-    async logout(userId) {
-        await User.findByIdAndUpdate(userId, { refreshToken: undefined });
+    // refreshToken verilirse sadece o cihazın oturumu, verilmezse tüm oturumlar kapanır
+    async logout(userId, refreshToken) {
+        if (refreshToken) {
+            await DeviceSession.deleteOne({ user: userId, tokenHash: hashToken(refreshToken) });
+        } else {
+            await DeviceSession.deleteMany({ user: userId });
+        }
     },
 
     async forgotPassword(email) {
         const user = await User.findOne({ email });
-        if (!user) throw new AppError('No user with that email', 404);
+        // E-posta enumeration koruması: kayıt yoksa da başarılı gibi dön
+        if (!user) return {};
 
         if (!user.isEmailVerified) {
             throw new AppError('Please verify your email first', 403);
@@ -113,7 +166,7 @@ const AuthService = {
         return { resetToken };
     },
 
-    async resetPassword(resetToken, newPassword) {
+    async resetPassword(resetToken, newPassword, deviceName) {
         const hashedToken = crypto
             .createHash('sha256')
             .update(resetToken)
@@ -131,8 +184,9 @@ const AuthService = {
         user.resetPasswordExpire = undefined;
         await user.save();
 
-        const token = user.generateJWT();
-        return { token };
+        // Güvenlik: şifre sıfırlanınca tüm eski oturumlar kapanır
+        const tokens = await rotateAllSessions(user._id, deviceName);
+        return tokens; // { accessToken, refreshToken } — login ile aynı sözleşme
     },
 
     async updateInfo(userId, updates) {
@@ -141,7 +195,34 @@ const AuthService = {
 
         if (updates.name) user.name = updates.name;
         if (updates.surname) user.surname = updates.surname;
-        if (updates.email) user.email = updates.email;
+
+        // E-posta değişiyorsa doğrulama sıfırlanır ve yeni adrese doğrulama maili gider
+        if (updates.email && updates.email !== user.email) {
+            const emailTaken = await User.findOne({ email: updates.email });
+            if (emailTaken) throw new AppError('Bu e-posta adresi zaten kullanımda', 400);
+
+            const verificationToken = crypto.randomBytes(20).toString('hex');
+
+            try {
+                const verificationUrl = `${process.env.CLIENT_URL}/api/auth/verify-email/${verificationToken}`;
+                await sendEmail({
+                    to: updates.email,
+                    subject: 'Kotoba - Yeni E-posta Doğrulama',
+                    html: `<p>Yeni e-posta adresini doğrulamak için <a href="${verificationUrl}">tıkla</a>. Link 24 saat geçerli.</p>`
+                });
+            } catch (err) {
+                throw new AppError('Doğrulama maili gönderilemedi, e-posta değiştirilmedi', 500);
+            }
+
+            user.email = updates.email;
+            user.isEmailVerified = false;
+            user.emailVerificationToken = crypto
+                .createHash('sha256')
+                .update(verificationToken)
+                .digest('hex');
+            user.emailVerificationExpire = Date.now() + 24 * 60 * 60 * 1000;
+        }
+
         if (updates.password) user.password = updates.password;
         if (updates.dailyGoal) user.dailyGoal = updates.dailyGoal;
         if (updates.fcmToken) user.fcmToken = updates.fcmToken;
@@ -156,7 +237,7 @@ const AuthService = {
         return user;
     },
 
-    async verifyEmail(verificationToken) {
+    async verifyEmail(verificationToken, deviceName) {
         const hashedToken = crypto
             .createHash('sha256')
             .update(verificationToken)
@@ -174,8 +255,12 @@ const AuthService = {
         user.emailVerificationExpire = undefined;
         await user.save();
 
-        const token = user.generateJWT();
-        return { token };
+        // Login ile aynı token sözleşmesi: access + refresh çifti
+        const accessToken = signAccessToken(user._id);
+        const refreshToken = signRefreshToken(user._id);
+        await createSession(user._id, refreshToken, deviceName);
+
+        return { accessToken, refreshToken };
     },
 
     async resendVerificationEmail(email) {
@@ -203,7 +288,7 @@ const AuthService = {
         }
     },
 
-    async changePassword(userId, oldPassword, newPassword) {
+    async changePassword(userId, oldPassword, newPassword, deviceName) {
         const user = await User.findById(userId).select('+password');
         if (!user) throw new AppError('User not found', 404);
 
@@ -212,6 +297,9 @@ const AuthService = {
 
         user.password = newPassword;
         await user.save();
+
+        // Güvenlik: diğer tüm cihazların oturumları kapanır, bu cihaz taze çift alır
+        return rotateAllSessions(userId, deviceName);
     },
 
     async deleteAccount(userId, password) {
@@ -220,6 +308,19 @@ const AuthService = {
 
         const isMatch = await user.comparePassword(password);
         if (!isMatch) throw new AppError('Password is incorrect', 401);
+
+        // KVKK: kullanıcıya ait tüm veriler silinir
+        await Promise.all([
+            UserWord.deleteMany({ user: userId }),
+            Progress.deleteMany({ user: userId }),
+            Streak.deleteMany({ user: userId }),
+            StudySession.deleteMany({ user: userId }),
+            DailyWordPool.deleteMany({ user: userId }),
+            Notification.deleteMany({ user: userId }),
+            QuizAttempt.deleteMany({ user: userId }),
+            DeviceSession.deleteMany({ user: userId }),
+            Event.deleteMany({ user: userId })
+        ]);
 
         await User.findByIdAndDelete(userId);
     },

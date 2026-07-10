@@ -1,12 +1,13 @@
 const StudySession = require('../../models/StudySession');
 const AppError = require('../../utils/AppError');
 const StreakService = require('../streak/streak.service');
+const { startOfTodayForUser } = require('../../utils/date.util');
+const logEvent = require('../../utils/event.util');
 
 const StudySessionService = {
     async startSession(userId, jlptLevel) {
         // Bugün zaten açık session var mı
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = await startOfTodayForUser(userId);
 
         const existingSession = await StudySession.findOne({
             user: userId,
@@ -25,8 +26,7 @@ const StudySessionService = {
     },
 
     async updateSession(userId, result) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = await startOfTodayForUser(userId);
 
         const session = await StudySession.findOne({
             user: userId,
@@ -46,8 +46,7 @@ const StudySessionService = {
     },
 
     async completeSession(userId) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = await startOfTodayForUser(userId);
 
         const session = await StudySession.findOne({
             user: userId,
@@ -64,12 +63,19 @@ const StudySessionService = {
         );
 
         await session.save();
+
+        logEvent(userId, 'session_completed', {
+            totalWords: session.totalWords,
+            correctCount: session.correctCount,
+            wrongCount: session.wrongCount,
+            duration: session.duration
+        });
+
         return session;
     },
 
     async getTodaySession(userId) {
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+        const today = await startOfTodayForUser(userId);
 
         const session = await StudySession.findOne({
             user: userId,

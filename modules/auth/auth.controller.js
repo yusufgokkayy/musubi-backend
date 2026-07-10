@@ -4,19 +4,21 @@ const AuthService = require('./auth.service');
 const AuthController = {
     register: catchAsync(async (req, res) => {
         const { name, surname, email, password } = req.body;
-        const { user, accessToken, refreshToken, verificationToken } = await AuthService.register({ name, surname, email, password });
+        const deviceName = req.body.deviceName || req.headers['user-agent'];
+        const { user, accessToken, refreshToken, verificationToken } = await AuthService.register({ name, surname, email, password, deviceName });
         res.status(201).json({
             success: true,
             accessToken,
             refreshToken,
-            verificationToken, // production'da kaldır
+            ...(process.env.NODE_ENV !== 'production' && { verificationToken }),
             data: { id: user._id, name: user.name }
         });
     }),
 
     login: catchAsync(async (req, res) => {
         const { email, password } = req.body;
-        const { user, accessToken, refreshToken, isEmailVerified } = await AuthService.login(email, password);
+        const deviceName = req.body.deviceName || req.headers['user-agent'];
+        const { user, accessToken, refreshToken, isEmailVerified } = await AuthService.login(email, password, deviceName);
         res.status(200).json({
             success: true,
             accessToken,
@@ -27,7 +29,8 @@ const AuthController = {
     }),
 
     logout: catchAsync(async (req, res) => {
-        await AuthService.logout(req.user.id);
+        // refreshToken verilirse sadece bu cihaz, verilmezse tüm cihazlar
+        await AuthService.logout(req.user.id, req.body?.refreshToken);
         res.status(200)
             .cookie('access_token', '', { httpOnly: true, expires: new Date(0) })
             .json({ success: true, message: 'Logged out' });
@@ -51,13 +54,14 @@ const AuthController = {
         res.status(200).json({ 
             success: true, 
             message: 'Password reset email sent',
-            resetToken // geçici test için
+            ...(process.env.NODE_ENV !== 'production' && { resetToken })
         });
     }),
 
     resetPassword: catchAsync(async (req, res) => {
         const { token, password } = req.body;
-        const result = await AuthService.resetPassword(token, password);
+        const deviceName = req.body.deviceName || req.headers['user-agent'];
+        const result = await AuthService.resetPassword(token, password, deviceName);
         res.status(200).json({ success: true, data: result });
     }),
 
@@ -67,7 +71,7 @@ const AuthController = {
     }),
 
     verifyEmail: catchAsync(async (req, res) => {
-        const result = await AuthService.verifyEmail(req.params.token);
+        const result = await AuthService.verifyEmail(req.params.token, req.headers['user-agent']);
         res.status(200).json({ success: true, data: result });
     }),
 
@@ -78,8 +82,10 @@ const AuthController = {
 
     changePassword: catchAsync(async (req, res) => {
         const { oldPassword, newPassword } = req.body;
-        await AuthService.changePassword(req.user.id, oldPassword, newPassword);
-        res.status(200).json({ success: true, message: 'Password changed successfully' });
+        const deviceName = req.body.deviceName || req.headers['user-agent'];
+        const tokens = await AuthService.changePassword(req.user.id, oldPassword, newPassword, deviceName);
+        // Diğer cihazların oturumları kapandı; bu cihaz için taze token çifti döner
+        res.status(200).json({ success: true, message: 'Password changed successfully', data: tokens });
     }),
 
     deleteAccount: catchAsync(async (req, res) => {

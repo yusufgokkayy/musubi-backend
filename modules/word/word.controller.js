@@ -1,10 +1,14 @@
 const catchAsync = require('../../utils/catchAsync');
+const AppError = require('../../utils/AppError');
 const WordService = require('./word.service');
 
 const WordController = {
     getAllWords: catchAsync(async (req, res) => {
-        const { jlptLevel, type, page, limit } = req.query;
-        const result = await WordService.getAllWords({ jlptLevel, type, page, limit });
+        const { jlptLevel, type, page, limit, includeAll } = req.query;
+        const result = await WordService.getAllWords({
+            jlptLevel, type, page, limit,
+            includeAll: includeAll === 'true'
+        });
         res.status(200).json({ success: true, data: result });
     }),
 
