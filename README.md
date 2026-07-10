@@ -275,9 +275,9 @@ Hesap silindiğinde kullanıcının event'leri de silinir (KVKK).
 npm test
 ```
 
-`node --test` (Node yerleşik test runner'ı) + in-memory MongoDB kullanır: gerçek veritabanına dokunmaz, internet bağlantısı gerektirmez (ilk çalıştırmada mongod binary'si indirilip cache'lenir). Kapsam: auth sözleşmesi (login/refresh/oturum rotasyonu), SRS döngüsü (havuz, masteryLevel, hatalar), quiz (placement merdiveni, cooldown, cevap anahtarı sızıntısı kontrolü), mastery decay ve KVKK cascade silme. **Backend'de davranış değiştiren her değişiklikten sonra `npm test` çalıştırılmalı** — mobil entegrasyonun dayandığı API sözleşmesinin bozulmadığını bu süit garanti eder. Aynı süit GitHub Actions'ta her push/PR'da otomatik koşar (`.github/workflows/test.yml`).
+`node --test` (Node yerleşik test runner'ı) + in-memory MongoDB kullanır: gerçek veritabanına dokunmaz, internet bağlantısı gerektirmez (ilk çalıştırmada mongod binary'si indirilip cache'lenir). Kapsam: auth sözleşmesi (login/refresh/oturum rotasyonu), e-posta akışları (register→doğrulama, rollback, şifre sıfırlama, adres değişikliği), SRS döngüsü (havuz, masteryLevel, hatalar), quiz (placement merdiveni, cooldown, cevap anahtarı sızıntısı kontrolü), mastery decay ve KVKK cascade silme. **Backend'de davranış değiştiren her değişiklikten sonra `npm test` çalıştırılmalı** — mobil entegrasyonun dayandığı API sözleşmesinin bozulmadığını bu süit garanti eder. Aynı süit GitHub Actions'ta her push/PR'da otomatik koşar (`.github/workflows/test.yml`).
 
-> Not: `register` akışı gerçek e-posta gönderdiği için test kapsamı dışındadır; testler kullanıcıyı doğrudan model üzerinden oluşturur.
+> Not: Test ortamında `sendEmail` gerçek gönderim yapmaz; mailler bellek içi bir outbox'a yazılır ve testler maildeki doğrulama/sıfırlama linklerini oradan okuyup uçtan uca doğrular. Rate limit'ler de test ortamında devre dışıdır.
 
 ## Zamanlanmış İşler
 

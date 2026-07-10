@@ -10,8 +10,8 @@ const mongoose = require('mongoose');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 
 let mongod, server, BASE;
-let User, Word, UserWord, Notification, QuizAttempt, Event, Progress, Streak;
-let UserWordService, NotificationService, ProgressService, StreakService;
+let User, Word, UserWord, Notification, QuizAttempt, Event, Progress, Streak, DeviceSession;
+let UserWordService, NotificationService, ProgressService, StreakService, sendEmail;
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -75,6 +75,8 @@ before(async () => {
     Event = require('../models/Event');
     Progress = require('../models/Progress');
     Streak = require('../models/Streak');
+    DeviceSession = require('../models/DeviceSession');
+    sendEmail = require('../utils/sendEmail');
     UserWordService = require('../modules/userword/userword.service');
     NotificationService = require('../modules/notification/notification.service');
     ProgressService = require('../modules/progress/progress.service');
@@ -158,6 +160,169 @@ describe('Auth', () => {
     it('tokensiz korumalı endpoint 401 döner', async () => {
         const res = await api('GET', '/userwords/stats');
         assert.equal(res.status, 401);
+    });
+});
+
+describe('E-posta akışları', () => {
+    const registerBody = (email, name = 'Posta') => ({
+        body: { name, surname: 'Test', email, password: 'testsifre123', deviceName: 'test-suite' }
+    });
+
+    it('register doğrulama maili gönderir; maildeki token e-postayı doğrular', async () => {
+        const res = await api('POST', '/auth/register', registerBody('posta@test.com'));
+        assert.equal(res.status, 201);
+        assert.ok(res.json.accessToken && res.json.refreshToken);
+        assert.ok(res.json.verificationToken, 'test/dev ortamında token yanıtta döner');
+
+        const mail = sendEmail.outbox.at(-1);
+        assert.equal(mail.to, 'posta@test.com');
+        assert.match(mail.subject, /Misugi - Email Doğrulama/);
+        assert.ok(mail.html.includes(res.json.verificationToken), 'maildeki link yanıttaki token ile aynı olmalı');
+
+        // Yan kayıtlar oluşmuş olmalı
+        const user = await User.findOne({ email: 'posta@test.com' });
+        assert.equal(await Progress.countDocuments({ user: user._id }), 5);
+        assert.equal(await Streak.countDocuments({ user: user._id }), 1);
+
+        // Doğrulanmadan ✉️ endpoint 403
+        const me = await api('GET', '/auth/me', { token: res.json.accessToken });
+        assert.equal(me.status, 403);
+
+        const verify = await api('GET', `/auth/verify-email/${res.json.verificationToken}`);
+        assert.equal(verify.status, 200);
+        assert.ok(verify.json.data.accessToken && verify.json.data.refreshToken, 'doğrulama taze çift dönmeli');
+
+        const meAfter = await api('GET', '/auth/me', { token: verify.json.data.accessToken });
+        assert.equal(meAfter.status, 200);
+        assert.equal(meAfter.json.data.isEmailVerified, true);
+    });
+
+    it('kayıtlı e-postayla register 400 döner', async () => {
+        const res = await api('POST', '/auth/register', registerBody('posta@test.com'));
+        assert.equal(res.status, 400);
+    });
+
+    it('mail gönderilemezse register geri alınır, yetim kayıt kalmaz', async () => {
+        const before = await Promise.all([
+            Progress.countDocuments({}), Streak.countDocuments({}), DeviceSession.countDocuments({})
+        ]);
+
+        sendEmail.failNextSend();
+        const res = await api('POST', '/auth/register', registerBody('rollback@test.com'));
+        assert.equal(res.status, 500);
+
+        assert.equal(await User.countDocuments({ email: 'rollback@test.com' }), 0, 'kullanıcı silinmeli');
+        const after = await Promise.all([
+            Progress.countDocuments({}), Streak.countDocuments({}), DeviceSession.countDocuments({})
+        ]);
+        assert.deepEqual(after, before, 'yetim Progress/Streak/oturum kalmamalı');
+    });
+
+    it('resend-verification: bilinmeyen adres de 200 döner, bilinene yeni token gider', async () => {
+        const outLenBefore = sendEmail.outbox.length;
+        const unknown = await api('POST', '/auth/resend-verification-email', { body: { email: 'yok@test.com' } });
+        assert.equal(unknown.status, 200, 'enumeration koruması: hesap yoksa da 200');
+        assert.equal(sendEmail.outbox.length, outLenBefore, 'bilinmeyen adrese mail atılmamalı');
+
+        await api('POST', '/auth/register', registerBody('tekrar@test.com'));
+        const res = await api('POST', '/auth/resend-verification-email', { body: { email: 'tekrar@test.com' } });
+        assert.equal(res.status, 200);
+
+        const mail = sendEmail.outbox.at(-1);
+        assert.equal(mail.to, 'tekrar@test.com');
+        const token = mail.html.match(/verify-email\/([0-9a-f]+)/)[1];
+        const verify = await api('GET', `/auth/verify-email/${token}`);
+        assert.equal(verify.status, 200, 'yeniden gönderilen token çalışmalı');
+    });
+
+    it('forgot→reset: yeni şifre çalışır, eski şifre ve eski oturumlar düşer', async () => {
+        await createVerifiedUser('sifirla@test.com');
+        const oldDevice = await login('sifirla@test.com');
+
+        const unknown = await api('POST', '/auth/forgot-password', { body: { email: 'hicyok@test.com' } });
+        assert.equal(unknown.status, 200, 'enumeration koruması');
+
+        const fp = await api('POST', '/auth/forgot-password', { body: { email: 'sifirla@test.com' } });
+        assert.equal(fp.status, 200);
+        assert.ok(fp.json.resetToken, 'test/dev ortamında token yanıtta döner');
+
+        const mail = sendEmail.outbox.at(-1);
+        assert.equal(mail.to, 'sifirla@test.com');
+        assert.match(mail.subject, /Şifre Sıfırlama/);
+        assert.ok(mail.html.includes(fp.json.resetToken));
+
+        const rp = await api('POST', '/auth/reset-password', {
+            body: { token: fp.json.resetToken, password: 'yenisifre123', deviceName: 'test-suite' }
+        });
+        assert.equal(rp.status, 200);
+        assert.ok(rp.json.data.accessToken && rp.json.data.refreshToken);
+
+        // Aynı token ikinci kez kullanılamaz
+        const replay = await api('POST', '/auth/reset-password', {
+            body: { token: fp.json.resetToken, password: 'baskasifre123' }
+        });
+        assert.equal(replay.status, 400);
+
+        const oldRefresh = await api('POST', '/auth/refresh', { body: { refreshToken: oldDevice.refreshToken } });
+        assert.equal(oldRefresh.status, 401, 'eski cihazın oturumu düşmeli');
+
+        const oldLogin = await api('POST', '/auth/login', {
+            body: { email: 'sifirla@test.com', password: 'testsifre123' }
+        });
+        assert.equal(oldLogin.status, 401, 'eski şifre çalışmamalı');
+
+        const newLogin = await api('POST', '/auth/login', {
+            body: { email: 'sifirla@test.com', password: 'yenisifre123' }
+        });
+        assert.equal(newLogin.status, 200);
+    });
+
+    it('doğrulanmamış hesap da şifre sıfırlayabilir', async () => {
+        await api('POST', '/auth/register', registerBody('dogrulanmamis@test.com'));
+        const fp = await api('POST', '/auth/forgot-password', { body: { email: 'dogrulanmamis@test.com' } });
+        assert.equal(fp.status, 200);
+        assert.ok(fp.json.resetToken, 'doğrulanmamış hesaba 403 dönülmemeli — link sahipliği zaten kanıtlar');
+    });
+
+    it('e-posta değişikliği doğrulamayı sıfırlar, yeni adrese mail gider', async () => {
+        await createVerifiedUser('eskiadres@test.com');
+        const token = (await login('eskiadres@test.com')).accessToken;
+
+        const res = await api('PUT', '/auth/update-info', {
+            token, body: { email: 'yeniadres@test.com' }
+        });
+        assert.equal(res.status, 200);
+        assert.equal(res.json.data.isEmailVerified, false);
+        assert.equal(res.json.data.email, 'yeniadres@test.com');
+
+        const mail = sendEmail.outbox.at(-1);
+        assert.equal(mail.to, 'yeniadres@test.com', 'doğrulama YENİ adrese gitmeli');
+
+        // Artık ✉️ endpoint'ler 403; maildeki token doğrulamayı geri açar
+        const me = await api('GET', '/auth/me', { token });
+        assert.equal(me.status, 403);
+
+        const vToken = mail.html.match(/verify-email\/([0-9a-f]+)/)[1];
+        const verify = await api('GET', `/auth/verify-email/${vToken}`);
+        assert.equal(verify.status, 200);
+
+        const meAfter = await api('GET', '/auth/me', { token });
+        assert.equal(meAfter.status, 200);
+    });
+
+    it('mail gönderilemezse e-posta değişikliği uygulanmaz', async () => {
+        await createVerifiedUser('sabitadres@test.com');
+        const token = (await login('sabitadres@test.com')).accessToken;
+
+        sendEmail.failNextSend();
+        const res = await api('PUT', '/auth/update-info', {
+            token, body: { email: 'ulasilmaz@test.com' }
+        });
+        assert.equal(res.status, 500);
+
+        const me = await api('GET', '/auth/me', { token });
+        assert.equal(me.json.data.email, 'sabitadres@test.com', 'adres değişmemiş olmalı');
+        assert.equal(me.json.data.isEmailVerified, true, 'doğrulama bozulmamış olmalı');
     });
 });
 
