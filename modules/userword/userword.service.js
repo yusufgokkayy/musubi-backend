@@ -86,15 +86,20 @@ const UserWordService = {
         // Tekrarlar öncelikli: hedefin en fazla %70'i tekrar
         const reviewLimit = Math.ceil(goal * 0.7);
 
-        const reviewWordsRaw = await UserWord.find({
+        // Seviye filtresi populate-match ile YAPILMAZ: eşleşmeyen kayıtlar
+        // word:null olarak dönüp limit kontenjanını yer, havuza boş kelime girerdi.
+        // Filtre sorgunun kendisine taşınır.
+        const reviewFilter = {
             user: userId,
             nextReviewDate: { $lte: new Date() },
             status: { $in: ['learning', 'learned'] }
-        })
-        .populate({
-            path: 'word',
-            match: jlptLevel ? { jlptLevel } : {}
-        })
+        };
+        if (jlptLevel) {
+            reviewFilter.word = { $in: await Word.find({ jlptLevel }).distinct('_id') };
+        }
+
+        const reviewWordsRaw = await UserWord.find(reviewFilter)
+        .populate('word')
         // En eski vade önce; eşitlikte en kırılgan (düşük seviyeli) kelime kazanır —
         // uzun aradan dönüşte kontenjan yetmezse sağlam hafızalı kelimeler bekleyebilir
         .sort({ nextReviewDate: 1, masteryLevel: 1 })
@@ -303,27 +308,29 @@ const UserWordService = {
     },
 
     async getTodayMistakes(userId, page = 1, limit = 10) {
+        page = Math.max(parseInt(page) || 1, 1);
+        limit = Math.min(Math.max(parseInt(limit) || 10, 1), 100);
+
         const user = await User.findById(userId).select('timezone');
         const today = startOfDayInTz(user?.timezone);
 
         const skip = (page - 1) * limit;
 
-        const [mistakes, total] = await Promise.all([
-            UserWord.find({
-                user: userId,
-                lastReviewDate: { $gte: today },
-                $expr: { $gt: ['$wrongCount', 0] }
-            })
-            .populate('word')
-            .sort({ wrongCount: -1 })
-            .skip(skip)
-            .limit(limit),
+        // Düz alan karşılaştırması $expr'dan farklı olarak index kullanabilir
+        const mistakeFilter = {
+            user: userId,
+            lastReviewDate: { $gte: today },
+            wrongCount: { $gt: 0 }
+        };
 
-            UserWord.countDocuments({
-                user: userId,
-                lastReviewDate: { $gte: today },
-                $expr: { $gt: ['$wrongCount', 0] }
-            })
+        const [mistakes, total] = await Promise.all([
+            UserWord.find(mistakeFilter)
+                .populate('word')
+                .sort({ wrongCount: -1 })
+                .skip(skip)
+                .limit(limit),
+
+            UserWord.countDocuments(mistakeFilter)
         ]);
 
         return {

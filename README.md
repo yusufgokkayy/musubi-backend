@@ -1,6 +1,6 @@
-# Kotoba API
+# Misugi API
 
-Kotoba, Türkçe konuşanlar için JLPT (N5–N1) temelli Japonca kelime öğrenme uygulamasının backend servisidir. SM-2 aralıklı tekrar algoritması, kelime başına 1–5 ustalık seviyesi, seviye belirleme/atlama sınavları, günlük seri (streak) takibi ve uygulama içi bildirimler sunar.
+Misugi, Türkçe konuşanlar için JLPT (N5–N1) temelli Japonca kelime öğrenme uygulamasının backend servisidir. SM-2 aralıklı tekrar algoritması, kelime başına 1–5 ustalık seviyesi, seviye belirleme/atlama sınavları, günlük seri (streak) takibi ve uygulama içi bildirimler sunar.
 
 ## Teknoloji Yığını
 
@@ -26,8 +26,8 @@ Kotoba, Türkçe konuşanlar için JLPT (N5–N1) temelli Japonca kelime öğren
 ### 2. Klonlama
 
 ```bash
-git clone <repo-url> kotoba-backend
-cd kotoba-backend
+git clone <repo-url> misugi-backend
+cd misugi-backend
 npm install
 
 # Kelime verisi ayrı bir repodan gelir (gitignore'da, elle klonlanmalı):
@@ -51,7 +51,7 @@ RESET_PASSWORD_EXPIRE=3600000
 
 CLIENT_URL=http://localhost:5000
 RESEND_API_KEY=re_...
-EMAIL_FROM=Kotoba <noreply@ornek.com>
+EMAIL_FROM=Misugi <noreply@ornek.com>
 
 # Günlük havuz fallback limitleri (kullanıcının dailyGoal'u yoksa)
 NEW_WORD_DAILY_LIMIT=10
@@ -61,7 +61,7 @@ REVIEW_DAILY_LIMIT=10
 CORS_ORIGIN=https://app.ornek.com
 ```
 
-Push bildirimleri için ayrıca proje köküne `firebase-service-account.json` konur (gitignore'da).
+Push bildirimleri için ayrıca `config/firebase-service-account.json` konur (gitignore'da).
 
 ### 4. Veriyi hazırlama
 
@@ -189,7 +189,9 @@ Sorular **her denemede** çekirdek havuzdan taze rastgele üretilir; üç format
 
 ## API Referansı
 
-Tüm yollar `/api` önekiyle başlar. 🔒 = access token gerekli, ✉️ = ayrıca doğrulanmış e-posta gerekli.
+> **Mobil geliştirici için:** Her endpoint'in tam istek gövdesi, yanıt örneği ve hata durumları **[API.md](API.md)** dosyasındadır. Aşağıdaki tablolar hızlı özet içindir.
+
+Tüm yollar `/api` önekiyle başlar. 🔒 = access token gerekli, ✉️ = ayrıca doğrulanmış e-posta gerekli. Ayrıca `GET /health` (öneksiz, auth'suz) deploy platformlarının canlılık kontrolü için `{ "status": "ok" }` döner.
 
 ### Auth — `/auth`
 | Metot | Yol | Açıklama |
@@ -273,7 +275,7 @@ Hesap silindiğinde kullanıcının event'leri de silinir (KVKK).
 npm test
 ```
 
-`node --test` (Node yerleşik test runner'ı) + in-memory MongoDB kullanır: gerçek veritabanına dokunmaz, internet bağlantısı gerektirmez (ilk çalıştırmada mongod binary'si indirilip cache'lenir). Kapsam: auth sözleşmesi (login/refresh/oturum rotasyonu), SRS döngüsü (havuz, masteryLevel, hatalar), quiz (placement merdiveni, cooldown, cevap anahtarı sızıntısı kontrolü), mastery decay ve KVKK cascade silme. **Backend'de davranış değiştiren her değişiklikten sonra `npm test` çalıştırılmalı** — mobil entegrasyonun dayandığı API sözleşmesinin bozulmadığını bu süit garanti eder.
+`node --test` (Node yerleşik test runner'ı) + in-memory MongoDB kullanır: gerçek veritabanına dokunmaz, internet bağlantısı gerektirmez (ilk çalıştırmada mongod binary'si indirilip cache'lenir). Kapsam: auth sözleşmesi (login/refresh/oturum rotasyonu), SRS döngüsü (havuz, masteryLevel, hatalar), quiz (placement merdiveni, cooldown, cevap anahtarı sızıntısı kontrolü), mastery decay ve KVKK cascade silme. **Backend'de davranış değiştiren her değişiklikten sonra `npm test` çalıştırılmalı** — mobil entegrasyonun dayandığı API sözleşmesinin bozulmadığını bu süit garanti eder. Aynı süit GitHub Actions'ta her push/PR'da otomatik koşar (`.github/workflows/test.yml`).
 
 > Not: `register` akışı gerçek e-posta gönderdiği için test kapsamı dışındadır; testler kullanıcıyı doğrudan model üzerinden oluşturur.
 
@@ -289,12 +291,12 @@ npm test
 
 ## Güvenlik Önlemleri
 
-- `helmet` + production'da origin bazlı CORS (`CORS_ORIGIN`)
-- Rate limit: genel 300 istek/15 dk, hassas auth endpoint'lerinde 20/15 dk
+- `helmet` + production'da origin bazlı CORS (`CORS_ORIGIN`) ve `trust proxy` (rate limit'in proxy arkasında gerçek client IP'sini görmesi için)
+- Rate limit: genel 300 istek/15 dk, hassas auth endpoint'lerinde 20/15 dk; liste endpoint'lerinde `limit` en fazla 100
 - bcrypt (cost 10), şifre min 8 karakter
-- Refresh token'lar DB'de SHA-256 hash'li; cihaz başına oturum, tek tek iptal edilebilir
+- Refresh token'lar DB'de SHA-256 hash'li; cihaz başına oturum, tek tek iptal edilebilir; 8 gün kullanılmayan oturum kayıtları TTL index ile otomatik silinir
 - Şifre değişimi/sıfırlamada tüm oturumların düşmesi
-- E-posta enumeration koruması (forgot-password), doğrulama/sıfırlama token'ları DB'de hash'li
+- E-posta enumeration koruması (forgot-password ve resend-verification hesap varlığını sızdırmaz), doğrulama/sıfırlama token'ları DB'de hash'li
 - Arama girdisinde regex escape (ReDoS koruması), JSON body 100 KB limiti
 - Quiz cevap anahtarının sunucuda kalması, sorunun her denemede yeniden üretilmesi
 - Hesap silmede tüm koleksiyonlardan cascade temizlik (KVKK)

@@ -11,7 +11,17 @@ dotenv.config({ path: './config/.env' });
 
 const app = express();
 
+// Railway/Render gibi platformlarda uygulama reverse proxy arkasında çalışır;
+// bu ayar olmadan rate limiter tüm istekleri proxy'nin IP'sinden sanır ve
+// 300/15dk limiti TÜM kullanıcıların toplamına uygulanır.
+if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+}
+
 app.use(helmet());
+
+// Deploy platformlarının canlılık kontrolü — auth ve rate limit dışında
+app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
 // Production'da sadece izin verilen origin'ler (CORS_ORIGIN=https://a.com,https://b.com)
 const corsOrigins = process.env.CORS_ORIGIN

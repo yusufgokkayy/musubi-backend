@@ -6,11 +6,11 @@ const { getMessaging } = require('firebase-admin/messaging');
 let messaging = null;
 
 try {
-    const serviceAccount = require('../firebase-service-account.json');
+    const serviceAccount = require('./firebase-service-account.json');
     initializeApp({ credential: cert(serviceAccount) });
     messaging = getMessaging();
 } catch (err) {
-    console.warn('Firebase başlatılamadı (firebase-service-account.json eksik/bozuk) — push bildirimleri devre dışı');
+    console.warn('Firebase başlatılamadı (config/firebase-service-account.json eksik/bozuk) — push bildirimleri devre dışı');
 }
 
 module.exports = {

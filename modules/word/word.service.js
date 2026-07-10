@@ -6,6 +6,10 @@ const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const WordService = {
     async getAllWords({ jlptLevel, type, page = 1, limit = 20, includeAll = false }) {
+        // Query parametreleri kullanıcıdan gelir: sınırla ki ?limit=100000 atılamasın
+        page = Math.max(parseInt(page) || 1, 1);
+        limit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
+
         // Kütüphane varsayılan olarak aktif (core) kelime havuzunu gösterir
         const filter = includeAll ? {} : { isCore: true };
         if (jlptLevel) filter.jlptLevel = jlptLevel;

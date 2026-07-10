@@ -51,8 +51,6 @@ const rotateAllSessions = async (userId, deviceName) => {
 const AuthService = {
     async register({ name, surname, email, password, deviceName }) {
         const user = await User.create({ name, surname, email, password });
-        await ProgressService.initializeProgress(user._id);
-        await StreakService.initializeStreak(user._id);
 
         const verificationToken = crypto.randomBytes(20).toString('hex');
         user.emailVerificationToken = crypto
@@ -66,11 +64,13 @@ const AuthService = {
 
         await user.save();
 
+        // E-posta gönderimi, yan kayıtlar (Progress/Streak/oturum) oluşmadan ÖNCE
+        // denenir: başarısızlıkta yalnızca User silinir, yetim doküman kalmaz.
         try {
             const verificationUrl = `${process.env.CLIENT_URL}/api/auth/verify-email/${verificationToken}`;
             await sendEmail({
                 to: email,
-                subject: 'Kotoba - Email Doğrulama',
+                subject: 'Misugi - Email Doğrulama',
                 html: `<p>Hesabını doğrulamak için <a href="${verificationUrl}">tıkla</a>. Link 24 saat geçerli.</p>`
             });
         } catch (err) {
@@ -78,6 +78,8 @@ const AuthService = {
             throw new AppError('Email gönderilemedi, tekrar deneyin', 500);
         }
 
+        await ProgressService.initializeProgress(user._id);
+        await StreakService.initializeStreak(user._id);
         await createSession(user._id, refreshToken, deviceName);
         logEvent(user._id, 'register');
 
@@ -134,26 +136,26 @@ const AuthService = {
 
     async forgotPassword(email) {
         const user = await User.findOne({ email });
-        // E-posta enumeration koruması: kayıt yoksa da başarılı gibi dön
+        // E-posta enumeration koruması: kayıt yoksa da başarılı gibi dön.
+        // Doğrulanmamış hesap da sıfırlayabilir — maildeki linke tıklamak
+        // zaten adres sahipliğini kanıtlar; 403 dönmek hem hesap varlığını
+        // sızdırır hem de kullanıcıyı çıkmaza sokar.
         if (!user) return {};
-
-        if (!user.isEmailVerified) {
-            throw new AppError('Please verify your email first', 403);
-        }
 
         const resetToken = crypto.randomBytes(20).toString('hex');
         user.resetPasswordToken = crypto
             .createHash('sha256')
             .update(resetToken)
             .digest('hex');
-        user.resetPasswordExpire = Date.now() + parseInt(process.env.RESET_PASSWORD_EXPIRE);
+        // Fallback 1 saat: env unset ise parseInt NaN üretir ve token anında geçersiz olurdu
+        user.resetPasswordExpire = Date.now() + (parseInt(process.env.RESET_PASSWORD_EXPIRE) || 3600000);
         await user.save();
 
         try {
             const resetUrl = `${process.env.CLIENT_URL}/api/auth/reset-password/${resetToken}`;
             await sendEmail({
                 to: email,
-                subject: 'Kotoba - Şifre Sıfırlama',
+                subject: 'Misugi - Şifre Sıfırlama',
                 html: `<p>Şifreni sıfırlamak için <a href="${resetUrl}">tıkla</a>. Link 1 saat geçerli.</p>`
             });
         } catch (err) {
@@ -207,7 +209,7 @@ const AuthService = {
                 const verificationUrl = `${process.env.CLIENT_URL}/api/auth/verify-email/${verificationToken}`;
                 await sendEmail({
                     to: updates.email,
-                    subject: 'Kotoba - Yeni E-posta Doğrulama',
+                    subject: 'Misugi - Yeni E-posta Doğrulama',
                     html: `<p>Yeni e-posta adresini doğrulamak için <a href="${verificationUrl}">tıkla</a>. Link 24 saat geçerli.</p>`
                 });
             } catch (err) {
@@ -265,8 +267,9 @@ const AuthService = {
 
     async resendVerificationEmail(email) {
         const user = await User.findOne({ email });
-        if (!user) throw new AppError('No user with that email', 404);
-        if (user.isEmailVerified) throw new AppError('Email already verified', 400);
+        // E-posta enumeration koruması: kayıt yoksa veya zaten doğrulanmışsa
+        // da sessizce başarılı dön (forgot-password ile aynı davranış)
+        if (!user || user.isEmailVerified) return;
 
         const verificationToken = crypto.randomBytes(20).toString('hex');
         user.emailVerificationToken = crypto
@@ -280,7 +283,7 @@ const AuthService = {
             const verificationUrl = `${process.env.CLIENT_URL}/api/auth/verify-email/${verificationToken}`;
             await sendEmail({
                 to: email,
-                subject: 'Kotoba - Email Doğrulama',
+                subject: 'Misugi - Email Doğrulama',
                 html: `<p>Hesabını doğrulamak için <a href="${verificationUrl}">tıkla</a>. Link 24 saat geçerli.</p>`
             });
         } catch (err) {

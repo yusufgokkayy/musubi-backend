@@ -26,7 +26,11 @@ const DeviceSessionSchema = new mongoose.Schema({
     },
     lastUsedAt: {
         type: Date,
-        default: Date.now
+        default: Date.now,
+        // TTL: refresh token zaten 7 günde (JWT_REFRESH_EXPIRE) geçersizleşir;
+        // 8 gün dokunulmayan oturum kaydını Mongo kendisi temizler ki
+        // süresi dolmuş oturumlar koleksiyonda birikmesin
+        index: { expires: '8d' }
     }
 });
 

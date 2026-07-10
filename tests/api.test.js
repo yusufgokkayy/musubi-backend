@@ -1,4 +1,4 @@
-// Kotoba API sözleşme testleri — `npm test` ile çalışır.
+// Misugi API sözleşme testleri — `npm test` ile çalışır.
 // In-memory MongoDB kullanır: gerçek DB'ye dokunmaz, internet gerektirmez
 // (ilk çalıştırmada mongod binary'si indirilir ve cache'lenir).
 //
@@ -58,7 +58,7 @@ const login = async (email) => {
 
 before(async () => {
     mongod = await startMemoryServer();
-    process.env.MONGO_URI = mongod.getUri('kotoba-test');
+    process.env.MONGO_URI = mongod.getUri('misugi-test');
     process.env.NODE_ENV = 'test';
 
     const app = require('../app'); // config/.env'i yükler (varsa)

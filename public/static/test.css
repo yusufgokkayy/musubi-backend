@@ -1,9 +1,9 @@
-/* Kotoba API Test Sayfası — uygulamanın tasarım diline uygun (kırmızı/beyaz) */
+/* Misugi API Test Sayfası — uygulamanın tasarım diline uygun (kırmızı/beyaz) */
 
 :root {
-    --kotoba-red: #c8102e;
-    --kotoba-red-dark: #a30d26;
-    --kotoba-red-soft: #fdecef;
+    --misugi-red: #c8102e;
+    --misugi-red-dark: #a30d26;
+    --misugi-red-soft: #fdecef;
     --ink: #1a1a1a;
     --ink-soft: #6b7280;
     --line: #e5e7eb;
@@ -30,7 +30,7 @@ body {
 /* ---------- Üst bar ---------- */
 
 header {
-    background: var(--kotoba-red);
+    background: var(--misugi-red);
     color: #fff;
     padding: 18px 28px;
     display: flex;
@@ -86,7 +86,7 @@ header .base-url {
     font-size: 14px;
     text-transform: uppercase;
     letter-spacing: .8px;
-    color: var(--kotoba-red);
+    color: var(--misugi-red);
     display: flex;
     align-items: center;
     gap: 8px;
@@ -97,7 +97,7 @@ header .base-url {
     width: 8px;
     height: 8px;
     border-radius: 50%;
-    background: var(--kotoba-red);
+    background: var(--misugi-red);
     flex: none;
 }
 
@@ -128,7 +128,7 @@ input:focus,
 select:focus,
 textarea:focus {
     outline: none;
-    border-color: var(--kotoba-red);
+    border-color: var(--misugi-red);
 }
 
 input::placeholder {
@@ -155,7 +155,7 @@ button {
     padding: 9px 18px;
     border: none;
     border-radius: 10px;
-    background: var(--kotoba-red);
+    background: var(--misugi-red);
     color: #fff;
     cursor: pointer;
     flex: 0 0 auto;
@@ -163,7 +163,7 @@ button {
 }
 
 button:hover {
-    background: var(--kotoba-red-dark);
+    background: var(--misugi-red-dark);
 }
 
 button:active {
@@ -171,8 +171,8 @@ button:active {
 }
 
 button.secondary {
-    background: var(--kotoba-red-soft);
-    color: var(--kotoba-red);
+    background: var(--misugi-red-soft);
+    color: var(--misugi-red);
 }
 
 button.secondary:hover {

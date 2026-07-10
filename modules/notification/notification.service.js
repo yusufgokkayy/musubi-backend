@@ -54,6 +54,8 @@ const NotificationService = {
     },
 
     async list(userId, page = 1, limit = 20) {
+        page = Math.max(parseInt(page) || 1, 1);
+        limit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
         const skip = (page - 1) * limit;
 
         const [notifications, total, unreadCount] = await Promise.all([
