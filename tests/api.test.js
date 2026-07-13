@@ -1,4 +1,4 @@
-// Misugi API sözleşme testleri — `npm test` ile çalışır.
+// Musubi API sözleşme testleri — `npm test` ile çalışır.
 // In-memory MongoDB kullanır: gerçek DB'ye dokunmaz, internet gerektirmez
 // (ilk çalıştırmada mongod binary'si indirilir ve cache'lenir).
 //
@@ -58,10 +58,10 @@ const login = async (email) => {
 
 before(async () => {
     mongod = await startMemoryServer();
-    process.env.MONGO_URI = mongod.getUri('misugi-test');
+    process.env.MONGO_URI = mongod.getUri('musubi-test');
     process.env.NODE_ENV = 'test';
 
-    const app = require('../app'); // config/.env'i yükler (varsa)
+    const app = require('../app'); // kökteki .env'i yükler (varsa)
     process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret';
     process.env.JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'test-refresh-secret';
 
@@ -176,7 +176,7 @@ describe('E-posta akışları', () => {
 
         const mail = sendEmail.outbox.at(-1);
         assert.equal(mail.to, 'posta@test.com');
-        assert.match(mail.subject, /Misugi - Email Doğrulama/);
+        assert.match(mail.subject, /Musubi - Email Doğrulama/);
         assert.ok(mail.html.includes(res.json.verificationToken), 'maildeki link yanıttaki token ile aynı olmalı');
 
         // Yan kayıtlar oluşmuş olmalı
@@ -326,6 +326,123 @@ describe('E-posta akışları', () => {
     });
 });
 
+describe('Onboarding — e-posta kontrolü ve sosyal giriş', () => {
+    // Test ortamında socialAuth imza doğrulamadan payload'ı decode eder;
+    // sahte ID token'ı HS256 ile imzalamak decode için yeterlidir
+    const jwt = require('jsonwebtoken');
+    const fakeIdToken = (payload) => jwt.sign(payload, 'sahte-imza');
+    const googleBody = (overrides = {}) => ({
+        body: {
+            provider: 'google',
+            idToken: fakeIdToken({
+                sub: 'google-sub-1', email: 'sosyal@test.com', email_verified: true,
+                given_name: 'Sosyal', family_name: 'Kullanıcı', ...overrides
+            }),
+            deviceName: 'test-suite'
+        }
+    });
+
+    it('check-email: müsait adres available:true, kayıtlı adres false, bozuk biçim 400', async () => {
+        const free = await api('POST', '/auth/check-email', { body: { email: 'bostaadres@test.com' } });
+        assert.equal(free.status, 200);
+        assert.equal(free.json.available, true);
+
+        await createVerifiedUser('dolu@test.com');
+        const taken = await api('POST', '/auth/check-email', { body: { email: 'dolu@test.com' } });
+        assert.equal(taken.status, 200);
+        assert.equal(taken.json.available, false);
+
+        const bad = await api('POST', '/auth/check-email', { body: { email: 'gecersiz-adres' } });
+        assert.equal(bad.status, 400);
+        const empty = await api('POST', '/auth/check-email', { body: {} });
+        assert.equal(empty.status, 400);
+    });
+
+    it('sosyal giriş: ilk seferde hesap oluşturur (201), sonrakinde giriş yapar (200)', async () => {
+        const outLenBefore = sendEmail.outbox.length;
+        const first = await api('POST', '/auth/social', googleBody());
+        assert.equal(first.status, 201);
+        assert.equal(first.json.isNewUser, true);
+        assert.ok(first.json.accessToken && first.json.refreshToken);
+        assert.equal(sendEmail.outbox.length, outLenBefore, 'sosyal kayıtta doğrulama maili atılmaz');
+
+        // Yan kayıtlar oluşmuş, e-posta doğrulanmış olmalı — ✉️ endpoint direkt çalışır
+        const me = await api('GET', '/auth/me', { token: first.json.accessToken });
+        assert.equal(me.status, 200);
+        assert.equal(me.json.data.isEmailVerified, true);
+        const user = await User.findOne({ email: 'sosyal@test.com' });
+        assert.equal(await Progress.countDocuments({ user: user._id }), 5);
+        assert.equal(await Streak.countDocuments({ user: user._id }), 1);
+
+        const second = await api('POST', '/auth/social', googleBody());
+        assert.equal(second.status, 200);
+        assert.equal(second.json.isNewUser, false);
+        assert.equal(second.json.data.id, first.json.data.id, 'aynı hesaba girmeli');
+    });
+
+    it('aynı e-postalı local hesap sosyal girişe bağlanır, yeni hesap açılmaz', async () => {
+        await createVerifiedUser('hibrit@test.com');
+        const res = await api('POST', '/auth/social', googleBody({
+            sub: 'google-sub-2', email: 'hibrit@test.com'
+        }));
+        assert.equal(res.status, 200);
+        assert.equal(res.json.isNewUser, false);
+        assert.equal(await User.countDocuments({ email: 'hibrit@test.com' }), 1);
+
+        // Bağlanan hesabın şifresi korunur: e-posta+şifre girişi çalışmaya devam eder
+        const pwLogin = await api('POST', '/auth/login', {
+            body: { email: 'hibrit@test.com', password: 'testsifre123' }
+        });
+        assert.equal(pwLogin.status, 200);
+    });
+
+    it('doğrulanmamış sosyal e-posta 400, desteklenmeyen sağlayıcı 400 döner', async () => {
+        const unverified = await api('POST', '/auth/social', googleBody({
+            sub: 'google-sub-3', email: 'suphe@test.com', email_verified: false
+        }));
+        assert.equal(unverified.status, 400);
+
+        const badProvider = await api('POST', '/auth/social', {
+            body: { provider: 'facebook', idToken: fakeIdToken({ sub: 'x', email: 'x@test.com' }) }
+        });
+        assert.equal(badProvider.status, 400);
+
+        const noToken = await api('POST', '/auth/social', { body: { provider: 'google' } });
+        assert.equal(noToken.status, 400);
+    });
+
+    it('sosyal hesaba şifreyle giriş denemesi 401 döner (crash değil)', async () => {
+        const res = await api('POST', '/auth/login', {
+            body: { email: 'sosyal@test.com', password: 'rastgele-sifre' }
+        });
+        assert.equal(res.status, 401);
+    });
+
+    it('sosyal hesap şifre değiştiremez (400), silme taze idToken ile onaylanır', async () => {
+        const tokens = (await api('POST', '/auth/social', googleBody())).json;
+
+        const cp = await api('PUT', '/auth/change-password', {
+            token: tokens.accessToken,
+            body: { oldPassword: 'x', newPassword: 'yenisifre123' }
+        });
+        assert.equal(cp.status, 400, 'şifresiz hesap change-password kullanamaz');
+
+        // Yanlış sub'lı idToken ile silme reddedilir
+        const wrong = await api('DELETE', '/auth/delete-account', {
+            token: tokens.accessToken,
+            body: { idToken: fakeIdToken({ sub: 'baskasi', email: 'sosyal@test.com' }) }
+        });
+        assert.equal(wrong.status, 401);
+
+        const del = await api('DELETE', '/auth/delete-account', {
+            token: tokens.accessToken,
+            body: { idToken: fakeIdToken({ sub: 'google-sub-1', email: 'sosyal@test.com' }) }
+        });
+        assert.equal(del.status, 200);
+        assert.equal(await User.countDocuments({ email: 'sosyal@test.com' }), 0);
+    });
+});
+
 describe('Öğrenme döngüsü (SRS)', () => {
     let token, userId, wordId;
 
@@ -420,48 +537,125 @@ describe('Quiz', () => {
         token = (await login('quiz@test.com')).accessToken;
     });
 
-    const submitFromDb = async (quizId, correct = true) => {
+    // Soru başına cevap akışı: her soru sırayla cevaplanır, son yanıt final result içerir
+    const answerAllFromDb = async (quizId, correct = true, tok = token, startIndex = 0) => {
         const attempt = await QuizAttempt.findById(quizId);
-        const answers = attempt.questions.map(q =>
-            correct ? q.correctIndex : (q.correctIndex + 1) % 4
-        );
-        return api('POST', `/quiz/${quizId}/submit`, { token, body: { answers } });
+        let last;
+        for (let i = startIndex; i < attempt.questions.length; i++) {
+            const q = attempt.questions[i];
+            const answer = q.format === 'typing'
+                ? (correct ? q.correctAnswers[0] : 'kesin-yanlis-cevap')
+                : (correct ? q.correctIndex : (q.correctIndex + 1) % 4);
+            last = await api('POST', `/quiz/${quizId}/answer`, { token: tok, body: { index: i, answer } });
+        }
+        return last;
     };
 
-    it('placement N5 ile başlar, 12 soru verir, cevap anahtarı sızdırmaz', async () => {
+    it('placement N5 ile başlar, 10 soru verir, cevap anahtarı sızdırmaz', async () => {
         const res = await api('POST', '/quiz/start', { token, body: { type: 'placement' } });
         assert.equal(res.status, 200);
         assert.equal(res.json.data.jlptLevel, 'N5');
-        assert.equal(res.json.data.totalQuestions, 12);
+        assert.equal(res.json.data.totalQuestions, 10, '10 soru × 5 basamak = 50');
         assert.ok(!JSON.stringify(res.json).includes('correctIndex'), 'cevap anahtarı sızmamalı');
+        assert.ok(!JSON.stringify(res.json).includes('correctAnswers'), 'yazma cevap anahtarı sızmamalı');
 
-        const sub = await submitFromDb(res.json.data.quizId, true);
-        assert.equal(sub.json.data.passed, true);
-        assert.equal(sub.json.data.unlockedLevel, 'N4');
-        assert.equal(sub.json.data.nextRung, 'N4');
+        const last = await answerAllFromDb(res.json.data.quizId, true);
+        assert.equal(last.json.data.finished, true);
+        const result = last.json.data.result;
+        assert.equal(result.passed, true);
+        assert.equal(result.unlockedLevel, 'N4');
+        assert.equal(result.nextRung, 'N4');
+        assert.equal(result.summary, undefined, 'merdiven sürerken özet dönmez');
     });
 
-    it('sonraki basamak N4; kalınca merdiven cezasız biter', async () => {
+    it('cevaplar anlık geri bildirim döner; N4\'te kalınca merdiven cezasız biter ve özet döner', async () => {
         const res = await api('POST', '/quiz/start', { token, body: { type: 'placement' } });
         assert.equal(res.json.data.jlptLevel, 'N4');
+        const quizId = res.json.data.quizId;
 
-        const sub = await submitFromDb(res.json.data.quizId, false);
-        assert.equal(sub.json.data.passed, false);
-        assert.equal(sub.json.data.placementFinished, true);
-        assert.equal(sub.json.data.nextAttemptAllowedAt, undefined, 'placement cooldown yakmaz');
+        // İlk soruya yanlış cevap: "Yanlış Cevap!" kartının verisi dönmeli
+        const attempt = await QuizAttempt.findById(quizId);
+        const q0 = attempt.questions[0];
+        const wrongAnswer = q0.format === 'typing' ? 'kesin-yanlis-cevap' : (q0.correctIndex + 1) % 4;
+        const fb = await api('POST', `/quiz/${quizId}/answer`, { token, body: { index: 0, answer: wrongAnswer } });
+        assert.equal(fb.status, 200);
+        assert.equal(fb.json.data.correct, false);
+        assert.ok(fb.json.data.word.kanji && fb.json.data.word.meaning, '"駅 — istasyon" satırı için kelime dönmeli');
+        assert.ok('correctIndex' in fb.json.data || 'correctAnswer' in fb.json.data, 'doğru cevap gösterilebilmeli');
+        assert.equal(fb.json.data.finished, false);
+        assert.equal(fb.json.data.answeredCount, 1);
+
+        // Aynı soru ikinci kez cevaplanamaz, index sınırları denetlenir
+        const dup = await api('POST', `/quiz/${quizId}/answer`, { token, body: { index: 0, answer: wrongAnswer } });
+        assert.equal(dup.status, 400);
+        const badIdx = await api('POST', `/quiz/${quizId}/answer`, { token, body: { index: 99, answer: 0 } });
+        assert.equal(badIdx.status, 400);
+
+        // Kalanları da yanlış cevapla → merdiven biter
+        const last = await answerAllFromDb(quizId, false, token, 1);
+        const result = last.json.data.result;
+        assert.equal(result.passed, false);
+        assert.equal(result.placementFinished, true);
+        assert.equal(result.nextAttemptAllowedAt, undefined, 'placement cooldown yakmaz');
+
+        // "Seviyen Belirlendi" ekranı: iki basamağın toplamları (10 doğru + 10 yanlış)
+        const summary = result.summary;
+        assert.equal(summary.determinedLevel, 'N4', 'N5 geçildi, N4\'te kalındı → seviye N4');
+        assert.equal(summary.totalQuestions, 20);
+        assert.equal(summary.correctCount, 10);
+        assert.equal(summary.wrongCount, 10);
+        assert.ok(typeof summary.durationSeconds === 'number' && summary.durationSeconds >= 0);
 
         const again = await api('POST', '/quiz/start', { token, body: { type: 'placement' } });
         assert.equal(again.status, 400, 'placement tek seferliktir');
+    });
+
+    it('yazma sorusu: büyük harf/noktalama/parantez toleranslı puanlanır, boş yanlış sayılır', async () => {
+        const user = await createVerifiedUser('yazma@test.com');
+        const t = (await login('yazma@test.com')).accessToken;
+        const word = await Word.findOne({ jlptLevel: 'N5', isCore: true });
+
+        // Deterministik test için deneme doğrudan oluşturulur (start'ta format rastgele)
+        const attempt = await QuizAttempt.create({
+            user: user._id, type: 'placement', jlptLevel: 'N5',
+            questions: [
+                { word: word._id, format: 'typing', prompt: { kanji: word.kanji, romaji: word.romaji }, correctAnswers: ['gelecek yıl', 'seneye'] },
+                { word: word._id, format: 'typing', prompt: { kanji: word.kanji, romaji: word.romaji }, correctAnswers: ['tehlikeli'] },
+                { word: word._id, format: 'typing', prompt: { kanji: word.kanji, romaji: word.romaji }, correctAnswers: ['mavi'] },
+                { word: word._id, format: 'meaning', prompt: { kanji: word.kanji }, choices: ['a', 'b', 'c', 'd'], correctIndex: 2 }
+            ]
+        });
+
+        const answers = ['  SENEYE!! ', 'Tehlikeli (çok)', '', 2];
+        const notes = [
+            'varyant + boşluk/noktalama/büyük harf kabul edilmeli',
+            'parantez içi yok sayılmalı',
+            'boş bırakılan (Şimdilik Geç) yanlış sayılmalı',
+            'şıklı soru index ile puanlanmalı'
+        ];
+        const expected = [true, true, false, true];
+        const feedbacks = [];
+        for (let i = 0; i < answers.length; i++) {
+            const r = await api('POST', `/quiz/${attempt._id}/answer`, {
+                token: t, body: { index: i, answer: answers[i] }
+            });
+            assert.equal(r.status, 200);
+            assert.equal(r.json.data.correct, expected[i], notes[i]);
+            feedbacks.push(r);
+        }
+        assert.equal(feedbacks[0].json.data.correctAnswer, 'gelecek yıl', 'geri bildirim kartı için cevap dönmeli');
+        assert.equal(feedbacks.at(-1).json.data.result.correctCount, 3);
     });
 
     it('levelup: 35 soru, kalınca 3 gün cooldown, tekrar deneme 403', async () => {
         const res = await api('POST', '/quiz/start', { token, body: { type: 'levelup', jlptLevel: 'N4' } });
         assert.equal(res.json.data.totalQuestions, 35);
 
-        const sub = await submitFromDb(res.json.data.quizId, false);
-        assert.equal(sub.json.data.passed, false);
-        assert.equal(sub.json.data.failCount, 1);
-        assert.equal(sub.json.data.cooldownDays, 3);
+        const last = await answerAllFromDb(res.json.data.quizId, false);
+        const result = last.json.data.result;
+        assert.equal(result.passed, false);
+        assert.equal(result.failCount, 1);
+        assert.equal(result.cooldownDays, 3);
 
         const retry = await api('POST', '/quiz/start', { token, body: { type: 'levelup', jlptLevel: 'N4' } });
         assert.equal(retry.status, 403);
@@ -477,6 +671,287 @@ describe('Quiz', () => {
         await sleep(100);
         const count = await Event.countDocuments({ user: userId, type: 'quiz_completed' });
         assert.equal(count, 3);
+    });
+});
+
+describe('İçerikli soru tipleri (boşluk doldurma & görselli)', () => {
+    before(async () => {
+        // Tüm N5 kelimelerine örnek cümle + görsel işle: içerik formatları seçilebilir olsun
+        await Word.updateMany({ jlptLevel: 'N5' }, [{
+            $set: {
+                example: { $concat: ['これは', '$kanji', 'です。'] },
+                imageUrl: { $concat: ['https://img.test/', '$romaji', '.jpg'] }
+            }
+        }], { updatePipeline: true });
+    });
+
+    it('içeriği olan kelimede fillblank/image üretilir ve doğru biçimlidir', async () => {
+        const QuizService = require('../modules/quiz/quiz.service');
+        // 6 formatlı 40 çekilişte içerik formatlarından en az biri pratikte kesin çıkar
+        const questions = [
+            ...await QuizService.generateQuestions('N5', 20, true),
+            ...await QuizService.generateQuestions('N5', 20, true)
+        ];
+
+        const fillblanks = questions.filter(q => q.format === 'fillblank');
+        const images = questions.filter(q => q.format === 'image');
+        assert.ok(fillblanks.length + images.length > 0, 'içerik formatları karışıma girmeli');
+
+        for (const q of fillblanks) {
+            assert.match(q.prompt.sentence, /____/, 'cümlede boşluk olmalı');
+            assert.ok(!q.prompt.audioUrl, 'ses cevabı söylerdi — fillblank\'te olmamalı');
+            assert.equal(q.choices.length, 4);
+            assert.ok(q.choices[q.correctIndex], 'doğru şık listede olmalı');
+        }
+        for (const q of images) {
+            assert.ok(q.prompt.imageUrl);
+            assert.ok(!q.prompt.audioUrl, 'ses cevabı söylerdi — image\'da olmamalı');
+            assert.equal(q.choices.length, 4);
+        }
+
+        // levelup üretimi içerik formatlarını kullanmaz (klasik 3 şıklı)
+        const classic = await QuizService.generateQuestions('N5', 20, false);
+        assert.ok(classic.every(q => ['meaning', 'reverse', 'reading'].includes(q.format)));
+    });
+
+    it('fillblank/image cevapları API üzerinden puanlanır', async () => {
+        const user = await createVerifiedUser('icerik@test.com');
+        const t = (await login('icerik@test.com')).accessToken;
+        const word = await Word.findOne({ jlptLevel: 'N5', isCore: true });
+
+        const attempt = await QuizAttempt.create({
+            user: user._id, type: 'placement', jlptLevel: 'N5',
+            questions: [
+                { word: word._id, format: 'fillblank', prompt: { sentence: 'これは____です。' }, choices: ['あ', word.kanji, 'い', 'う'], correctIndex: 1 },
+                { word: word._id, format: 'image', prompt: { imageUrl: 'https://img.test/x.jpg' }, choices: [word.kanji, 'あ', 'い', 'う'], correctIndex: 0 }
+            ]
+        });
+
+        const a1 = await api('POST', `/quiz/${attempt._id}/answer`, { token: t, body: { index: 0, answer: 1 } });
+        assert.equal(a1.json.data.correct, true);
+
+        const a2 = await api('POST', `/quiz/${attempt._id}/answer`, { token: t, body: { index: 1, answer: 3 } });
+        assert.equal(a2.json.data.correct, false);
+        assert.equal(a2.json.data.correctIndex, 0);
+        assert.equal(a2.json.data.finished, true);
+        assert.equal(a2.json.data.result.score, 50);
+    });
+});
+
+describe('Ana ekran (Home)', () => {
+    let token, todayStr;
+
+    before(async () => {
+        await createVerifiedUser('home@test.com', { dailyGoal: 20 });
+        token = (await login('home@test.com')).accessToken;
+        // Varsayılan timezone Europe/Istanbul — gün string'i ona göre
+        todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date());
+
+        // Havuz + oturum aç, 2 kelime cevapla (1 doğru 1 yanlış)
+        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const [w1, w2] = today.json.data.newWords;
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
+        await api('POST', '/userwords/answer', { token, body: { wordId: w1._id, result: 'correct' } });
+        await api('POST', '/userwords/answer', { token, body: { wordId: w2._id, result: 'wrong' } });
+        await sleep(100); // answer_submitted event'leri fire-and-forget yazılır
+    });
+
+    it('summary ana ekranın tüm başlık verisini döner', async () => {
+        const res = await api('GET', '/home/summary', { token });
+        assert.equal(res.status, 200);
+        const d = res.json.data;
+
+        assert.equal(d.name, 'Test', '"Merhaba <ad>" başlığı için');
+        assert.equal(d.dailyGoal, 20, 'ilerleme çemberinin paydası (14/20)');
+        assert.equal(d.today.totalWords, 2);
+        assert.equal(d.today.correctCount, 1);
+        assert.equal(d.today.wrongCount, 1);
+        assert.equal(d.todayMistakeCount, 1, '"Bugünün Hataları — N Hata" başlığı için');
+        assert.equal(d.streak.current, 1);
+        assert.ok(typeof d.tomorrowReviews === 'number', '"Yarın N Kart Bekliyor" bandı için');
+    });
+
+    it('gün detayı: sayılar + o gün çalışılan kelimeler sonuçlarıyla döner', async () => {
+        const res = await api('GET', `/home/day/${todayStr}`, { token });
+        assert.equal(res.status, 200);
+        const d = res.json.data;
+
+        assert.equal(d.date, todayStr);
+        assert.equal(d.goal, 20, 'o günün havuz büyüklüğü çemberin paydasıdır');
+        assert.equal(d.totalWords, 2);
+        assert.equal(d.correctCount, 1);
+        assert.equal(d.wrongCount, 1);
+        assert.equal(d.words.length, 2);
+        assert.ok(d.words.every(w => w.word.kanji && ['correct', 'wrong', 'empty'].includes(w.result)));
+        assert.equal(d.words.filter(w => w.result === 'wrong').length, 1);
+    });
+
+    it('gün detayı: veri olmayan gün sıfırlarla döner, bozuk tarih 400', async () => {
+        const empty = await api('GET', '/home/day/2020-01-01', { token });
+        assert.equal(empty.status, 200);
+        assert.equal(empty.json.data.totalWords, 0);
+        assert.deepEqual(empty.json.data.words, []);
+
+        const bad = await api('GET', '/home/day/22-nisan', { token });
+        assert.equal(bad.status, 400);
+
+        const badCalendar = await api('GET', '/home/day/2026-13-45', { token });
+        assert.equal(badCalendar.status, 400);
+    });
+});
+
+describe('Seviyeler ekranı', () => {
+    let token;
+
+    before(async () => {
+        await createVerifiedUser('seviye@test.com');
+        token = (await login('seviye@test.com')).accessToken;
+        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const [w1, w2] = today.json.data.newWords;
+        await api('POST', '/userwords/answer', { token, body: { wordId: w1._id, result: 'correct' } });
+        await api('POST', '/userwords/answer', { token, body: { wordId: w2._id, result: 'wrong' } });
+    });
+
+    it('progress %75 eşiğini ve seviye listesini döner', async () => {
+        const res = await api('GET', '/progress', { token });
+        assert.equal(res.status, 200);
+        assert.equal(res.json.data.completionThreshold, 75, '"listeyi %75 oranında tamamlayın" kutusu için');
+        assert.equal(res.json.data.levels.length, 5);
+        const n5 = res.json.data.levels.find(l => l.jlptLevel === 'N5');
+        assert.ok(n5.isUnlocked && n5.totalWords > 0);
+    });
+
+    it('kelime listesi jlptLevel + masteryLevel filtreleriyle çalışır', async () => {
+        const all = await api('GET', '/userwords/list?jlptLevel=N5', { token });
+        assert.equal(all.status, 200);
+        assert.equal(all.json.data.total, 2);
+        assert.ok(all.json.data.items[0].word.kanji, 'kelime dokümanı gömülü gelmeli');
+
+        const lvl1 = await api('GET', '/userwords/list?jlptLevel=N5&masteryLevel=1', { token });
+        assert.equal(lvl1.json.data.total, 1, 'yanlış cevaplanan kelime 1. seviyede olmalı');
+
+        const bad = await api('GET', '/userwords/list?masteryLevel=9', { token });
+        assert.equal(bad.status, 400);
+    });
+});
+
+describe('Ayarlar ekranı', () => {
+    let token;
+
+    before(async () => {
+        await createVerifiedUser('ayar@test.com');
+        token = (await login('ayar@test.com')).accessToken;
+    });
+
+    it('verify-password: doğru şifre 200, yanlış 401 döner', async () => {
+        const ok = await api('POST', '/auth/verify-password', {
+            token, body: { password: 'testsifre123' }
+        });
+        assert.equal(ok.status, 200);
+
+        const wrong = await api('POST', '/auth/verify-password', {
+            token, body: { password: 'yanlis-sifre' }
+        });
+        assert.equal(wrong.status, 401);
+        assert.match(wrong.json.message, /Şifreniz yanlış/);
+    });
+
+    it('tercihler (dil/tema/font) kısmi güncellenir, geçersiz değer 400', async () => {
+        const me = await api('GET', '/auth/me', { token });
+        assert.deepEqual(me.json.data.preferences, { language: 'tr', theme: 'light', fontSize: 'medium' });
+        assert.equal(me.json.data.isPremium, false);
+
+        const res = await api('PUT', '/auth/update-info', {
+            token, body: { preferences: { theme: 'dark' } }
+        });
+        assert.equal(res.status, 200);
+        assert.equal(res.json.data.preferences.theme, 'dark');
+        assert.equal(res.json.data.preferences.fontSize, 'medium', 'gönderilmeyen tercih korunmalı');
+
+        const bad = await api('PUT', '/auth/update-info', {
+            token, body: { preferences: { theme: 'neon' } }
+        });
+        assert.equal(bad.status, 400);
+    });
+
+    it('isPremium update-info ile değiştirilemez, timezone değiştirilebilir', async () => {
+        const res = await api('PUT', '/auth/update-info', {
+            token, body: { isPremium: true, timezone: 'Europe/Berlin' }
+        });
+        assert.equal(res.status, 200);
+        assert.equal(res.json.data.isPremium, false, 'premium yalnızca satın almayla açılır');
+        assert.equal(res.json.data.timezone, 'Europe/Berlin');
+
+        // Geçersiz timezone patlatmaz, varsayılana düşer
+        const badTz = await api('PUT', '/auth/update-info', {
+            token, body: { timezone: 'Mars/Olympus' }
+        });
+        assert.equal(badTz.json.data.timezone, 'Europe/Istanbul');
+    });
+});
+
+describe('Bildirim üretimi (cron)', () => {
+    let userId;
+    // Europe/Istanbul = UTC+3 (DST yok) — kullanıcının yerel saatine denk gelen an
+    const atIstanbulHour = (h) => {
+        const d = new Date();
+        d.setUTCHours(h - 3, 30, 0, 0);
+        return d;
+    };
+
+    before(async () => {
+        const user = await createVerifiedUser('bildirim@test.com', { dailyGoal: 25 });
+        userId = user._id;
+        await Streak.updateOne(
+            { user: userId },
+            { currentStreak: 12, lastStudyDate: new Date(Date.now() - 2 * 86400000) }
+        );
+    });
+
+    it('10:00 — Bugünün Görevi + Günlük Kelime üretilir; tekrar çağrı çoğaltmaz', async () => {
+        await NotificationService.generateDailyNotifications(atIstanbulHour(10));
+        await NotificationService.generateDailyNotifications(atIstanbulHour(10));
+
+        const tasks = await Notification.find({ user: userId, type: 'daily_task' });
+        assert.equal(tasks.length, 1, 'dedupe: günde 1 görev bildirimi');
+        assert.match(tasks[0].body, /25 ezberlenecek/, 'gövde kullanıcının dailyGoal\'unu içermeli');
+
+        const words = await Notification.find({ user: userId, type: 'daily_word' });
+        assert.equal(words.length, 1);
+        assert.match(words[0].body, /Bugünün günlük kelimesi/);
+        assert.ok(words[0].data.wordId, 'push deep-link için wordId dönmeli');
+    });
+
+    it('19:00 nazik seri hatırlatması, 23:00 son uyarı üretir', async () => {
+        await NotificationService.generateDailyNotifications(atIstanbulHour(19));
+        const reminder = await Notification.findOne({ user: userId, type: 'streak_reminder' });
+        assert.equal(reminder.title, '12 Günlük Seri!');
+        assert.match(reminder.body, /devam ettirmeyi unutma/);
+
+        await NotificationService.generateDailyNotifications(atIstanbulHour(23));
+        const warning = await Notification.findOne({ user: userId, type: 'streak_warning' });
+        assert.match(warning.body, /1 saat sonra/);
+    });
+
+    it('bugün çalışana seri bildirimi gitmez; tercihi kapalıya günlükler gitmez', async () => {
+        const calisan = await createVerifiedUser('calisan@test.com');
+        await Streak.updateOne({ user: calisan._id }, { currentStreak: 5, lastStudyDate: new Date() });
+
+        const kapali = await createVerifiedUser('kapali@test.com', {
+            notificationSettings: { dailyReminder: false, streakReminder: true, wordLevelDown: true }
+        });
+
+        await NotificationService.generateDailyNotifications(atIstanbulHour(19));
+        await NotificationService.generateDailyNotifications(atIstanbulHour(10));
+
+        assert.equal(
+            await Notification.countDocuments({ user: calisan._id, type: { $in: ['streak_reminder', 'streak_warning'] } }),
+            0, 'bugün çalışmış kullanıcı rahatsız edilmez'
+        );
+        assert.equal(
+            await Notification.countDocuments({ user: kapali._id, type: { $in: ['daily_task', 'daily_word'] } }),
+            0, 'dailyReminder kapalıysa günlük bildirimler oluşmaz'
+        );
     });
 });
 

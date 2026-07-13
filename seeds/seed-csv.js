@@ -6,7 +6,7 @@ const csv = require('csv-parse/sync');
 const wanakana = require('wanakana');
 const Word = require('../models/Word');
 
-dotenv.config({ path: './config/.env' });
+dotenv.config();
 
 const LEVEL_FILES = {
     N5: 'n5.csv',
@@ -46,6 +46,8 @@ async function seed() {
 
         const words = records.map(r => ({
             kanji: r.expression,
+            // Kana okunuşu olduğu gibi saklanır (detay kartındaki えき satırı)
+            kana: r.reading || r.expression || '',
             // CSV'deki kana okunuşu latin romaji'ye çevrilir (たべる -> taberu)
             romaji: wanakana.toRomaji(r.reading || r.expression || ''),
             meaning: r.meaning,
@@ -59,8 +61,9 @@ async function seed() {
             updateOne: {
                 filter: { kanji: w.kanji, jlptLevel: w.jlptLevel },
                 update: {
-                    // type ve romaji her seed'de tazelenir, diğer alanlar sadece ilk eklemede yazılır
-                    $set: { type: w.type, romaji: w.romaji },
+                    // type/romaji/kana her seed'de tazelenir (mevcut kayıtlara kana böyle işlenir),
+                    // diğer alanlar sadece ilk eklemede yazılır
+                    $set: { type: w.type, romaji: w.romaji, kana: w.kana },
                     $setOnInsert: { kanji: w.kanji, meaning: w.meaning, jlptLevel: w.jlptLevel }
                 },
                 upsert: true

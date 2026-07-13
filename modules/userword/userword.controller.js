@@ -24,6 +24,12 @@ const UserWordController = {
         const result = await UserWordService.getTodayMistakes(req.user.id, page, limit);
         res.status(200).json({ success: true, data: result });
     }),
+
+    getWordList: catchAsync(async (req, res) => {
+        const { jlptLevel, masteryLevel, page, limit } = req.query;
+        const result = await UserWordService.getWordList(req.user.id, { jlptLevel, masteryLevel, page, limit });
+        res.status(200).json({ success: true, data: result });
+    }),
 };
 
 module.exports = UserWordController;

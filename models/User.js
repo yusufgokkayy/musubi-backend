@@ -8,7 +8,9 @@ const UserSchema = new mongoose.Schema({
     },
     surname: {
         type: String,
-        required: [true, 'Please provide a surname']
+        // Apple ilk girişte bile soyadı göndermeyebilir; sosyal hesapta zorunlu değil
+        required: [function () { return this.provider === 'local'; }, 'Please provide a surname'],
+        default: ''
     },
     email: {
         type: String,
@@ -19,9 +21,17 @@ const UserSchema = new mongoose.Schema({
     password: {
         type: String,
         minlength: [8, 'Şifreniz çok kısa (en az 8 karakter olmalı)'],
-        required: [true, 'Please provide a password'],
+        // Sosyal girişle açılan hesapların şifresi yoktur; sonradan
+        // forgot-password ile şifre belirlerse hibrit hesaba dönüşür
+        required: [function () { return this.provider === 'local'; }, 'Please provide a password'],
         select: false
     },
+    provider: {
+        type: String,
+        enum: ['local', 'google', 'apple'],
+        default: 'local'
+    },
+    providerId: String,
     profile_image: {
         type: String,
         default: 'default.jpg'
@@ -50,6 +60,18 @@ const UserSchema = new mongoose.Schema({
         streakReminder: { type: Boolean, default: true },
         wordLevelDown: { type: Boolean, default: true }
     },
+    // Ayarlar ekranındaki cihazlar arası senkron tercihler (Dil/Tema/Font Boyutu)
+    preferences: {
+        language: { type: String, enum: ['tr'], default: 'tr' },
+        theme: { type: String, enum: ['light', 'dark', 'system'], default: 'light' },
+        fontSize: { type: String, enum: ['small', 'medium', 'large'], default: 'medium' }
+    },
+    // "Reklamları Kaldır" — yalnızca satın alma doğrulaması set eder,
+    // update-info üzerinden değiştirilemez
+    isPremium: {
+        type: Boolean,
+        default: false
+    },
     fcmToken: {
         type: String,
         select: false
@@ -68,12 +90,21 @@ const UserSchema = new mongoose.Schema({
     }
 });
 
+// Aynı sağlayıcı hesabı iki kullanıcıya bağlanamaz; local kullanıcıların
+// providerId'si olmadığından partial filter ile index dışında tutulurlar
+UserSchema.index(
+    { provider: 1, providerId: 1 },
+    { unique: true, partialFilterExpression: { providerId: { $exists: true } } }
+);
+
 UserSchema.pre('save', async function () {
     if (!this.isModified('password')) return;
     this.password = await bcrypt.hash(this.password, 10);
 });
 
 UserSchema.methods.comparePassword = async function (enteredPassword) {
+    // Sosyal hesapta şifre yoktur; bcrypt'e undefined geçmek exception atar
+    if (!enteredPassword || !this.password) return false;
     return await bcrypt.compare(enteredPassword, this.password);
 };
 

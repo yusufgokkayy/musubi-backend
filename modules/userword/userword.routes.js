@@ -8,5 +8,6 @@ router.get('/today',    protect, isEmailVerified, UserWordController.getTodayWor
 router.get('/stats',    protect, isEmailVerified, UserWordController.getUserStats);
 router.post('/answer',  protect, isEmailVerified, UserWordController.submitAnswer);
 router.get('/mistakes', protect, isEmailVerified, UserWordController.getTodayMistakes);
+router.get('/list',     protect, isEmailVerified, UserWordController.getWordList);
 
 module.exports = router;

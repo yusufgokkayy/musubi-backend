@@ -1,4 +1,4 @@
-# Misugi API — İstek/Yanıt Referansı
+# Musubi API — İstek/Yanıt Referansı
 
 Mobil entegrasyon için tam sözleşme. Tüm yollar `/api` önekiyle başlar, tüm gövdeler JSON'dur (`Content-Type: application/json`).
 
@@ -11,6 +11,43 @@ Mobil entegrasyon için tam sözleşme. Tüm yollar `/api` önekiyle başlar, t�
 ---
 
 ## Auth — `/auth`
+
+### POST /auth/check-email
+Onboarding'in "E-posta ile Devam Et" adımı: ad-soyad/şifre ekranlarına geçmeden adresin biçimini ve müsaitliğini kontrol eder.
+```jsonc
+// İstek
+{ "email": "yusuf@ornek.com" }
+
+// 200
+{ "success": true, "available": true }   // false ise adres kayıtlı → giriş ekranına yönlendir
+```
+Hata: `400 "Geçerli bir e-posta adresi girin"` (boş veya bozuk biçim).
+
+### POST /auth/social
+Google/Apple ile giriş. Client, sağlayıcı SDK'sından aldığı `idToken`'ı gönderir; backend imzayı sağlayıcının anahtarlarıyla doğrular. Hesap yoksa oluşturulur, aynı e-postayla local hesap varsa sosyal hesaba bağlanır (şifresi korunur). Sosyal hesapların e-postası doğrulanmış sayılır — doğrulama maili akışı çalışmaz.
+```jsonc
+// İstek — name/surname opsiyonel (Apple ad bilgisini yalnızca İLK girişte client'a verir, o zaman iletin)
+{
+  "provider": "google",          // "google" | "apple"
+  "idToken": "eyJhbGciOiJSUzI1...",
+  "name": "Yusuf",               // opsiyonel
+  "surname": "Gökkaya",          // opsiyonel
+  "deviceName": "Pixel 8"        // opsiyonel; yoksa User-Agent kullanılır
+}
+
+// 201 (yeni hesap) veya 200 (mevcut hesaba giriş)
+{
+  "success": true,
+  "accessToken": "eyJ...",
+  "refreshToken": "eyJ...",
+  "isNewUser": true,             // true ise client onboarding/seviye testi teklifine yönlendirebilir
+  "isEmailVerified": true,
+  "data": { "id": "665f1a...", "name": "Yusuf" }
+}
+```
+Hatalar: `400 "Desteklenmeyen sağlayıcı"`, `400 "idToken gerekli"`, `400 "Sosyal hesabınızın e-postası doğrulanmamış"`, `401 "Geçersiz sosyal giriş tokenı"`.
+
+Notlar: Sosyal hesabın şifresi yoktur — e-posta+şifre login denemesi `401`, `change-password` `400` döner; şifre belirlemek isterse forgot-password akışı kullanılır (hesap hibrite dönüşür).
 
 ### POST /auth/register
 ```jsonc
@@ -83,6 +120,9 @@ Hata: `401 "No refresh token"` / `401 "Invalid refresh token"` (oturum kapatılm
     "isEmailVerified": true,
     "dailyGoal": 20,
     "notificationSettings": { "dailyReminder": true, "streakReminder": true, "wordLevelDown": true },
+    "preferences": { "language": "tr", "theme": "light", "fontSize": "medium" },
+    "isPremium": false,        // "Reklamları Kaldır" durumu — yalnızca satın alma doğrulaması değiştirir
+    "provider": "local",       // local | google | apple
     "timezone": "Europe/Istanbul",
     "createdAt": "2026-07-01T09:30:00.000Z"
   }
@@ -99,14 +139,26 @@ Hata: `401 "No refresh token"` / `401 "Invalid refresh token"` (oturum kapatılm
   "password": "yenisifre123",
   "dailyGoal": 30,                    // 5-50 arası
   "fcmToken": "fcm-cihaz-tokeni",     // push için Firebase SDK'dan alınan token
-  "timezone": "Europe/Berlin",
-  "notificationSettings": { "streakReminder": false }   // kısmi güncelleme, kalanlar korunur
+  "timezone": "Europe/Berlin",        // geçersiz değer varsayılana (Europe/Istanbul) düşer
+  "notificationSettings": { "streakReminder": false },   // kısmi güncelleme, kalanlar korunur
+  "preferences": { "theme": "dark" }  // kısmi güncelleme — language: tr | theme: light/dark/system | fontSize: small/medium/large
 }
 
 // 200 — güncellenmiş kullanıcı (GET /auth/me ile aynı biçim)
 { "success": true, "data": { /* ... */ } }
 ```
-Hatalar: `400 "Bu e-posta adresi zaten kullanımda"`, `500 "Doğrulama maili gönderilemedi, e-posta değiştirilmedi"`.
+Hatalar: `400 "Bu e-posta adresi zaten kullanımda"`, `400` enum validasyonu (geçersiz theme/fontSize), `500 "Doğrulama maili gönderilemedi, e-posta değiştirilmedi"`. `isPremium` bu endpoint'ten **değiştirilemez** (gönderilirse yok sayılır).
+
+### POST /auth/verify-password 🔒✉️
+Ayarlardaki adım adım şifre değiştirme akışının ilk ekranı ("Şifre Girin" alt sayfası): mevcut şifre doğrulanmadan yeni şifre ekranına geçilmez.
+```jsonc
+// İstek
+{ "password": "mevcutsifre" }
+
+// 200
+{ "success": true, "message": "Password verified" }
+```
+Hatalar: `401 "Şifreniz yanlış. Lütfen tekrar deneyin."` (ekrandaki hata metniyle aynı), `400` (sosyal hesapta şifre yoktur). Doğrulama sonrası yeni şifre `PUT /auth/change-password`'e eski+yeni birlikte gönderilir.
 
 ### PUT /auth/change-password 🔒✉️
 ```jsonc
@@ -162,10 +214,13 @@ Hata: `400 "Invalid or expired token"` (link 24 saat geçerli).
 // İstek — güvenlik için şifre tekrar istenir
 { "password": "enaz8karakter" }
 
+// Şifresiz sosyal hesap: şifre yerine sağlayıcıdan alınan TAZE idToken gönderilir
+{ "idToken": "eyJhbGciOiJSUzI1..." }
+
 // 200 — kullanıcı + TÜM ilişkili veri kalıcı silinir (KVKK)
 { "success": true, "message": "Account deleted" }
 ```
-Hata: `401 "Password is incorrect"`.
+Hata: `401 "Password is incorrect"` / `401 "Kimlik doğrulanamadı"`.
 
 ---
 
@@ -175,11 +230,13 @@ Hata: `401 "Password is incorrect"`.
 ```jsonc
 {
   "_id": "665f2b...",
-  "kanji": "水",
-  "romaji": "mizu",
-  "meaning": "water",
+  "kanji": "駅",
+  "kana": "えき",          // detay kartında kanjinin altındaki okunuş; eski kayıtta boşsa romaji'ye düşün
+  "romaji": "eki",
+  "meaning": "istasyon",
   "type": "isim",
   "jlptLevel": "N5",       // N5 | N4 | N3 | N2 | N1
+  "audioUrl": null,        // varsa "Dinle" butonu ("Yavaş" client'ta oynatma hızıyla)
   "isCore": true           // aktif oyun havuzunda mı (3000 çekirdek kelime)
 }
 ```
@@ -288,6 +345,22 @@ Hatalar: `400 "Invalid result, use: correct, empty, wrong"`, `404 "Word not foun
 }
 ```
 
+### GET /userwords/list 🔒✉️
+Seviyeler detayındaki "Kelime Listesi": çalışılmış kelimeler, dropdown'daki mastery seviyesine göre filtrelenebilir. Query: `?jlptLevel=N5&masteryLevel=5&page=1&limit=20` (hepsi opsiyonel; `limit` en fazla 100). Sıralama: son çalışılandan eskiye.
+```jsonc
+// 200
+{
+  "success": true,
+  "data": {
+    "items": [ { /* UserWord + gömülü word */ } ],
+    "total": 200,
+    "page": 1,
+    "totalPages": 10
+  }
+}
+```
+Hata: `400 "masteryLevel 1-5 arası olmalı"`. Dropdown'daki seviye sayıları `GET /progress/:jlptLevel/distribution`'dan gelir.
+
 ### GET /userwords/mistakes?page=1&limit=10 🔒✉️
 Bugün (kullanıcının saat diliminde) yanlış yapılmış kelimeler, çok yanlıştan aza sıralı.
 ```jsonc
@@ -369,16 +442,20 @@ Hata: `404 "No active session found"`.
 
 ### GET /progress 🔒✉️
 ```jsonc
-// 200
+// 200 — Seviyeler ekranının liste verisi
 {
   "success": true,
-  "data": [
-    { "jlptLevel": "N5", "isUnlocked": true,  "completionRate": 42, "totalWords": 300 },
-    { "jlptLevel": "N4", "isUnlocked": false, "completionRate": 0,  "totalWords": 400 }
-    // ... N3, N2, N1
-  ]
+  "data": {
+    "completionThreshold": 75,   // "Bir sonraki seviyeye geçmek için listeyi %75 oranında tamamlayın" kutusu
+    "levels": [
+      { "jlptLevel": "N5", "isUnlocked": true,  "completionRate": 42, "totalWords": 300 },
+      { "jlptLevel": "N4", "isUnlocked": false, "completionRate": 0,  "totalWords": 400 }
+      // ... N3, N2, N1
+    ]
+  }
 }
 ```
+Not: seviye kilidi, tamamlanma oranı `completionThreshold`'a ulaşınca çalışmayla ya da seviye atlama sınavıyla açılır.
 
 ### GET /progress/:jlptLevel/distribution 🔒✉️
 ```jsonc
@@ -405,7 +482,7 @@ Hata: `400 "Invalid level"`.
 {
   "success": true,
   "data": {
-    "placementAvailable": true,      // seviye belirleme sınavına girebilir mi
+    "placementAvailable": true,      // seviye belirleme sınavına girebilir mi — "Seviyeni Öğrenelim Mi?" modalı bununla gösterilir ("Daha Sonra" client'ta saklanır, bu alan true kaldıkça Ayarlar'dan tekrar girilebilir)
     "levels": {
       "N5": {
         "unlocked": true,
@@ -435,56 +512,94 @@ Hata: `400 "Invalid level"`.
     "type": "levelup",
     "jlptLevel": "N5",
     "passThreshold": 85,             // placement'ta 70
-    "expiresAt": "2026-07-10T10:30:00.000Z",   // 30 dk — süresinde submit edilmezse expired
-    "totalQuestions": 35,            // placement'ta 12
+    "expiresAt": "2026-07-10T10:30:00.000Z",   // 30 dk — süresinde bitirilmezse expired
+    "totalQuestions": 35,            // placement'ta 10 (5 basamak × 10 = 50 soru)
     "questions": [
       {
         "index": 0,
-        "format": "meaning",         // meaning: kelime→anlam | reverse: anlam→kelime | reading: kanji→okunuş
-        "prompt": { "kanji": "水", "romaji": "mizu" },   // reverse'te {meaning}, reading'de {kanji}
-        "choices": ["water", "fire", "tree", "stone"]    // doğru cevap işaretli DEĞİL (sunucuda skorlanır)
+        "format": "meaning",
+        "prompt": { "kanji": "駅", "romaji": "eki", "audioUrl": "https://..." },
+        "choices": ["istasyon", "tren", "araba", "ben"]  // doğru cevap işaretli DEĞİL (sunucuda skorlanır)
       }
     ]
   }
 }
 ```
+
+Soru formatları ve `prompt` biçimleri:
+| format | Ekran | prompt | choices |
+|---|---|---|---|
+| `meaning` | kelime → anlam seç | `{ kanji, romaji, audioUrl? }` | 4 anlam |
+| `reverse` | anlam → kelime seç | `{ meaning }` (ses YOK — cevabı söylerdi) | 4 kelime |
+| `reading` | kanji → okunuş seç | `{ kanji, audioUrl? }` | 4 okunuş |
+| `typing` | "Bu kelimenin Türkçesini yazınız" | `{ kanji, romaji, audioUrl? }` | YOK (serbest metin) |
+| `fillblank` | "Boşluğa uygun kelimeyi yerleştir" | `{ sentence: "東京____で会いましょう。" }` (ses yok) | 4 kelime |
+| `image` | "Doğru şıkkı işaretleyiniz" (görsel) | `{ imageUrl }` (ses yok) | 4 kelime |
+
+`typing`/`fillblank`/`image` yalnızca placement karışımına girer; levelup klasik 3 şıklı formatla kalır. `fillblank` ve `image`, yalnızca örnek cümlesi/görseli olan kelimelerde üretilir — içerik DB'ye girdikçe karışımda kendiliğinden görünmeye başlarlar, kod değişikliği gerekmez. `audioUrl` varsa "Dinle" butonu gösterilebilir ("Yavaş" client'ta oynatma hızıyla yapılır).
 Hatalar: `400 "Invalid quiz type..."`, `403 "Bu seviye henüz kilitli"`, `400 "Sonraki seviye zaten açık"`, `400 "Seviye belirleme sınavı tamamlanmış"`, ve cooldown:
 ```jsonc
 // 403 — cooldown; UI geri sayım gösterebilir
 { "success": false, "message": "Sınav hakkın henüz yenilenmedi", "nextAttemptAllowedAt": "2026-07-13T09:00:00.000Z" }
 ```
 
-### POST /quiz/:id/submit 🔒✉️
+### POST /quiz/:id/answer 🔒✉️
+Her soru cevaplanır cevaplanmaz çağrılır; anlık "Doğru! / Yanlış Cevap!" kartının verisi döner. Son soru cevaplanınca sınav otomatik sonuçlanır ve yanıta `result` eklenir.
 ```jsonc
-// İstek — her soru için seçilen şık indeksi (0-3), soru sırasıyla; boş bırakılan için null gönderilebilir
-{ "answers": [2, 0, 1, null, 3 /* ... totalQuestions kadar */] }
+// İstek — şıklı soruda seçilen indeks (0-3), typing sorusunda yazılan METİN;
+// boş bırakılan ("Şimdilik Geç") için null veya "" gönderilir (yanlış sayılır)
+{ "index": 4, "answer": 2 }        // veya { "index": 4, "answer": "istasyon" }
 
-// 200
+// 200 — ara soru
 {
   "success": true,
   "data": {
-    "score": 88,                    // yüzde
-    "passed": true,
-    "passThreshold": 85,
-    "correctCount": 31,
-    "totalQuestions": 35,
-    "results": [
-      { "index": 0, "yourAnswer": 2, "correctIndex": 2, "correct": true }
-    ],
-    "unlockedLevel": "N4",          // yalnızca geçince ve yeni seviye açılınca
+    "correct": true,
+    "word": { "kanji": "駅", "meaning": "istasyon" },  // kartın "駅 — istasyon" satırı
+    "correctIndex": 2,             // şıklı soruda; typing'de yerine "correctAnswer": "istasyon"
+    "answeredCount": 5,
+    "totalQuestions": 10,
+    "finished": false
+  }
+}
 
-    // yalnızca levelup + kalınca:
-    "failCount": 1,
-    "cooldownDays": 3,
-    "nextAttemptAllowedAt": "2026-07-13T09:00:00.000Z",
+// 200 — SON soru: yukarıdakilere ek olarak result gelir
+{
+  "success": true,
+  "data": {
+    "correct": false, "word": { /*...*/ }, "correctIndex": 1,
+    "answeredCount": 10, "totalQuestions": 10, "finished": true,
+    "result": {
+      "score": 80,                  // yüzde
+      "passed": true,
+      "passThreshold": 70,
+      "correctCount": 8,
+      "totalQuestions": 10,
+      "unlockedLevel": "N4",        // yalnızca geçince ve yeni seviye açılınca
 
-    // yalnızca placement:
-    "nextRung": "N4",               // geçildiyse sonraki basamak; client bununla yeni /quiz/start atar
-    "placementFinished": false      // true ise merdiven bitti
+      // yalnızca levelup + kalınca:
+      "failCount": 1,
+      "cooldownDays": 3,
+      "nextAttemptAllowedAt": "2026-07-16T09:00:00.000Z",
+
+      // yalnızca placement:
+      "nextRung": "N4",             // geçildiyse sonraki basamak; client "Sınavınız Oluşturuluyor" gösterip yeni /quiz/start atar
+      "placementFinished": false,   // true ise merdiven bitti
+
+      // yalnızca placement bitince — "Seviyen Belirlendi" ekranının tüm verisi:
+      "summary": {
+        "determinedLevel": "N4",    // en yüksek kilidi açılan seviye
+        "totalQuestions": 50,       // tüm basamakların toplamı
+        "correctCount": 41,
+        "wrongCount": 9,            // boş bırakılanlar dahil
+        "durationSeconds": 277
+      }
+    }
   }
 }
 ```
-Hatalar: `404 "Quiz not found"`, `400 "Bu quiz zaten sonuçlanmış"`, `400 "Quiz süresi doldu, yeniden başlat"`, `400 "answers dizisi N eleman olmalı"`.
+Typing cevapları sunucuda toleranslı puanlanır: büyük/küçük harf, noktalama, fazla boşluk ve parantez içleri yok sayılır; anlamın virgülle ayrılmış her varyantı tek başına kabul edilir.
+Hatalar: `404 "Quiz not found"`, `400 "Bu quiz zaten sonuçlanmış"`, `400 "Quiz süresi doldu, yeniden başlat"` (30 dk), `400 "index 0-9 arası olmalı"`, `400 "Bu soru zaten cevaplandı"`.
 
 ---
 
@@ -516,21 +631,24 @@ Not: Streak, günün ilk `/userwords/answer` çağrısıyla otomatik güncelleni
 {
   "success": true,
   "data": {
-    "today": { "totalWords": 18, "correctCount": 14, "wrongCount": 3, "emptyCount": 1, "isCompleted": false },
-    "streak": { "current": 7, "longest": 21, "lastStudyDate": "2026-07-10T06:45:00.000Z" },
+    "name": "Emirhan",         // "Merhaba Emirhan" başlığı
+    "dailyGoal": 20,           // ilerleme çemberinin paydası (14/20'deki 20)
+    "today": { "totalWords": 14, "correctCount": 10, "wrongCount": 3, "emptyCount": 1, "isCompleted": false },
+    "streak": { "current": 12, "longest": 21, "lastStudyDate": "2026-07-10T06:45:00.000Z" },  // "12 Günlük Seri" + "En iyi: 21"
     "progress": [
       { "jlptLevel": "N5", "isUnlocked": true, "completionRate": 42 }
       // ... diğer seviyeler
     ],
     "pendingReviews": 12,      // şu an vadesi gelmiş tekrar sayısı
-    "tomorrowReviews": 8       // yarın vadesi gelecek tekrar sayısı
+    "tomorrowReviews": 20,     // "Yarın 20 Kart Seri Bekliyor" bandı
+    "todayMistakeCount": 8     // "Bugünün Hataları — 8 Hata" başlığı (liste: GET /userwords/mistakes)
   }
 }
 ```
 
 ### GET /home/calendar 🔒✉️
 ```jsonc
-// 200 — son 30 günün oturumları (aktivite takvimi için)
+// 200 — son 30 günün oturumları (seri takvimi şeridi için; dolu gün = çalışılmış)
 {
   "success": true,
   "data": [
@@ -538,6 +656,31 @@ Not: Streak, günün ilk `/userwords/answer` çağrısıyla otomatik güncelleni
   ]
 }
 ```
+
+### GET /home/day/:date 🔒✉️
+Takvimde bir güne dokununca açılan detay ekranı ("22 Nisan Salı"). `:date` `YYYY-MM-DD` biçimindedir ve kullanıcının saat dilimine göre yorumlanır.
+```jsonc
+// 200 — GET /home/day/2026-04-22
+{
+  "success": true,
+  "data": {
+    "date": "2026-04-22",
+    "goal": 20,                // o günün havuz büyüklüğü (tarihsel hedef; havuz kaydı yoksa güncel dailyGoal)
+    "totalWords": 14,          // çember: 14/20
+    "correctCount": 10,        // yeşil nokta
+    "wrongCount": 3,           // kırmızı nokta
+    "emptyCount": 1,           // sarı nokta
+    "isCompleted": false,
+    "words": [                 // o gün çalışılan kelimeler, cevap sırasıyla; result = o günkü SON cevap
+      {
+        "word": { "_id": "665f2b...", "kanji": "食べる", "romaji": "taberu", "meaning": "yemek yemek", "type": "fiil", "jlptLevel": "N5" },
+        "result": "correct"    // correct | wrong | empty
+      }
+    ]
+  }
+}
+```
+Veri olmayan gün `200` + sıfır sayaçlar ve boş `words` ile döner. Hata: `400 "Geçersiz tarih, YYYY-MM-DD bekleniyor"`.
 
 ---
 
@@ -550,12 +693,23 @@ Not: Streak, günün ilk `/userwords/answer` çağrısıyla otomatik güncelleni
   "user": "665f1a...",
   "type": "streak_warning",   // daily_task | word_level_down | streak_warning | streak_reminder | daily_word
   "title": "Serini Kaybedeceksin",
-  "body": "7 günlük serin bitmek üzere. Acele et, dersini kaçırma...",
-  "data": { "currentStreak": 7 },   // tipe göre değişir; push deep-link için de aynı içerik gider
+  "body": "1 saat sonra serini kaybedeceksin. Acele et, dersini kaçırma...",
+  "data": { "currentStreak": 12 },   // tipe göre değişir; push deep-link için de aynı içerik gider
   "read": false,
-  "createdAt": "2026-07-10T16:00:00.000Z"
+  "createdAt": "2026-07-10T20:00:00.000Z"
 }
 ```
+
+Otomatik üretim (kullanıcının KENDİ saat diliminde):
+| Saat | Tip | Örnek |
+|---|---|---|
+| 10:00 | `daily_task` | "Bugünün Görevi — Bugün 20 ezberlenecek kelime seni bekliyor!" |
+| 10:00 | `daily_word` | "Günlük Kelime — Bugünün günlük kelimesi; 危ない (abunai) = tehlikeli" (`data.wordId` ile detaya gidilir) |
+| 19:00 | `streak_reminder` | "12 Günlük Seri! — Serini devam ettirmeyi unutma." (yalnızca serisi olup o gün çalışmamışsa) |
+| 23:00 | `streak_warning` | "Serini Kaybedeceksin — 1 saat sonra serini kaybedeceksin. Acele et, dersini kaçırma..." |
+| cevap/decay anı | `word_level_down` | "危ない (abunai) kelimesinin seviyesi 3. seviyeye düştü. Tekrar hatırla!" |
+
+Kullanıcının `notificationSettings` tercihleri kapalıysa ilgili tip hiç oluşmaz (`daily_task`/`daily_word` → `dailyReminder`, seri tipleri → `streakReminder`, seviye düşüşü → `wordLevelDown`).
 
 ### GET /notifications?page=1&limit=20 🔒✉️
 ```jsonc

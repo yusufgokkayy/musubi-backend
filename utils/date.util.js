@@ -28,11 +28,13 @@ const tzOffsetMs = (timeZone, date) => {
     return asUTC - date.getTime();
 };
 
-// Kullanıcının saat diliminde bugünün başlangıcı (UTC Date instant'ı olarak)
-const startOfDayInTz = (timeZone, now = new Date()) => {
+// Verilen YYYY-MM-DD gününün kullanıcının saat dilimindeki başlangıcı
+// (UTC Date instant'ı olarak). Geçersiz string'de null döner.
+const startOfDateInTz = (timeZone, dayStr) => {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(dayStr || '')) return null;
     const tz = safeTimezone(timeZone);
-    const dayStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(now); // YYYY-MM-DD
     const guess = new Date(dayStr + 'T00:00:00Z');
+    if (isNaN(guess)) return null; // 2026-13-45 gibi takvim dışı değerler
     let result = new Date(guess.getTime() - tzOffsetMs(tz, guess));
     // DST geçiş kenarı: offset sonuçta değiştiyse bir kez düzelt
     const offset2 = tzOffsetMs(tz, result);
@@ -40,6 +42,13 @@ const startOfDayInTz = (timeZone, now = new Date()) => {
         result = new Date(guess.getTime() - offset2);
     }
     return result;
+};
+
+// Kullanıcının saat diliminde bugünün başlangıcı (UTC Date instant'ı olarak)
+const startOfDayInTz = (timeZone, now = new Date()) => {
+    const tz = safeTimezone(timeZone);
+    const dayStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(now); // YYYY-MM-DD
+    return startOfDateInTz(tz, dayStr);
 };
 
 const addDays = (date, n) => new Date(date.getTime() + n * 24 * 60 * 60 * 1000);
@@ -58,4 +67,4 @@ const startOfTodayForUser = async (userId) => {
     return startOfDayInTz(user?.timezone);
 };
 
-module.exports = { DEFAULT_TZ, safeTimezone, startOfDayInTz, addDays, localHourInTz, startOfTodayForUser };
+module.exports = { DEFAULT_TZ, safeTimezone, startOfDayInTz, startOfDateInTz, addDays, localHourInTz, startOfTodayForUser };

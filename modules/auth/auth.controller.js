@@ -2,6 +2,26 @@ const catchAsync = require('../../utils/catchAsync');
 const AuthService = require('./auth.service');
 
 const AuthController = {
+    checkEmail: catchAsync(async (req, res) => {
+        const { available } = await AuthService.checkEmail(req.body.email);
+        res.status(200).json({ success: true, available });
+    }),
+
+    socialLogin: catchAsync(async (req, res) => {
+        const { provider, idToken, name, surname } = req.body;
+        const deviceName = req.body.deviceName || req.headers['user-agent'];
+        const { user, accessToken, refreshToken, isNewUser } =
+            await AuthService.socialLogin({ provider, idToken, name, surname, deviceName });
+        res.status(isNewUser ? 201 : 200).json({
+            success: true,
+            accessToken,
+            refreshToken,
+            isNewUser,
+            isEmailVerified: true,
+            data: { id: user._id, name: user.name }
+        });
+    }),
+
     register: catchAsync(async (req, res) => {
         const { name, surname, email, password } = req.body;
         const deviceName = req.body.deviceName || req.headers['user-agent'];
@@ -80,6 +100,11 @@ const AuthController = {
         res.status(200).json({ success: true, message: 'Verification email sent' });
     }),
 
+    verifyPassword: catchAsync(async (req, res) => {
+        await AuthService.verifyPassword(req.user.id, req.body.password);
+        res.status(200).json({ success: true, message: 'Password verified' });
+    }),
+
     changePassword: catchAsync(async (req, res) => {
         const { oldPassword, newPassword } = req.body;
         const deviceName = req.body.deviceName || req.headers['user-agent'];
@@ -89,7 +114,8 @@ const AuthController = {
     }),
 
     deleteAccount: catchAsync(async (req, res) => {
-        await AuthService.deleteAccount(req.user.id, req.body.password);
+        // Şifreli hesap password, şifresiz sosyal hesap idToken gönderir
+        await AuthService.deleteAccount(req.user.id, req.body);
         res.status(200)
             .cookie('access_token', '', { httpOnly: true, expires: new Date(0) })
             .json({ success: true, message: 'Account deleted' });

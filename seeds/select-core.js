@@ -11,7 +11,7 @@ const path = require('path');
 const https = require('https');
 const Word = require('../models/Word');
 
-dotenv.config({ path: './config/.env' });
+dotenv.config();
 
 // Seviye başına çekirdek kelime hedefi (toplam 3000)
 const CORE_TARGETS = { N5: 300, N4: 400, N3: 550, N2: 750, N1: 1000 };

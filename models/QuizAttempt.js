@@ -6,10 +6,12 @@ const QuizQuestionSchema = new mongoose.Schema({
         ref: 'Word',
         required: true
     },
-    // meaning: kelime göster anlam seçtir | reverse: anlam göster kelime seçtir | reading: kanji göster okunuş seçtir
+    // meaning: kelime göster anlam seçtir | reverse: anlam göster kelime seçtir |
+    // reading: kanji göster okunuş seçtir | typing: kelime göster anlamını YAZDIR (şıksız) |
+    // fillblank: örnek cümlede boşluğa gelecek kelimeyi seçtir | image: görsele uyan kelimeyi seçtir
     format: {
         type: String,
-        enum: ['meaning', 'reverse', 'reading'],
+        enum: ['meaning', 'reverse', 'reading', 'typing', 'fillblank', 'image'],
         required: true
     },
     prompt: {
@@ -18,13 +20,25 @@ const QuizQuestionSchema = new mongoose.Schema({
     },
     choices: {
         type: [String],
-        required: true
+        // Yazma sorusunun şıkkı yoktur
+        required: function () { return this.format !== 'typing'; }
     },
     // Cevap anahtarı — client'a asla gönderilmez (controller sanitize eder)
     correctIndex: {
         type: Number,
-        required: true
-    }
+        required: function () { return this.format !== 'typing'; }
+    },
+    // Yazma sorusunun kabul edilen cevapları (anlam + virgülle ayrılmış varyantları).
+    // Cevap anahtarıdır, client'a gönderilmez.
+    correctAnswers: {
+        type: [String],
+        required: function () { return this.format === 'typing'; }
+    },
+    // Soru bazlı cevap akışı (POST /quiz/:id/answer): her sorunun cevabı anında
+    // puanlanıp burada birikir; tüm sorular cevaplanınca deneme sonuçlanır
+    yourAnswer: mongoose.Schema.Types.Mixed,
+    isCorrect: Boolean,
+    answeredAt: Date
 }, { _id: false });
 
 const QuizAttemptSchema = new mongoose.Schema({
@@ -55,6 +69,10 @@ const QuizAttemptSchema = new mongoose.Schema({
         required: true
     },
     score: {
+        type: Number
+    },
+    // Doğru cevap sayısı — placement sonuç özeti basamak toplamlarını bundan hesaplar
+    correctCount: {
         type: Number
     },
     passed: {

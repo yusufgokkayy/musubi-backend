@@ -9,7 +9,8 @@ const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
 
 const QUIZ_CONFIG = {
     levelup: { questionCount: 35, passThreshold: 85 },
-    placement: { questionCount: 12, passThreshold: 70 }
+    // 10 soru × 5 basamak = tasarımın sonuç ekranındaki 50 soru
+    placement: { questionCount: 10, passThreshold: 70 }
 };
 const COOLDOWN_DAYS = [3, 7, 14]; // 1., 2., 3.+ başarısız deneme
 const EXPIRY_MINUTES = 30;
@@ -24,14 +25,37 @@ const shuffle = (arr) => {
     return a;
 };
 
-// Client'a cevap anahtarı sızdırmadan soru listesi
+// Client'a cevap anahtarı sızdırmadan soru listesi (typing sorusunun şıkkı yoktur)
 const sanitizeQuestions = (questions) =>
     questions.map((q, index) => ({
         index,
         format: q.format,
         prompt: q.prompt,
-        choices: q.choices
+        ...(q.format !== 'typing' && { choices: q.choices })
     }));
+
+// Yazma cevabı puanlama: Türkçe küçük harf, parantez içleri opsiyonel,
+// noktalama/fazla boşluk yok sayılır
+const normalizeAnswer = (s) => String(s ?? '')
+    .toLocaleLowerCase('tr')
+    .replace(/\([^)]*\)/g, ' ')
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+const gradeTyping = (answer, correctAnswers) => {
+    const typed = normalizeAnswer(answer);
+    if (!typed) return false; // boş bırakılan ("Şimdilik Geç") yanlış sayılır
+    return correctAnswers.some(c => normalizeAnswer(c) === typed);
+};
+
+// "gelecek yıl, seneye" gibi anlamlarda her varyant tek başına da kabul edilir
+const meaningVariants = (meaning) => {
+    const variants = [meaning, ...meaning.split(/[,;/]/)]
+        .map(v => v.trim())
+        .filter(Boolean);
+    return [...new Set(variants)];
+};
 
 const attemptResponse = (attempt) => ({
     quizId: attempt._id,
@@ -44,8 +68,11 @@ const attemptResponse = (attempt) => ({
 });
 
 const QuizService = {
-    // Havuzdan rastgele, her denemede taze soru seti üretir
-    async generateQuestions(jlptLevel, count) {
+    // Havuzdan rastgele, her denemede taze soru seti üretir.
+    // extendedFormats (placement): yazma sorusu + içeriği olan kelimelerde
+    // boşluk doldurma (example) ve görselli soru (imageUrl) da karışıma girer;
+    // levelup klasik 3 şıklı formatla kalır
+    async generateQuestions(jlptLevel, count, extendedFormats = false) {
         const targets = await Word.aggregate([
             { $match: { jlptLevel, isCore: true } },
             { $sample: { size: count } }
@@ -65,8 +92,30 @@ const QuizService = {
         for (const word of targets) {
             const formats = ['meaning', 'reverse'];
             if (word.kanji !== word.romaji) formats.push('reading'); // kana-only kelimede okunuş sorusu anlamsız
+            if (extendedFormats) {
+                formats.push('typing');
+                // İçerik formatları yalnızca verisi olan kelimede seçilebilir
+                if (word.example?.includes(word.kanji)) formats.push('fillblank');
+                if (word.imageUrl) formats.push('image');
+            }
             const format = formats[Math.floor(Math.random() * formats.length)];
-            const field = format === 'meaning' ? 'meaning' : format === 'reverse' ? 'kanji' : 'romaji';
+
+            if (format === 'typing') {
+                questions.push({
+                    word: word._id,
+                    format,
+                    // Kelime gösterilir, anlamı yazılır; ses de kelimeyi söyler (cevabı sızdırmaz)
+                    prompt: { kanji: word.kanji, romaji: word.romaji, audioUrl: word.audioUrl },
+                    correctAnswers: meaningVariants(word.meaning)
+                });
+                continue;
+            }
+
+            // fillblank/image cevabı kelimenin kendisidir (kanji şıkları);
+            // ses bu ikisinde YOK — kelimeyi seslendirmek cevabı söylemek olur
+            const field = (format === 'meaning') ? 'meaning'
+                : (format === 'reading') ? 'romaji'
+                : 'kanji'; // reverse | fillblank | image
             const correct = word[field];
 
             // Aynı tür öncelikli, benzersiz metinli 3 çeldirici
@@ -84,10 +133,13 @@ const QuizService = {
             if (distractors.length < 3) continue; // yeterli çeldirici yoksa soruyu atla
 
             const choices = shuffle([correct, ...distractors]);
+            // reverse/fillblank/image'da ses YOK: kelimeyi seslendirmek doğru şıkkı söylemek olur
             const prompt =
-                format === 'meaning' ? { kanji: word.kanji, romaji: word.romaji } :
+                format === 'meaning' ? { kanji: word.kanji, romaji: word.romaji, audioUrl: word.audioUrl } :
                 format === 'reverse' ? { meaning: word.meaning } :
-                { kanji: word.kanji };
+                format === 'fillblank' ? { sentence: word.example.replaceAll(word.kanji, '____') } :
+                format === 'image' ? { imageUrl: word.imageUrl } :
+                { kanji: word.kanji, audioUrl: word.audioUrl }; // reading
 
             questions.push({
                 word: word._id,
@@ -181,7 +233,7 @@ const QuizService = {
         const existing = await QuizService.resolveInProgress(userId, 'placement');
         if (existing) return attemptResponse(existing);
 
-        const questions = await QuizService.generateQuestions(rung, QUIZ_CONFIG.placement.questionCount);
+        const questions = await QuizService.generateQuestions(rung, QUIZ_CONFIG.placement.questionCount, true);
         const attempt = await QuizAttempt.create({ user: userId, type: 'placement', jlptLevel: rung, questions });
         logEvent(userId, 'quiz_started', { type: 'placement', jlptLevel: rung });
         return attemptResponse(attempt);
@@ -193,7 +245,10 @@ const QuizService = {
         throw new AppError('Invalid quiz type, use: placement, levelup', 400);
     },
 
-    async submit(userId, attemptId, answers) {
+    // Tasarımdaki soru→anlık geri bildirim akışı: her cevap anında puanlanır,
+    // "Doğru!/Yanlış Cevap!" kartının verisi döner; son soru cevaplanınca
+    // deneme otomatik sonuçlanır ve yanıta result eklenir.
+    async answerQuestion(userId, attemptId, index, answer) {
         const attempt = await QuizAttempt.findOne({ _id: attemptId, user: userId });
         if (!attempt) throw new AppError('Quiz not found', 404);
         if (attempt.status !== 'in_progress') throw new AppError('Bu quiz zaten sonuçlanmış', 400);
@@ -204,22 +259,60 @@ const QuizService = {
             throw new AppError('Quiz süresi doldu, yeniden başlat', 400);
         }
 
-        if (!Array.isArray(answers) || answers.length !== attempt.questions.length) {
-            throw new AppError(`answers dizisi ${attempt.questions.length} eleman olmalı`, 400);
+        if (!Number.isInteger(index) || index < 0 || index >= attempt.questions.length) {
+            throw new AppError(`index 0-${attempt.questions.length - 1} arası olmalı`, 400);
         }
 
-        const config = QUIZ_CONFIG[attempt.type];
-        let correctCount = 0;
-        const results = attempt.questions.map((q, i) => {
-            const isCorrect = answers[i] === q.correctIndex;
-            if (isCorrect) correctCount++;
-            return { index: i, yourAnswer: answers[i], correctIndex: q.correctIndex, correct: isCorrect };
-        });
+        const q = attempt.questions[index];
+        if (q.answeredAt) throw new AppError('Bu soru zaten cevaplandı', 400);
 
+        // Şıklı soruda cevap index (number), yazma sorusunda metin (string);
+        // boş/null gönderilen yanlış sayılır ("Şimdilik Geç")
+        const isCorrect = q.format === 'typing'
+            ? gradeTyping(answer, q.correctAnswers)
+            : answer === q.correctIndex;
+
+        q.yourAnswer = answer ?? null;
+        q.isCorrect = isCorrect;
+        q.answeredAt = new Date();
+
+        // Geri bildirim kartındaki "駅 — istasyon" satırı
+        const word = await Word.findById(q.word).select('kanji meaning');
+
+        const answeredCount = attempt.questions.filter(x => x.answeredAt).length;
+        const finished = answeredCount === attempt.questions.length;
+
+        const response = {
+            correct: isCorrect,
+            word: word ? { kanji: word.kanji, meaning: word.meaning } : null,
+            // Yanlışta "Cevap: ..." satırı için anahtar (soru artık cevaplandı, sızıntı değil)
+            ...(q.format === 'typing'
+                ? { correctAnswer: q.correctAnswers[0] }
+                : { correctIndex: q.correctIndex }),
+            answeredCount,
+            totalQuestions: attempt.questions.length,
+            finished
+        };
+
+        if (finished) {
+            response.result = await QuizService.finalizeAttempt(userId, attempt);
+        } else {
+            await attempt.save();
+        }
+
+        return response;
+    },
+
+    // Tüm sorular cevaplanınca çağrılır: skor, geçme, kilit açma, cooldown,
+    // placement merdiven kararı ve (bittiyse) sonuç özeti
+    async finalizeAttempt(userId, attempt) {
+        const config = QUIZ_CONFIG[attempt.type];
+        const correctCount = attempt.questions.filter(q => q.isCorrect).length;
         const score = Math.round((correctCount / attempt.questions.length) * 100);
         const passed = score >= config.passThreshold;
 
         attempt.score = score;
+        attempt.correctCount = correctCount;
         attempt.passed = passed;
         attempt.status = 'completed';
         attempt.completedAt = new Date();
@@ -229,8 +322,7 @@ const QuizService = {
             passed,
             passThreshold: config.passThreshold,
             correctCount,
-            totalQuestions: attempt.questions.length,
-            results
+            totalQuestions: attempt.questions.length
         };
 
         const currentIndex = LEVELS.indexOf(attempt.jlptLevel);
@@ -268,6 +360,12 @@ const QuizService = {
 
         await attempt.save();
 
+        // "Seviyen Belirlendi" ekranı: tüm basamakların toplamları + belirlenen seviye
+        // (attempt.save() sonrası — bu basamağın sayıları da toplama girsin)
+        if (attempt.type === 'placement' && response.placementFinished) {
+            response.summary = await QuizService.placementSummary(userId);
+        }
+
         logEvent(userId, 'quiz_completed', {
             type: attempt.type,
             jlptLevel: attempt.jlptLevel,
@@ -277,6 +375,32 @@ const QuizService = {
         });
 
         return response;
+    },
+
+    // Placement merdiveninin tamamı üzerinden sonuç ekranı özeti.
+    // Belirlenen seviye = en yüksek kilidi açık seviye (her geçilen basamak bir üstünü açar)
+    async placementSummary(userId) {
+        const attempts = await QuizAttempt.find({
+            user: userId, type: 'placement', status: 'completed'
+        });
+
+        let totalQuestions = 0, correctCount = 0, durationMs = 0;
+        for (const a of attempts) {
+            totalQuestions += a.questions.length;
+            correctCount += a.correctCount || 0;
+            if (a.completedAt) durationMs += a.completedAt - a.createdAt;
+        }
+
+        const unlocked = await Progress.find({ user: userId, isUnlocked: true });
+        const highestIdx = unlocked.reduce((max, p) => Math.max(max, LEVELS.indexOf(p.jlptLevel)), 0);
+
+        return {
+            determinedLevel: LEVELS[highestIdx],
+            totalQuestions,
+            correctCount,
+            wrongCount: totalQuestions - correctCount,
+            durationSeconds: Math.round(durationMs / 1000)
+        };
     },
 
     // UI için: hangi seviyeye sınav açık, cooldown ne zaman bitiyor, placement hakkı var mı

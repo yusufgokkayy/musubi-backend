@@ -5,7 +5,9 @@ const Word = require('../../models/Word');
 const AppError = require('../../utils/AppError');
 
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
-const COMPLETION_THRESHOLD = 80; // %80
+// Seviyeler ekranındaki "listeyi %75 oranında tamamlayın" metniyle aynı değer;
+// client bu sayıyı GET /progress yanıtındaki completionThreshold'dan okur
+const COMPLETION_THRESHOLD = 75;
 
 const ProgressService = {
     async initializeProgress(userId) {
@@ -31,7 +33,7 @@ const ProgressService = {
     async getProgress(userId) {
         const progress = await Progress.find({ user: userId }).sort({ jlptLevel: 1 });
 
-        const progressWithCount = await Promise.all(
+        const levels = await Promise.all(
             progress.map(async (p) => {
                 const totalWords = await Word.countDocuments({ jlptLevel: p.jlptLevel, isCore: true });
                 return {
@@ -43,7 +45,10 @@ const ProgressService = {
             })
         );
 
-        return progressWithCount;
+        return {
+            completionThreshold: COMPLETION_THRESHOLD, // "listeyi %75 oranında tamamlayın" bilgi kutusu
+            levels
+        };
     },
 
     async calculateCompletionRate(userId, jlptLevel) {

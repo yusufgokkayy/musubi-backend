@@ -6,6 +6,6 @@ const router = express.Router();
 
 router.get('/status',       protect, isEmailVerified, QuizController.getStatus);
 router.post('/start',       protect, isEmailVerified, QuizController.start);
-router.post('/:id/submit',  protect, isEmailVerified, QuizController.submit);
+router.post('/:id/answer',  protect, isEmailVerified, QuizController.answerQuestion);
 
 module.exports = router;

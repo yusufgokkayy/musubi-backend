@@ -10,6 +10,11 @@ const HomeController = {
     getCalendar: catchAsync(async (req, res) => {
         const calendar = await HomeService.getCalendar(req.user.id);
         res.status(200).json({ success: true, data: calendar });
+    }),
+
+    getDayDetail: catchAsync(async (req, res) => {
+        const detail = await HomeService.getDayDetail(req.user.id, req.params.date);
+        res.status(200).json({ success: true, data: detail });
     })
 };
 

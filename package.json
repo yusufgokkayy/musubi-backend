@@ -1,7 +1,7 @@
 {
-  "name": "misugi-backend",
+  "name": "musubi-backend",
   "version": "1.0.0",
-  "description": "Misugi — JLPT tabanlı Japonca kelime öğrenme uygulamasının backend API'si",
+  "description": "Musubi — JLPT tabanlı Japonca kelime öğrenme uygulamasının backend API'si",
   "private": true,
   "scripts": {
     "seed": "node seeds/seed-csv.js",

@@ -1,6 +1,6 @@
-# Misugi API
+# Musubi API
 
-Misugi, Türkçe konuşanlar için JLPT (N5–N1) temelli Japonca kelime öğrenme uygulamasının backend servisidir. SM-2 aralıklı tekrar algoritması, kelime başına 1–5 ustalık seviyesi, seviye belirleme/atlama sınavları, günlük seri (streak) takibi ve uygulama içi bildirimler sunar.
+Musubi, Türkçe konuşanlar için JLPT (N5–N1) temelli Japonca kelime öğrenme uygulamasının backend servisidir. SM-2 aralıklı tekrar algoritması, kelime başına 1–5 ustalık seviyesi, seviye belirleme/atlama sınavları, günlük seri (streak) takibi ve uygulama içi bildirimler sunar.
 
 ## Teknoloji Yığını
 
@@ -26,8 +26,8 @@ Misugi, Türkçe konuşanlar için JLPT (N5–N1) temelli Japonca kelime öğren
 ### 2. Klonlama
 
 ```bash
-git clone <repo-url> misugi-backend
-cd misugi-backend
+git clone <repo-url> musubi-backend
+cd musubi-backend
 npm install
 
 # Kelime verisi ayrı bir repodan gelir (gitignore'da, elle klonlanmalı):
@@ -36,7 +36,11 @@ git clone https://github.com/elzup/jlpt-word-list.git
 
 ### 3. Ortam değişkenleri
 
-`config/.env` dosyası oluşturun:
+Kök dizindeki örnek dosyayı kopyalayıp doldurun:
+
+```bash
+cp .env.example .env
+```
 
 ```env
 PORT=5000
@@ -51,7 +55,13 @@ RESET_PASSWORD_EXPIRE=3600000
 
 CLIENT_URL=http://localhost:5000
 RESEND_API_KEY=re_...
-EMAIL_FROM=Misugi <noreply@ornek.com>
+EMAIL_FROM=Musubi <noreply@ornek.com>
+
+# Sosyal giriş (POST /auth/social) — idToken'ın aud claim'i bu listeyle eşleşmeli
+# Google: iOS/Android/Web client ID'leri virgülle ayrılır
+GOOGLE_CLIENT_IDS=xxxx.apps.googleusercontent.com
+# Apple: uygulamanın bundle ID'si (Sign in with Apple)
+APPLE_CLIENT_IDS=com.ornek.musubi
 
 # Günlük havuz fallback limitleri (kullanıcının dailyGoal'u yoksa)
 NEW_WORD_DAILY_LIMIT=10
@@ -84,7 +94,8 @@ npm start      # production
 ```
 app.js                     # Express app + route mount'ları (DB/cron/listen içermez — testler bunu kullanır)
 server.js                  # app + DB bağlantısı + cron'lar + listen + graceful shutdown
-config/                    # db, firebase, resend, .env
+.env                       # ortam değişkenleri (gitignore'da; şablonu .env.example)
+config/                    # db, firebase, resend
 middlewares/               # auth (protect, isEmailVerified, isAdmin), rateLimiter, errorHandler
 models/                    # Mongoose şemaları
 modules/<özellik>/         # her özellik: routes → controller → service üçlüsü

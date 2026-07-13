@@ -17,7 +17,7 @@ const sendEmail = async ({ to, subject, html }) => {
     }
 
     if (!process.env.EMAIL_FROM) {
-        throw new Error('EMAIL_FROM tanımlı değil (config/.env)');
+        throw new Error('EMAIL_FROM tanımlı değil (.env)');
     }
 
     // Resend SDK hata durumunda exception ATMAZ, { data, error } döner.

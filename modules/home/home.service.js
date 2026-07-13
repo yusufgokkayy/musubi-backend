@@ -3,16 +3,20 @@ const Streak = require('../../models/Streak');
 const Progress = require('../../models/Progress');
 const UserWord = require('../../models/UserWord');
 const User = require('../../models/User');
-const { startOfDayInTz, addDays } = require('../../utils/date.util');
+const Word = require('../../models/Word');
+const Event = require('../../models/Event');
+const DailyWordPool = require('../../models/DailyWordPool');
+const AppError = require('../../utils/AppError');
+const { startOfDayInTz, startOfDateInTz, addDays } = require('../../utils/date.util');
 
 const HomeService = {
     async getSummary(userId) {
-        const user = await User.findById(userId).select('timezone');
+        const user = await User.findById(userId).select('timezone name dailyGoal');
         const today = startOfDayInTz(user?.timezone);
         const tomorrow = addDays(today, 1);
         const tomorrowEnd = addDays(today, 2);
 
-        const [todaySession, streak, progress, reviewCount, tomorrowReviews] = await Promise.all([
+        const [todaySession, streak, progress, reviewCount, tomorrowReviews, todayMistakeCount] = await Promise.all([
             // Bugünün session'ı
             StudySession.findOne({
                 user: userId,
@@ -34,10 +38,20 @@ const HomeService = {
             UserWord.countDocuments({
                 user: userId,
                 nextReviewDate: { $gte: tomorrow, $lt: tomorrowEnd }
+            }),
+
+            // "Bugünün Hataları — 8 Hata" başlığı; liste /userwords/mistakes'ten
+            // gelir, filtre oradakiyle birebir aynı olmalı
+            UserWord.countDocuments({
+                user: userId,
+                lastReviewDate: { $gte: today },
+                wrongCount: { $gt: 0 }
             })
         ]);
 
         return {
+            name: user?.name || '',        // "Merhaba Emirhan" başlığı
+            dailyGoal: user?.dailyGoal || 20, // ilerleme çemberinin paydası (14/20)
             today: {
                 totalWords: todaySession?.totalWords || 0,
                 correctCount: todaySession?.correctCount || 0,
@@ -56,7 +70,59 @@ const HomeService = {
                 completionRate: p.completionRate
             })),
             pendingReviews: reviewCount,
-            tomorrowReviews  // bunu ekle
+            tomorrowReviews,       // "Yarın N Kart Bekliyor" bandı
+            todayMistakeCount
+        };
+    },
+
+    // Takvimden bir güne dokununca açılan detay: o günün sayıları + çalışılan
+    // kelimeler (her kelimenin o günkü SON cevabıyla). Kelime listesi
+    // answer_submitted event'lerinden geri kurulur.
+    async getDayDetail(userId, dateStr) {
+        const user = await User.findById(userId).select('timezone dailyGoal');
+        const dayStart = startOfDateInTz(user?.timezone, dateStr);
+        if (!dayStart) throw new AppError('Geçersiz tarih, YYYY-MM-DD bekleniyor', 400);
+        const dayEnd = addDays(dayStart, 1);
+
+        const [session, events, pools] = await Promise.all([
+            StudySession.findOne({ user: userId, date: { $gte: dayStart, $lt: dayEnd } }),
+            Event.find({
+                user: userId,
+                type: 'answer_submitted',
+                createdAt: { $gte: dayStart, $lt: dayEnd }
+            }).sort({ createdAt: 1 }).select('data'),
+            DailyWordPool.find({ user: userId, date: { $gte: dayStart, $lt: dayEnd } })
+        ]);
+
+        // Kelime başına o günkü son cevap geçerlidir (kronolojik sıra korunur)
+        const resultByWord = new Map();
+        for (const e of events) {
+            if (e.data?.wordId) resultByWord.set(String(e.data.wordId), e.data.result);
+        }
+
+        const wordDocs = await Word.find({ _id: { $in: [...resultByWord.keys()] } })
+            .select('kanji romaji meaning type jlptLevel');
+        const wordById = new Map(wordDocs.map(w => [String(w._id), w]));
+
+        const words = [...resultByWord.entries()]
+            .filter(([id]) => wordById.has(id))
+            .map(([id, result]) => ({ word: wordById.get(id), result }));
+
+        // Çemberin paydası: o günün havuz büyüklüğü (tarihsel hedef);
+        // havuz kaydı yoksa güncel dailyGoal'a düşülür
+        const poolSize = pools.reduce(
+            (sum, p) => sum + p.newWordIds.length + p.reviewWordIds.length, 0
+        );
+
+        return {
+            date: dateStr,
+            goal: poolSize || user?.dailyGoal || 20,
+            totalWords: session?.totalWords || 0,
+            correctCount: session?.correctCount || 0,
+            wrongCount: session?.wrongCount || 0,
+            emptyCount: session?.emptyCount || 0,
+            isCompleted: session?.isCompleted || false,
+            words
         };
     },
 

@@ -20,9 +20,9 @@ const QuizController = {
         }
     }),
 
-    submit: catchAsync(async (req, res) => {
-        const { answers } = req.body;
-        const result = await QuizService.submit(req.user.id, req.params.id, answers);
+    answerQuestion: catchAsync(async (req, res) => {
+        const { index, answer } = req.body;
+        const result = await QuizService.answerQuestion(req.user.id, req.params.id, index, answer);
         res.status(200).json({ success: true, data: result });
     }),
 

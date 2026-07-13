@@ -7,7 +7,7 @@ const helmet = require('helmet');
 const errorHandler = require('./middlewares/errorHandler');
 const { generalLimiter } = require('./middlewares/rateLimiter');
 
-dotenv.config({ path: './config/.env' });
+dotenv.config(); // kök dizindeki .env (örnek için .env.example)
 
 const app = express();
 

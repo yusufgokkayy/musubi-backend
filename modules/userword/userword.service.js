@@ -307,6 +307,35 @@ const UserWordService = {
         return { total, learned, learning, review, byMasteryLevel };
     },
 
+    // Seviyeler detayındaki "Kelime Listesi": çalışılmış kelimeler,
+    // JLPT seviyesi ve mastery seviyesi (dropdown) filtreleriyle
+    async getWordList(userId, { jlptLevel, masteryLevel, page = 1, limit = 20 } = {}) {
+        page = Math.max(parseInt(page) || 1, 1);
+        limit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
+
+        const filter = { user: userId };
+        if (masteryLevel) {
+            const lvl = parseInt(masteryLevel);
+            if (!(lvl >= 1 && lvl <= 5)) throw new AppError('masteryLevel 1-5 arası olmalı', 400);
+            filter.masteryLevel = lvl;
+        }
+        if (jlptLevel) {
+            filter.word = { $in: await Word.find({ jlptLevel, isCore: true }).distinct('_id') };
+        }
+
+        const skip = (page - 1) * limit;
+        const [items, total] = await Promise.all([
+            UserWord.find(filter)
+                .populate('word')
+                .sort({ lastReviewDate: -1 })
+                .skip(skip)
+                .limit(limit),
+            UserWord.countDocuments(filter)
+        ]);
+
+        return { items, total, page, totalPages: Math.ceil(total / limit) };
+    },
+
     async getTodayMistakes(userId, page = 1, limit = 10) {
         page = Math.max(parseInt(page) || 1, 1);
         limit = Math.min(Math.max(parseInt(limit) || 10, 1), 100);

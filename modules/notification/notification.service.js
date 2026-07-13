@@ -2,6 +2,7 @@ const Notification = require('../../models/Notification');
 const User = require('../../models/User');
 const Streak = require('../../models/Streak');
 const Word = require('../../models/Word');
+const Progress = require('../../models/Progress');
 const AppError = require('../../utils/AppError');
 const sendNotification = require('../../utils/notification');
 const { startOfDayInTz, localHourInTz } = require('../../utils/date.util');
@@ -146,50 +147,90 @@ const NotificationService = {
         return notification;
     },
 
-    // Cron tarafından her saat başı çağrılır (server.js). Her kullanıcı için
-    // KENDİ saat diliminde saat 19:00'a denk gelen turda, o gün çalışmamışsa
-    // seri hatırlatması / uyarısı oluşturur.
-    async generateDailyNotifications() {
-        const users = await User.find({ active: true }).select('notificationSettings timezone +fcmToken');
+    // Cron tarafından her saat başı çağrılır (server.js). Her kullanıcının KENDİ
+    // saat dilimindeki saate göre günün bildirimleri üretilir:
+    //   10:00 — "Bugünün Görevi" (daily_task) + "Günlük Kelime" (daily_word)
+    //   19:00 — serisi olup henüz çalışmamışsa nazik hatırlatma (streak_reminder)
+    //   23:00 — hâlâ çalışmamışsa son uyarı: "1 saat sonra serini kaybedeceksin" (streak_warning)
+    // `now` parametresi test edilebilirlik içindir.
+    async generateDailyNotifications(now = new Date()) {
+        const users = await User.find({ active: true })
+            .select('notificationSettings timezone dailyGoal +fcmToken');
 
         for (const user of users) {
             try {
-                // Kullanıcının yerel saati 19 değilse bu tur ona ait değil
-                if (localHourInTz(user.timezone) !== 19) continue;
+                const hour = localHourInTz(user.timezone, now);
+                if (hour !== 10 && hour !== 19 && hour !== 23) continue;
 
-                const today = startOfDayInTz(user.timezone);
+                const today = startOfDayInTz(user.timezone, now);
 
                 // Aynı gün aynı tipten tekrar oluşturma (restart dedupe)
-                const existing = await Notification.findOne({
-                    user: user._id,
-                    type: { $in: ['streak_reminder', 'streak_warning'] },
-                    createdAt: { $gte: today }
+                const dedupe = async (type) => Notification.exists({
+                    user: user._id, type, createdAt: { $gte: today }
                 });
-                if (existing) continue;
 
+                if (hour === 10) {
+                    if (!(await dedupe('daily_task'))) {
+                        await NotificationService.create(user._id, {
+                            type: 'daily_task',
+                            title: 'Bugünün Görevi',
+                            body: `Bugün ${user.dailyGoal || 20} ezberlenecek kelime seni bekliyor!`,
+                            data: { dailyGoal: user.dailyGoal || 20 }
+                        }, user);
+                    }
+                    if (!(await dedupe('daily_word'))) {
+                        const word = await NotificationService.pickDailyWord(user._id);
+                        if (word) {
+                            await NotificationService.create(user._id, {
+                                type: 'daily_word',
+                                title: 'Günlük Kelime',
+                                body: `Bugünün günlük kelimesi; ${word.kanji} (${word.romaji}) = ${word.meaning}`,
+                                data: { wordId: word._id, kanji: word.kanji }
+                            }, user);
+                        }
+                    }
+                    continue;
+                }
+
+                // 19:00 ve 23:00 yalnızca seri riski taşıyanlara gider
                 const streak = await Streak.findOne({ user: user._id });
                 const studiedToday = streak?.lastStudyDate && streak.lastStudyDate >= today;
-                if (studiedToday) continue;
+                if (studiedToday || !(streak?.currentStreak > 0)) continue;
 
-                if (streak?.currentStreak > 0) {
+                if (hour === 19 && !(await dedupe('streak_reminder'))) {
+                    await NotificationService.create(user._id, {
+                        type: 'streak_reminder',
+                        title: `${streak.currentStreak} Günlük Seri!`,
+                        body: 'Serini devam ettirmeyi unutma.',
+                        data: { currentStreak: streak.currentStreak }
+                    }, user);
+                }
+
+                if (hour === 23 && !(await dedupe('streak_warning'))) {
                     await NotificationService.create(user._id, {
                         type: 'streak_warning',
                         title: 'Serini Kaybedeceksin',
-                        body: `${streak.currentStreak} günlük serin bitmek üzere. Acele et, dersini kaçırma...`,
+                        body: '1 saat sonra serini kaybedeceksin. Acele et, dersini kaçırma...',
                         data: { currentStreak: streak.currentStreak }
-                    }, user);
-                } else {
-                    await NotificationService.create(user._id, {
-                        type: 'streak_reminder',
-                        title: 'Bugünün Görevi',
-                        body: 'Bugün ezberlenecek kelimeler seni bekliyor!',
-                        data: {}
                     }, user);
                 }
             } catch (err) {
                 console.error(`Notification generation failed for user ${user._id}:`, err.message);
             }
         }
+    },
+
+    // Günlük kelime: kullanıcının açık en yüksek seviyesinden rastgele bir core kelime
+    async pickDailyWord(userId) {
+        const unlocked = await Progress.find({ user: userId, isUnlocked: true }).select('jlptLevel');
+        const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
+        const highestIdx = unlocked.reduce((max, p) => Math.max(max, LEVELS.indexOf(p.jlptLevel)), 0);
+
+        const [word] = await Word.aggregate([
+            { $match: { jlptLevel: LEVELS[highestIdx], isCore: true } },
+            { $sample: { size: 1 } }
+        ]);
+        return word || null;
     }
 };
 
