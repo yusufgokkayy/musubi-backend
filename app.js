@@ -7,7 +7,7 @@ const helmet = require('helmet');
 const errorHandler = require('./middlewares/errorHandler');
 const { generalLimiter } = require('./middlewares/rateLimiter');
 
-dotenv.config(); // kök dizindeki .env (örnek için .env.example)
+dotenv.config({ path: './.env' }); // kök dizindeki .env (örnek için .env.example)
 
 const app = express();
 
@@ -18,7 +18,22 @@ if (process.env.NODE_ENV === 'production') {
     app.set('trust proxy', 1);
 }
 
-app.use(helmet());
+// Dev konsolu (public/) yalnızca production DIŞINDA servis edilir; CSP'de ses ve
+// görsellere https izni verilir ki konsoldan kelime sesi/görseli test edilebilsin
+if (process.env.NODE_ENV !== 'production') {
+    app.use(helmet({
+        contentSecurityPolicy: {
+            useDefaults: true,
+            directives: {
+                'img-src': ["'self'", 'data:', 'https:'],
+                'media-src': ["'self'", 'https:']
+            }
+        }
+    }));
+    app.use(express.static('public'));
+} else {
+    app.use(helmet());
+}
 
 // Deploy platformlarının canlılık kontrolü — auth ve rate limit dışında
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));

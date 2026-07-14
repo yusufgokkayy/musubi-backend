@@ -89,6 +89,10 @@ npm run dev    # nodemon ile geliştirme
 npm start      # production
 ```
 
+### 6. Dev konsolu
+
+Geliştirme modunda `http://localhost:5000/` adresi, tüm modülleri uçtan uca test edebileceğin görsel bir konsol açar (`public/`): kayıt/giriş ve e-posta doğrulama (dev tokenlarıyla tek tıkla), SRS kart çalışma, interaktif sınav oynatıcı (tüm soru formatları), seviye dağılımları, kütüphane, bildirimler, ayarlar ve ham istek aracı. Her API çağrısı alttaki istek günlüğüne düşer. **Production'da servis edilmez.**
+
 ## Mimari
 
 ```

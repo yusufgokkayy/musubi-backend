@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Musubi Dev Konsolu</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧧</text></svg>">
+<link rel="stylesheet" href="./console.css">
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="logo">musubi<span>dev konsolu</span></div>
+  <nav id="nav">
+    <button data-view="auth" class="active">🔑 Kimlik</button>
+    <button data-view="home">🏠 Anasayfa</button>
+    <button data-view="study">📖 Çalışma (SRS)</button>
+    <button data-view="quiz">🎯 Sınav</button>
+    <button data-view="levels">📊 Seviyeler</button>
+    <button data-view="library">📚 Kütüphane</button>
+    <button data-view="notifications">🔔 Bildirimler <em id="unread-badge" hidden></em></button>
+    <button data-view="settings">⚙️ Ayarlar</button>
+    <button data-view="raw">🛠 Ham İstek</button>
+  </nav>
+  <div class="whoami" id="whoami">
+    <div class="dot off" id="auth-dot"></div>
+    <div id="auth-label">Oturum yok</div>
+  </div>
+</aside>
+
+<main class="main">
+
+  <!-- ═══ KİMLİK ═══ -->
+  <section data-view="auth" class="view active">
+    <h1>Kimlik / Auth</h1>
+
+    <div class="grid2">
+      <div class="card">
+        <h2>Kayıt Ol</h2>
+        <form id="f-register">
+          <div class="row">
+            <input name="name" placeholder="Ad" value="Emirhan" required>
+            <input name="surname" placeholder="Soyad" value="Test" required>
+          </div>
+          <div class="row">
+            <input name="email" type="email" placeholder="E-posta" required>
+            <button type="button" class="ghost" data-action="random-email">🎲</button>
+          </div>
+          <input name="password" placeholder="Şifre (en az 8)" value="testsifre123" required>
+          <div class="row">
+            <button type="button" class="ghost" data-action="check-email">Müsait mi?</button>
+            <button type="submit" class="primary">Kayıt Ol</button>
+          </div>
+          <div class="hint" id="check-email-result"></div>
+        </form>
+        <div id="verify-panel" class="notice" hidden>
+          Doğrulama tokenı geldi (dev modu):
+          <div class="row">
+            <button class="primary" data-action="verify-email">E-postayı Doğrula</button>
+            <button class="ghost" data-action="resend-verification">Tekrar Gönder</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2>Giriş Yap</h2>
+        <form id="f-login">
+          <input name="email" type="email" placeholder="E-posta" required>
+          <input name="password" placeholder="Şifre" value="testsifre123" required>
+          <button type="submit" class="primary">Giriş Yap</button>
+        </form>
+        <h2 style="margin-top:18px">Şifremi Unuttum</h2>
+        <form id="f-forgot">
+          <div class="row">
+            <input name="email" type="email" placeholder="E-posta" required>
+            <button type="submit" class="ghost">Sıfırlama Maili</button>
+          </div>
+        </form>
+        <form id="f-reset" hidden>
+          <div class="hint">Reset tokenı geldi (dev modu) — yeni şifreyi gir:</div>
+          <div class="row">
+            <input name="password" placeholder="Yeni şifre" required>
+            <button type="submit" class="primary">Şifreyi Sıfırla</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Oturum</h2>
+      <div class="tokens">
+        <div><b>access</b> <code id="tok-access">—</code></div>
+        <div><b>refresh</b> <code id="tok-refresh">—</code></div>
+      </div>
+      <div class="row wrap">
+        <button class="ghost" data-action="me">GET /me</button>
+        <button class="ghost" data-action="refresh-token">Token Tazele</button>
+        <button class="ghost" data-action="logout">Çıkış (bu cihaz)</button>
+        <button class="ghost" data-action="logout-all">Çıkış (tüm cihazlar)</button>
+        <button class="danger" data-action="delete-account">Hesabı Sil</button>
+      </div>
+      <pre id="me-box" class="json" hidden></pre>
+    </div>
+  </section>
+
+  <!-- ═══ ANASAYFA ═══ -->
+  <section data-view="home" class="view">
+    <h1>Anasayfa <button class="ghost" data-action="load-home">Yenile</button></h1>
+    <div id="home-summary" class="empty">Yüklemek için “Yenile”.</div>
+    <div class="card">
+      <h2>Gün Detayı</h2>
+      <div class="row">
+        <input type="date" id="day-input">
+        <button class="ghost" data-action="load-day">Getir</button>
+      </div>
+      <div id="day-detail"></div>
+    </div>
+    <div class="card">
+      <h2>Takvim (son 30 gün)</h2>
+      <div id="home-calendar" class="chips"></div>
+    </div>
+  </section>
+
+  <!-- ═══ ÇALIŞMA ═══ -->
+  <section data-view="study" class="view">
+    <h1>Çalışma (SRS)</h1>
+    <div class="card">
+      <div class="row">
+        <select id="study-level">
+          <option>N5</option><option>N4</option><option>N3</option><option>N2</option><option>N1</option>
+        </select>
+        <button class="primary" data-action="load-today">Bugünün Kelimeleri</button>
+        <button class="ghost" data-action="session-start">Oturum Başlat</button>
+        <button class="ghost" data-action="session-complete">Oturumu Bitir</button>
+      </div>
+      <div id="study-words"></div>
+    </div>
+    <div class="grid2">
+      <div class="card">
+        <h2>Bugünün Hataları <button class="ghost" data-action="load-mistakes">Yenile</button></h2>
+        <div id="mistakes-list"></div>
+      </div>
+      <div class="card">
+        <h2>İstatistikler <button class="ghost" data-action="load-stats">Yenile</button></h2>
+        <div id="stats-box"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ SINAV ═══ -->
+  <section data-view="quiz" class="view">
+    <h1>Sınav <button class="ghost" data-action="quiz-status">Durum</button></h1>
+    <div id="quiz-status-box"></div>
+    <div class="card">
+      <div class="row wrap">
+        <button class="primary" data-action="quiz-start-placement">Seviye Tespit Sınavı Başlat</button>
+        <select id="levelup-level"><option>N5</option><option>N4</option><option>N3</option><option>N2</option></select>
+        <button class="ghost" data-action="quiz-start-levelup">Seviye Atlama Başlat</button>
+      </div>
+    </div>
+    <div id="quiz-player"></div>
+  </section>
+
+  <!-- ═══ SEVİYELER ═══ -->
+  <section data-view="levels" class="view">
+    <h1>Seviyeler <button class="ghost" data-action="load-progress">Yenile</button></h1>
+    <div id="progress-list"></div>
+    <div class="card" id="distribution-card" hidden>
+      <h2 id="distribution-title">Dağılım</h2>
+      <div id="distribution-box"></div>
+      <h2 style="margin-top:16px">Kelime Listesi</h2>
+      <div class="row">
+        <select id="wl-mastery">
+          <option value="">Tüm seviyeler</option>
+          <option value="1">1. Seviye</option><option value="2">2. Seviye</option>
+          <option value="3">3. Seviye</option><option value="4">4. Seviye</option>
+          <option value="5">5. Seviye</option>
+        </select>
+        <button class="ghost" data-action="load-wordlist">Getir</button>
+      </div>
+      <div id="wordlist-box"></div>
+    </div>
+  </section>
+
+  <!-- ═══ KÜTÜPHANE ═══ -->
+  <section data-view="library" class="view">
+    <h1>Kütüphane</h1>
+    <div class="card">
+      <div class="row">
+        <input id="lib-search" placeholder="Bir kelime ara… (kanji / romaji / anlam)">
+        <select id="lib-level">
+          <option value="">Tümü</option>
+          <option>N5</option><option>N4</option><option>N3</option><option>N2</option><option>N1</option>
+        </select>
+      </div>
+      <div id="lib-list"></div>
+      <div class="row center" id="lib-pager" hidden>
+        <button class="ghost" data-action="lib-prev">‹ Önceki</button>
+        <span id="lib-page-label"></span>
+        <button class="ghost" data-action="lib-next">Sonraki ›</button>
+      </div>
+    </div>
+    <div class="card" id="word-detail" hidden></div>
+  </section>
+
+  <!-- ═══ BİLDİRİMLER ═══ -->
+  <section data-view="notifications" class="view">
+    <h1>Bildirimler
+      <button class="ghost" data-action="load-notifications">Yenile</button>
+      <button class="ghost" data-action="read-all">Tümünü Okundu Yap</button>
+    </h1>
+    <div id="notif-list"></div>
+  </section>
+
+  <!-- ═══ AYARLAR ═══ -->
+  <section data-view="settings" class="view">
+    <h1>Ayarlar</h1>
+    <div class="grid2">
+      <div class="card">
+        <h2>Profil & Tercihler</h2>
+        <form id="f-updateinfo">
+          <div class="row"><input name="name" placeholder="Ad"><input name="surname" placeholder="Soyad"></div>
+          <label>Günlük Kelime Hedefi <input name="dailyGoal" type="number" min="5" max="50" placeholder="20"></label>
+          <label>Saat Dilimi <input name="timezone" placeholder="Europe/Istanbul"></label>
+          <div class="row">
+            <label>Tema
+              <select name="theme"><option value="">—</option><option value="light">Açık</option><option value="dark">Koyu</option><option value="system">Sistem</option></select>
+            </label>
+            <label>Font
+              <select name="fontSize"><option value="">—</option><option value="small">Küçük</option><option value="medium">Orta</option><option value="large">Büyük</option></select>
+            </label>
+          </div>
+          <button type="submit" class="primary">Güncelle</button>
+        </form>
+      </div>
+      <div class="card">
+        <h2>Bildirim Ayarları</h2>
+        <div class="toggles">
+          <label><input type="checkbox" id="ns-dailyReminder"> Günlük Kelime Bildirimleri</label>
+          <label><input type="checkbox" id="ns-streakReminder"> Hatırlatma Bildirimleri</label>
+          <label><input type="checkbox" id="ns-wordLevelDown"> Seviye Bildirimleri</label>
+        </div>
+        <button class="primary" data-action="save-notif-settings">Kaydet</button>
+        <h2 style="margin-top:18px">Şifreyi Değiştir</h2>
+        <form id="f-verifypass">
+          <div class="row">
+            <input name="password" placeholder="Mevcut şifre" required>
+            <button type="submit" class="ghost">Doğrula</button>
+          </div>
+        </form>
+        <form id="f-changepass" hidden>
+          <div class="row">
+            <input name="newPassword" placeholder="Yeni şifre (en az 8)" required>
+            <button type="submit" class="primary">Değiştir</button>
+          </div>
+        </form>
+      </div>
+    </div>
+  </section>
+
+  <!-- ═══ HAM İSTEK ═══ -->
+  <section data-view="raw" class="view">
+    <h1>Ham İstek</h1>
+    <div class="card">
+      <form id="f-raw">
+        <div class="row">
+          <select name="method"><option>GET</option><option>POST</option><option>PUT</option><option>DELETE</option></select>
+          <input name="path" placeholder="/auth/me" required style="flex:1">
+        </div>
+        <textarea name="body" rows="6" placeholder='{ "ornek": "gövde (opsiyonel)" }'></textarea>
+        <button type="submit" class="primary">Gönder</button>
+      </form>
+      <pre id="raw-result" class="json" hidden></pre>
+    </div>
+  </section>
+
+</main>
+
+<!-- ═══ İSTEK GÜNLÜĞÜ ═══ -->
+<div class="logbar" id="logbar">
+  <button id="log-toggle">📜 İstek Günlüğü <em id="log-count">0</em></button>
+  <div id="log-entries" hidden></div>
+</div>
+
+<div id="toasts"></div>
+<script src="./console.js"></script>
+</body>
+</html>

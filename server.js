@@ -1,5 +1,5 @@
 const dotenv = require('dotenv');
-dotenv.config();
+dotenv.config({ path: './.env' });
 
 const connectDatabase = require('./config/db');
 const cron = require('node-cron');
