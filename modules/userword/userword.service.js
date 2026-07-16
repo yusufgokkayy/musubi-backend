@@ -14,7 +14,11 @@ const logEvent = require('../../utils/event.util');
 const NEW_WORD_DAILY_LIMIT = parseInt(process.env.NEW_WORD_DAILY_LIMIT) || 10;
 const REVIEW_DAILY_LIMIT = parseInt(process.env.REVIEW_DAILY_LIMIT) || 10;
 
+// 'easy' StudySession sayaçlarında öteden beri doğru sayılıyordu ama burada
+// reddediliyordu; SM-2'nin en yüksek kalitesi olarak eklendi (easeFactor'ü
+// 'correct'ten biraz daha hızlı büyütür, aynı-gün kuralına o da tabidir)
 const qualityMap = {
+    easy: 5,
     correct: 4,
     empty: 2,
     wrong: 1
@@ -158,7 +162,7 @@ const UserWordService = {
 
     async submitAnswer(userId, wordId, result) {
         const quality = qualityMap[result];
-        if (!quality) throw new AppError('Invalid result, use: correct, empty, wrong', 400);
+        if (!quality) throw new AppError('Invalid result, use: correct, easy, empty, wrong', 400);
 
         // wordId gerçekten var mı kontrol et
         const wordExists = await Word.findById(wordId);
@@ -170,21 +174,31 @@ const UserWordService = {
             userWord = await UserWord.create({ user: userId, word: wordId });
         }
 
-        const { easeFactor, interval, repetitions, nextReviewDate } = sm2(userWord, quality);
+        // SM-2 aralıklı tekrar varsayar: aynı gün içinde tekrar verilen doğru
+        // cevap SM-2 durumunu İLERLETMEZ (istemci bir kelimeyi öğrenme + test
+        // aşamalarında iki kez sorabiliyor; dakikalar arayla iki doğru, kelimeyi
+        // 6 günlük interval'a zıplatıp tek oturumda "ustalık 3" yapıyordu).
+        // Yanlış cevap ise her koşulda sıfırlar — unutma sinyali gün içinde de geçerli.
+        const user = await User.findById(userId).select('timezone');
+        const today = startOfDayInTz(user?.timezone);
+        const reviewedToday = !!userWord.lastReviewDate && userWord.lastReviewDate >= today;
 
-        userWord.easeFactor = easeFactor;
-        userWord.interval = interval;
-        userWord.repetitions = repetitions;
-        userWord.nextReviewDate = nextReviewDate;
+        if (!(quality >= 3 && reviewedToday)) {
+            const { easeFactor, interval, repetitions, nextReviewDate } = sm2(userWord, quality);
+            userWord.easeFactor = easeFactor;
+            userWord.interval = interval;
+            userWord.repetitions = repetitions;
+            userWord.nextReviewDate = nextReviewDate;
+        }
         userWord.lastReviewDate = new Date();
 
         const previousLevel = userWord.masteryLevel || 1;
-        userWord.masteryLevel = computeMasteryLevel({ repetitions, interval });
+        userWord.masteryLevel = computeMasteryLevel(userWord);
         const levelDropped = userWord.masteryLevel < previousLevel;
 
         if (quality >= 3) {
             userWord.correctCount += 1;
-            userWord.status = interval >= 21 ? 'learned' : 'learning';
+            userWord.status = userWord.interval >= 21 ? 'learned' : 'learning';
         } else {
             userWord.wrongCount += 1;
             userWord.status = 'learning';

@@ -79,8 +79,10 @@ const AuthController = {
     }),
 
     resetPassword: catchAsync(async (req, res) => {
-        const { token, password } = req.body;
-        const deviceName = req.body.deviceName || req.headers['user-agent'];
+        // deviceName BİLEREK yalnızca body'den okunur (user-agent fallback'i yok):
+        // web landing sayfası deviceName göndermez ve tarayıcıya oturum açılmaz;
+        // uygulama deviceName gönderir ve login sözleşmesiyle taze çift alır
+        const { token, password, deviceName } = req.body;
         const result = await AuthService.resetPassword(token, password, deviceName);
         res.status(200).json({ success: true, data: result });
     }),
@@ -92,6 +94,15 @@ const AuthController = {
 
     verifyEmail: catchAsync(async (req, res) => {
         const result = await AuthService.verifyEmail(req.params.token, req.headers['user-agent']);
+        res.status(200).json({ success: true, data: result });
+    }),
+
+    // Landing sayfası + uygulama için POST varyantı. deviceName gönderilirse
+    // (uygulama) oturum açılıp token çifti döner; gönderilmezse (web) yalnızca
+    // doğrulama yapılır — mail istemcisi tarayıcısına token/oturum üretilmez
+    verifyEmailPost: catchAsync(async (req, res) => {
+        const { token, deviceName } = req.body;
+        const result = await AuthService.verifyEmail(token, deviceName);
         res.status(200).json({ success: true, data: result });
     }),
 

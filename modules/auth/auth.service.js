@@ -9,6 +9,8 @@ const QuizAttempt = require('../../models/QuizAttempt');
 const DeviceSession = require('../../models/DeviceSession');
 const AppError = require('../../utils/AppError');
 const sendEmail = require('../../utils/sendEmail');
+const clientUrl = require('../../utils/clientUrl');
+const ctaEmailHtml = require('../../utils/emailTemplate');
 const crypto = require('crypto');
 const ProgressService = require('../progress/progress.service');
 const StreakService = require('../streak/streak.service');
@@ -80,11 +82,15 @@ const AuthService = {
         // E-posta gönderimi, yan kayıtlar (Progress/Streak/oturum) oluşmadan ÖNCE
         // denenir: başarısızlıkta yalnızca User silinir, yetim doküman kalmaz.
         try {
-            const verificationUrl = `${process.env.CLIENT_URL}/api/auth/verify-email/${verificationToken}`;
             await sendEmail({
                 to: email,
                 subject: 'Musubi - Email Doğrulama',
-                html: `<p>Hesabını doğrulamak için <a href="${verificationUrl}">tıkla</a>. Link 24 saat geçerli.</p>`
+                html: ctaEmailHtml({
+                    text: 'Musubi hesabını doğrulamak için aşağıdaki butona tıkla.',
+                    ctaLabel: 'E-postamı Doğrula',
+                    ctaUrl: clientUrl(`/verify-email/${verificationToken}`),
+                    note: 'Bu bağlantı 24 saat geçerlidir. Bu hesabı sen açmadıysan bu e-postayı yok sayabilirsin.'
+                })
             });
         } catch (err) {
             await User.findByIdAndDelete(user._id);
@@ -214,11 +220,15 @@ const AuthService = {
         await user.save();
 
         try {
-            const resetUrl = `${process.env.CLIENT_URL}/api/auth/reset-password/${resetToken}`;
             await sendEmail({
                 to: email,
                 subject: 'Musubi - Şifre Sıfırlama',
-                html: `<p>Şifreni sıfırlamak için <a href="${resetUrl}">tıkla</a>. Link 1 saat geçerli.</p>`
+                html: ctaEmailHtml({
+                    text: 'Musubi hesabının şifresini sıfırlamak için aşağıdaki butona tıkla.',
+                    ctaLabel: 'Şifremi Sıfırla',
+                    ctaUrl: clientUrl(`/reset-password/${resetToken}`),
+                    note: 'Bu bağlantı 1 saat geçerlidir. Bu isteği sen yapmadıysan bu e-postayı yok sayabilirsin.'
+                })
             });
         } catch (err) {
             user.resetPasswordToken = undefined;
@@ -231,6 +241,8 @@ const AuthService = {
     },
 
     async resetPassword(resetToken, newPassword, deviceName) {
+        if (!resetToken) throw new AppError('Invalid or expired token', 400);
+
         const hashedToken = crypto
             .createHash('sha256')
             .update(resetToken)
@@ -247,6 +259,13 @@ const AuthService = {
         user.resetPasswordToken = undefined;
         user.resetPasswordExpire = undefined;
         await user.save();
+
+        // Web landing sayfasından (deviceName'siz) sıfırlamada tarayıcıya oturum
+        // AÇILMAZ: eski oturumlar yine düşer, kullanıcı uygulamadan giriş yapar
+        if (!deviceName) {
+            await DeviceSession.deleteMany({ user: user._id });
+            return {};
+        }
 
         // Güvenlik: şifre sıfırlanınca tüm eski oturumlar kapanır
         const tokens = await rotateAllSessions(user._id, deviceName);
@@ -268,11 +287,15 @@ const AuthService = {
             const verificationToken = crypto.randomBytes(20).toString('hex');
 
             try {
-                const verificationUrl = `${process.env.CLIENT_URL}/api/auth/verify-email/${verificationToken}`;
                 await sendEmail({
                     to: updates.email,
                     subject: 'Musubi - Yeni E-posta Doğrulama',
-                    html: `<p>Yeni e-posta adresini doğrulamak için <a href="${verificationUrl}">tıkla</a>. Link 24 saat geçerli.</p>`
+                    html: ctaEmailHtml({
+                        text: 'Musubi hesabının yeni e-posta adresini doğrulamak için aşağıdaki butona tıkla.',
+                        ctaLabel: 'Yeni Adresimi Doğrula',
+                        ctaUrl: clientUrl(`/verify-email/${verificationToken}`),
+                        note: 'Bu bağlantı 24 saat geçerlidir. Bu değişikliği sen yapmadıysan bu e-postayı yok sayabilirsin.'
+                    })
                 });
             } catch (err) {
                 throw new AppError('Doğrulama maili gönderilemedi, e-posta değiştirilmedi', 500);
@@ -311,6 +334,8 @@ const AuthService = {
     },
 
     async verifyEmail(verificationToken, deviceName) {
+        if (!verificationToken) throw new AppError('Invalid or expired token', 400);
+
         const hashedToken = crypto
             .createHash('sha256')
             .update(verificationToken)
@@ -328,12 +353,33 @@ const AuthService = {
         user.emailVerificationExpire = undefined;
         await user.save();
 
+        // Web landing sayfasından (deviceName'siz) doğrulamada tarayıcıya token
+        // ve oturum ÜRETİLMEZ: kullanılmayacak token sızdırmamak ve 5 oturumluk
+        // kotayı mail istemcisi tarayıcısıyla doldurmamak için
+        if (!deviceName) return {};
+
         // Login ile aynı token sözleşmesi: access + refresh çifti
         const accessToken = signAccessToken(user._id);
         const refreshToken = signRefreshToken(user._id);
         await createSession(user._id, refreshToken, deviceName);
 
         return { accessToken, refreshToken };
+    },
+
+    // Landing sayfalarının yan etkisiz ön kontrolü: sayfa, geçersiz/süresi
+    // dolmuş linke form göstermek yerine doğrudan hata ekranı basar
+    async isVerificationTokenValid(verificationToken) {
+        return !!(await User.exists({
+            emailVerificationToken: hashToken(verificationToken),
+            emailVerificationExpire: { $gt: Date.now() }
+        }));
+    },
+
+    async isResetTokenValid(resetToken) {
+        return !!(await User.exists({
+            resetPasswordToken: hashToken(resetToken),
+            resetPasswordExpire: { $gt: Date.now() }
+        }));
     },
 
     async resendVerificationEmail(email) {
@@ -351,11 +397,15 @@ const AuthService = {
         await user.save();
 
         try {
-            const verificationUrl = `${process.env.CLIENT_URL}/api/auth/verify-email/${verificationToken}`;
             await sendEmail({
                 to: email,
                 subject: 'Musubi - Email Doğrulama',
-                html: `<p>Hesabını doğrulamak için <a href="${verificationUrl}">tıkla</a>. Link 24 saat geçerli.</p>`
+                html: ctaEmailHtml({
+                    text: 'Musubi hesabını doğrulamak için aşağıdaki butona tıkla.',
+                    ctaLabel: 'E-postamı Doğrula',
+                    ctaUrl: clientUrl(`/verify-email/${verificationToken}`),
+                    note: 'Bu bağlantı 24 saat geçerlidir. Bu isteği sen yapmadıysan bu e-postayı yok sayabilirsin.'
+                })
             });
         } catch (err) {
             throw new AppError('Email gönderilemedi, tekrar deneyin', 500);

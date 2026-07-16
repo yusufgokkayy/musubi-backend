@@ -52,6 +52,10 @@ app.use(express.json({ limit: '100kb' }));
 
 app.use('/api', generalLimiter);
 
+// E-posta linklerinin indiği tarayıcı sayfaları (HTML, /api dışında):
+// GET /verify-email/:token ve GET /reset-password/:token
+app.use(require('./modules/auth/landing.routes'));
+
 app.use('/api/auth', require('./modules/auth/auth.routes'));
 app.use('/api/words', require('./modules/word/word.routes'));
 app.use('/api/userwords', require('./modules/userword/userword.routes'));

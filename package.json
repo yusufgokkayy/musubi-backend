@@ -6,6 +6,7 @@
   "scripts": {
     "seed": "node seeds/seed-csv.js",
     "select-core": "node seeds/select-core.js",
+    "wipe-users": "node seeds/wipe-user-data.js",
     "test": "node --test",
     "dev": "nodemon server.js",
     "start": "node server.js"

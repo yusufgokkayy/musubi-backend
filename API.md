@@ -188,17 +188,42 @@ Hata: `401 "Old password is incorrect"`.
 // İstek — token, e-postadaki linkten alınır
 { "token": "a1b2c3...", "password": "yenisifre123", "deviceName": "Pixel 8" }
 
-// 200 — tüm eski oturumlar kapanır, taze çift döner (login ile aynı sözleşme)
+// 200 — tüm eski oturumlar kapanır; deviceName GÖNDERİLDİYSE taze çift döner
+// (login ile aynı sözleşme)
 { "success": true, "data": { "accessToken": "eyJ...", "refreshToken": "eyJ..." } }
+
+// deviceName gönderilmediyse (web landing sayfası) oturum açılmaz: data boş döner
+{ "success": true, "data": {} }
 ```
 Hata: `400 "Invalid or expired token"` (link 1 saat geçerli).
 
-### GET /auth/verify-email/:token
+### POST /auth/verify-email
 ```jsonc
-// 200 — doğrulama sonrası otomatik giriş için taze çift döner
+// İstek — token, e-postadaki linkten alınır
+{ "token": "a1b2c3...", "deviceName": "Pixel 8" }
+
+// 200 — deviceName GÖNDERİLDİYSE oturum açılır, taze çift döner (login sözleşmesi)
 { "success": true, "data": { "accessToken": "eyJ...", "refreshToken": "eyJ..." } }
+
+// deviceName gönderilmediyse (web landing sayfası) yalnızca doğrulama yapılır
+{ "success": true, "data": {} }
 ```
 Hata: `400 "Invalid or expired token"` (link 24 saat geçerli).
+
+### GET /auth/verify-email/:token
+POST varyantının eski GET biçimi (geriye uyumluluk). `User-Agent` cihaz adı sayılır,
+her zaman oturum açılıp taze çift döner. Yeni istemciler POST kullanmalı.
+
+### Tarayıcı sayfaları (API dışı)
+E-postalardaki linkler artık `/api`'ye değil şu HTML sayfalarına gider:
+
+- `GET /verify-email/:token` — deep link (`musubi://verify-email/<token>`) ile
+  uygulamada açma + "Burada Doğrula" butonu (`POST /api/auth/verify-email` çağırır).
+- `GET /reset-password/:token` — deep link (`musubi://reset-password/<token>`) +
+  tarayıcıda yeni şifre formu (`POST /api/auth/reset-password` çağırır).
+
+Sayfalar yan etkisizdir (mail istemcilerinin link tarayıcıları GET'i takip
+edebilir); geçersiz/süresi dolmuş tokende hata ekranı basar.
 
 ### POST /auth/resend-verification-email
 ```jsonc
@@ -307,7 +332,7 @@ Günün havuzunu döner; gün içinde (kullanıcının saat diliminde) tekrar ç
 ### POST /userwords/answer 🔒✉️
 ```jsonc
 // İstek — wordId, Word'ün _id'sidir (UserWord id'si DEĞİL)
-{ "wordId": "665f2b...", "result": "correct" }   // correct | empty | wrong
+{ "wordId": "665f2b...", "result": "correct" }   // correct | easy | empty | wrong
 
 // 200 — güncellenmiş SRS durumu
 {
@@ -328,7 +353,14 @@ Günün havuzunu döner; gün içinde (kullanıcının saat diliminde) tekrar ç
   }
 }
 ```
-Hatalar: `400 "Invalid result, use: correct, empty, wrong"`, `404 "Word not found"`.
+Hatalar: `400 "Invalid result, use: correct, easy, empty, wrong"`, `404 "Word not found"`.
+
+Aynı-gün kuralı: bir kelimeye gün içinde (kullanıcının saat diliminde) ikinci kez
+verilen **doğru** cevap SM-2 durumunu (`interval`/`repetitions`/`nextReviewDate`/
+`masteryLevel`) İLERLETMEZ — yalnızca `correctCount` işler. Bu yüzden aynı kelimeyi
+öğrenme + test aşamalarında iki kez cevaplatmak seviyeyi şişirmez; istemcinin bunu
+dert etmesine gerek yoktur. **Yanlış** cevap ise her koşulda sıfırlar (unutma
+sinyali gün içinde de geçerlidir).
 
 ### GET /userwords/stats 🔒✉️
 ```jsonc

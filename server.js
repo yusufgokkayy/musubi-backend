@@ -4,6 +4,13 @@ dotenv.config({ path: './.env' });
 const connectDatabase = require('./config/db');
 const cron = require('node-cron');
 
+// Eksik CLIENT_URL bir dönem maillerin "http://undefined/..." linkiyle
+// gitmesine yol açtı; artık gönderim anında hata veriyor ama sebebi açılışta
+// görünür kılmak teşhisi kolaylaştırır (Railway → Variables → CLIENT_URL)
+if (process.env.NODE_ENV === 'production' && !process.env.CLIENT_URL) {
+    console.error('UYARI: CLIENT_URL tanımlı değil — doğrulama/sıfırlama mailleri gönderilemez');
+}
+
 connectDatabase();
 
 require('./config/firebase');

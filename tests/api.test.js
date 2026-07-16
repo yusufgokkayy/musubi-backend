@@ -284,6 +284,99 @@ describe('E-posta akışları', () => {
         assert.ok(fp.json.resetToken, 'doğrulanmamış hesaba 403 dönülmemeli — link sahipliği zaten kanıtlar');
     });
 
+    // HTML landing sayfaları /api dışında yaşar
+    const pageGet = async (path) => {
+        const res = await fetch(BASE.replace(/\/api$/, '') + path);
+        return { status: res.status, text: await res.text() };
+    };
+
+    it('mail linkleri /api yerine landing sayfalarına gider', async () => {
+        const reg = await api('POST', '/auth/register', registerBody('landing-mail@test.com'));
+        const vMail = sendEmail.outbox.at(-1);
+        assert.ok(vMail.html.includes(`/verify-email/${reg.json.verificationToken}`));
+        assert.ok(!vMail.html.includes('/api/auth/'), 'mail linki API endpointine gitmemeli');
+        assert.ok(/<a href="[^"]*verify-email/.test(vMail.html), 'link <a href> içinde olmalı');
+
+        const fp = await api('POST', '/auth/forgot-password', { body: { email: 'landing-mail@test.com' } });
+        const rMail = sendEmail.outbox.at(-1);
+        assert.ok(rMail.html.includes(`/reset-password/${fp.json.resetToken}`));
+        assert.ok(!rMail.html.includes('/api/auth/'));
+    });
+
+    it('verify landing: geçerli tokende deep link, geçersizde hata sayfası; sayfa yan etkisizdir', async () => {
+        const reg = await api('POST', '/auth/register', registerBody('landing-verify@test.com'));
+        const token = reg.json.verificationToken;
+
+        const page = await pageGet(`/verify-email/${token}`);
+        assert.equal(page.status, 200);
+        assert.ok(page.text.includes(`musubi://verify-email/${token}`), 'deep link sayfada olmalı');
+
+        // Sayfayı açmak (scanner prefetch senaryosu) doğrulamaz
+        const user = await User.findOne({ email: 'landing-verify@test.com' });
+        assert.equal(user.isEmailVerified, false, 'GET sayfası doğrulama YAPMAMALI');
+
+        const bogus = await pageGet(`/verify-email/${'0'.repeat(40)}`);
+        assert.ok(bogus.text.includes('Bağlantı Geçersiz'));
+
+        const malformed = await pageGet('/verify-email/' + encodeURIComponent('<script>alert(1)</script>'));
+        assert.ok(malformed.text.includes('Bağlantı Geçersiz'), 'bozuk biçimli token DB\'ye sorulmadan reddedilir');
+        assert.ok(!malformed.text.includes('<script>alert'), 'token sayfaya kaçışsız gömülmemeli');
+    });
+
+    it('POST /auth/verify-email: deviceName yoksa oturum/token üretmez, varsa taze çift döner', async () => {
+        const reg = await api('POST', '/auth/register', registerBody('post-verify@test.com'));
+        const user = await User.findOne({ email: 'post-verify@test.com' });
+        const sessionsBefore = await DeviceSession.countDocuments({ user: user._id });
+
+        const web = await api('POST', '/auth/verify-email', { body: { token: reg.json.verificationToken } });
+        assert.equal(web.status, 200);
+        assert.ok(!web.json.data.accessToken && !web.json.data.refreshToken, 'web doğrulamada token dönmemeli');
+        assert.equal(await DeviceSession.countDocuments({ user: user._id }), sessionsBefore, 'web doğrulama oturum açmamalı');
+
+        const me = await api('GET', '/auth/me', { token: reg.json.accessToken });
+        assert.equal(me.status, 200, 'doğrulama yine de gerçekleşmeli');
+
+        // deviceName ile: login sözleşmesi (uygulama akışı)
+        const reg2 = await api('POST', '/auth/register', registerBody('post-verify2@test.com'));
+        const app2 = await api('POST', '/auth/verify-email', {
+            body: { token: reg2.json.verificationToken, deviceName: 'Pixel 8' }
+        });
+        assert.equal(app2.status, 200);
+        assert.ok(app2.json.data.accessToken && app2.json.data.refreshToken, 'uygulama doğrulamasında taze çift dönmeli');
+
+        const missing = await api('POST', '/auth/verify-email', { body: {} });
+        assert.equal(missing.status, 400, 'tokensiz istek 400 dönmeli');
+    });
+
+    it('reset landing: form sayfası açılır; deviceName\'siz reset oturum açmadan tüm oturumları düşürür', async () => {
+        await createVerifiedUser('landing-reset@test.com');
+        await login('landing-reset@test.com');
+
+        const fp = await api('POST', '/auth/forgot-password', { body: { email: 'landing-reset@test.com' } });
+        const page = await pageGet(`/reset-password/${fp.json.resetToken}`);
+        assert.equal(page.status, 200);
+        assert.ok(page.text.includes(`musubi://reset-password/${fp.json.resetToken}`));
+        assert.ok(page.text.includes('reset-form'), 'yeni şifre formu olmalı');
+
+        const rp = await api('POST', '/auth/reset-password', {
+            body: { token: fp.json.resetToken, password: 'websifre123' }
+        });
+        assert.equal(rp.status, 200);
+        assert.ok(!rp.json.data.accessToken, 'web resetinde token dönmemeli');
+
+        const user = await User.findOne({ email: 'landing-reset@test.com' });
+        assert.equal(await DeviceSession.countDocuments({ user: user._id }), 0, 'tüm oturumlar düşmeli, yenisi açılmamalı');
+
+        const newLogin = await api('POST', '/auth/login', {
+            body: { email: 'landing-reset@test.com', password: 'websifre123' }
+        });
+        assert.equal(newLogin.status, 200);
+
+        // Kullanılmış token ile landing artık hata sayfası basar
+        const usedPage = await pageGet(`/reset-password/${fp.json.resetToken}`);
+        assert.ok(usedPage.text.includes('Bağlantı Geçersiz'));
+    });
+
     it('e-posta değişikliği doğrulamayı sıfırlar, yeni adrese mail gider', async () => {
         await createVerifiedUser('eskiadres@test.com');
         const token = (await login('eskiadres@test.com')).accessToken;
@@ -481,13 +574,27 @@ describe('Öğrenme döngüsü (SRS)', () => {
         assert.equal(res.status, 200);
     });
 
-    it('doğru cevaplar masteryLevel yükseltir, yanlış 1\'e düşürür + bildirim', async () => {
+    it('doğru cevap seviye yükseltir; AYNI GÜN ikinci doğru SM-2\'yi ilerletmez; yanlış 1\'e düşürür + bildirim', async () => {
         let res = await api('POST', '/userwords/answer', { token, body: { wordId, result: 'correct' } });
         assert.equal(res.json.data.masteryLevel, 2);
 
+        // İstemci aynı kelimeyi öğrenme + test aşamalarında iki kez sorabiliyor;
+        // dakikalar arayla ikinci doğru, kelimeyi tek oturumda seviye 3'e zıplatmamalı
         res = await api('POST', '/userwords/answer', { token, body: { wordId, result: 'correct' } });
-        assert.equal(res.json.data.masteryLevel, 3);
+        assert.equal(res.json.data.masteryLevel, 2, 'aynı gün ikinci doğru seviyeyi İLERLETMEMELİ');
+        assert.equal(res.json.data.repetitions, 1, 'SM-2 tekrarı saymamalı');
+        assert.equal(res.json.data.interval, 1, 'interval büyümemeli');
+        assert.equal(res.json.data.correctCount, 2, 'istatistik sayacı yine de işlemeli');
 
+        // Ertesi gün gelen doğru normal ilerler (gerçek aralıklı tekrar)
+        await UserWord.updateOne(
+            { user: userId, word: wordId },
+            { $set: { lastReviewDate: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
+        );
+        res = await api('POST', '/userwords/answer', { token, body: { wordId, result: 'correct' } });
+        assert.equal(res.json.data.masteryLevel, 3, 'ertesi günkü doğru → 2. tekrar → interval 6 → seviye 3');
+
+        // Yanlış cevap aynı gün bile her koşulda sıfırlar (unutma sinyali)
         res = await api('POST', '/userwords/answer', { token, body: { wordId, result: 'wrong' } });
         assert.equal(res.json.data.masteryLevel, 1);
         assert.equal(res.json.data.levelDropped, true);
@@ -495,6 +602,14 @@ describe('Öğrenme döngüsü (SRS)', () => {
 
         const notifs = await api('GET', '/notifications', { token });
         assert.ok(notifs.json.data.notifications.some(n => n.type === 'word_level_down'));
+    });
+
+    it('easy doğru sayılır ve SM-2\'yi ilerletir (studysession ile tutarlı)', async () => {
+        const w = (await api('GET', '/userwords/today?jlptLevel=N5', { token })).json.data.newWords[1];
+        const res = await api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'easy' } });
+        assert.equal(res.status, 200);
+        assert.equal(res.json.data.masteryLevel, 2);
+        assert.equal(res.json.data.correctCount, 1);
     });
 
     it('geçersiz result 400 döner', async () => {
@@ -509,8 +624,9 @@ describe('Öğrenme döngüsü (SRS)', () => {
 
     it('stats byMasteryLevel dağılımı döner', async () => {
         const res = await api('GET', '/userwords/stats', { token });
-        assert.equal(res.json.data.total, 1);
-        assert.equal(res.json.data.byMasteryLevel[1], 1);
+        assert.equal(res.json.data.total, 2);
+        assert.equal(res.json.data.byMasteryLevel[1], 1, 'yanlışla biten kelime');
+        assert.equal(res.json.data.byMasteryLevel[2], 1, 'easy ile öğrenilen kelime');
     });
 
     it('distribution toplamları tutarlıdır', async () => {
