@@ -305,6 +305,9 @@ Gövde `Word` alanlarıdır; mobil uygulamanın kullanması gerekmez.
 
 ### GET /userwords/today?jlptLevel=N5 🔒✉️
 Günün havuzunu döner; gün içinde (kullanıcının saat diliminde) tekrar çağrılırsa **aynı liste** döner.
+Tek istisna: `dailyGoal` gün içinde **artarsa** havuz bir sonraki çağrıda fark
+kadar yeni kelimeyle genişler (cevaplanmışlar korunur). Hedef azalırsa bugünü
+etkilemez, yarınki havuz yeni hedefle kurulur.
 
 Kaldığın yerden devam: her öğede `answeredToday`/`todayResult`, kökte `progress`
 sayaçları vardır. Ders yarıda kalıp yeniden açıldığında istemci
@@ -414,7 +417,10 @@ Seviyeler detayındaki "Kelime Listesi": çalışılmış kelimeler, dropdown'da
 Hata: `400 "masteryLevel 1-5 arası olmalı"`. Dropdown'daki seviye sayıları `GET /progress/:jlptLevel/distribution`'dan gelir.
 
 ### GET /userwords/mistakes?page=1&limit=10 🔒✉️
-Bugün (kullanıcının saat diliminde) yanlış yapılmış kelimeler, çok yanlıştan aza sıralı.
+Bugün (kullanıcının saat diliminde) **son cevabı yanlış olan** kelimeler, çok
+yanlıştan aza sıralı. "Şimdilik Geç" (empty) hata sayılmaz; geçmiş günlerin
+yanlışları bugüne taşınmaz ve bugün doğruya dönen kelime listeden düşer.
+`GET /home/summary` içindeki `todayMistakeCount` da aynı tanımı kullanır.
 ```jsonc
 // 200
 {

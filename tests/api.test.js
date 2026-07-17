@@ -945,6 +945,43 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
         assert.equal(d.accuracy, 57);
         assert.equal(d.isCompleted, true);
     });
+
+    it('bugünün hataları yalnızca bugün YANLIŞ cevaplananlardır (empty ve eski yanlışlar sayılmaz)', async () => {
+        let res = await api('GET', '/userwords/mistakes', { token });
+        // w1 ve ue bugün yanlış; migi empty (hata değil), diğerleri doğru
+        assert.equal(res.json.data.total, 2, 'yalnızca son cevabı yanlış olanlar');
+        const kanjis = res.json.data.mistakes.map(m => m.word.kanji);
+        assert.ok(kanjis.includes('上'), 'yanlış cevaplanan listede olmalı');
+        assert.ok(!kanjis.includes('右'), '"Şimdilik Geç" (empty) hata DEĞİL');
+
+        // Geçmişte yanlışı olan kelime bugün doğru cevaplanınca listeden düşer
+        // (wrongCount ömür boyu 1 kalsa bile)
+        const ue = await Word.findOne({ kanji: '上' });
+        const user = await User.findOne({ email: 'ders@test.com' });
+        await UserWord.updateOne(
+            { user: user._id, word: ue._id },
+            { $set: { lastReviewDate: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
+        );
+        await api('POST', '/userwords/answer', { token, body: { wordId: ue._id, result: 'correct' } });
+
+        res = await api('GET', '/userwords/mistakes', { token });
+        assert.equal(res.json.data.total, 1, 'bugün doğruya dönen kelime hatalardan düşmeli');
+        assert.ok(!res.json.data.mistakes.some(m => m.word.kanji === '上'));
+    });
+
+    it('dailyGoal gün içinde artınca havuz fark kadar genişler, cevaplananlar korunur', async () => {
+        const up = await api('PUT', '/auth/update-info', { token, body: { dailyGoal: 25 } });
+        assert.equal(up.status, 200);
+
+        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const d = today.json.data;
+        assert.equal(d.progress.total, 25, 'havuz 20→25 genişlemeli');
+        assert.equal(d.progress.answered, 2, 'önceki cevaplar (w0, w1) korunmalı');
+
+        // İkinci çağrı tekrar büyütmemeli (idempotent)
+        const again = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        assert.equal(again.json.data.progress.total, 25);
+    });
 });
 
 describe('Ana ekran (Home)', () => {

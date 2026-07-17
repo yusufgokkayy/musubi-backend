@@ -117,7 +117,33 @@ const UserWordService = {
         });
 
         if (pool) {
-            // Havuz zaten var, sabit listeyi döndür
+            // Hedef gün içinde ARTTIYSA havuz fark kadar yeni kelimeyle genişler
+            // ("30 yaptım ama 20'de kaldı" bug'ı). Azalma bugünü etkilemez:
+            // cevaplanmış kelimeler havuzdan atılamaz, yeni hedef yarın uygulanır.
+            const currentGoal = user?.dailyGoal || (NEW_WORD_DAILY_LIMIT + REVIEW_DAILY_LIMIT);
+            const poolSize = pool.reviewWordIds.length + pool.newWordIds.length;
+            if (currentGoal > poolSize) {
+                const knownWordIds = await UserWord.find({ user: userId }).distinct('word');
+                const extra = await Word.aggregate([
+                    {
+                        $match: {
+                            _id: { $nin: [...knownWordIds, ...pool.newWordIds] },
+                            isCore: true,
+                            ...(jlptLevel && { jlptLevel })
+                        }
+                    },
+                    { $sample: { size: currentGoal - poolSize } }
+                ]);
+                if (extra.length > 0) {
+                    pool.newWordIds.push(...extra.map(w => w._id));
+                    await pool.save();
+                    logEvent(userId, 'daily_pool_extended', {
+                        jlptLevel, added: extra.length, goal: currentGoal
+                    });
+                }
+            }
+
+            // Havuz sabit listeyi döndürür (gün içinde aynı kelimeler)
             const reviewWords = await UserWord.find({
                 _id: { $in: pool.reviewWordIds }
             }).populate('word');
@@ -131,7 +157,8 @@ const UserWordService = {
 
         // Havuz yok, yeni oluştur.
         // Havuz boyutunu kullanıcının günlük hedefi belirler (env limitleri fallback).
-        // Not: Havuz gün boyu sabittir; dailyGoal gün içinde değişirse yarın etkili olur.
+        // dailyGoal gün içinde ARTARSA havuz yukarıdaki blokta genişletilir;
+        // azalırsa bugünü etkilemez, yarınki havuz yeni hedefle kurulur.
         const goal = user?.dailyGoal || (NEW_WORD_DAILY_LIMIT + REVIEW_DAILY_LIMIT);
 
         // Tekrarlar öncelikli: hedefin en fazla %70'i tekrar
@@ -430,11 +457,14 @@ const UserWordService = {
 
         const skip = (page - 1) * limit;
 
-        // Düz alan karşılaştırması $expr'dan farklı olarak index kullanabilir
+        // "Bugünün Hataları" = bugün cevaplanmış VE son cevabı yanlış olanlar.
+        // wrongCount ömür boyu sayaçtır, filtre olarak KULLANILMAZ: dünkü
+        // yanlışlar bugün doğru cevaplansa bile listede görünürdü (20 hata
+        // varken 30 gösterme bug'ı). "Şimdilik Geç" (empty) hata sayılmaz.
         const mistakeFilter = {
             user: userId,
             lastReviewDate: { $gte: today },
-            wrongCount: { $gt: 0 }
+            lastResult: 'wrong'
         };
 
         const [mistakes, total] = await Promise.all([

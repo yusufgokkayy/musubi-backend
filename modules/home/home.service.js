@@ -41,11 +41,12 @@ const HomeService = {
             }),
 
             // "Bugünün Hataları — 8 Hata" başlığı; liste /userwords/mistakes'ten
-            // gelir, filtre oradakiyle birebir aynı olmalı
+            // gelir, filtre oradakiyle birebir aynı olmalı: bugün cevaplanmış
+            // VE son cevabı yanlış (ömür boyu wrongCount filtre DEĞİLDİR)
             UserWord.countDocuments({
                 user: userId,
                 lastReviewDate: { $gte: today },
-                wrongCount: { $gt: 0 }
+                lastResult: 'wrong'
             })
         ]);
 

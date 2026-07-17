@@ -79,3 +79,22 @@ Detaylı sözleşmeler API.md'de; senin tarafta değişmesi gerekenler:
 
 Türkçe anlamlar (`meaningTr`) ayrı iş olarak planda; şablon/çeviri kararı verilince
 gelecek.
+
+## 5. İkinci tur geri bildirimlerin — 17.07.2026 akşam
+
+1. **"Hâlâ aynı soru geliyor"** — backend'de değil: `GET /userwords/today`
+   yanıtındaki `answeredToday` bayrağını uygulamada kullanman gerekiyor (madde
+   4.1'de anlatıldı). Derse başlarken `answeredToday: true` olanları atla;
+   ilerleme çubuğunu `progress.answered/total`'dan çiz. Bunu bağlayınca "kaldığım
+   yerden devam" kendiliğinden çalışacak.
+2. **"20 hatam var 30 gösteriyor"** — backend bug'ıydı, düzeltildi. "Bugünün
+   Hataları" artık yalnızca bugün SON cevabı yanlış olan kelimeler: "Şimdilik
+   Geç" hata sayılmaz, eski günlerin yanlışları bugüne taşınmaz, bugün doğruya
+   dönen kelime listeden düşer.
+3. **"Hedefi 30 yaptım, 20'de kaldı"** — backend bug'ıydı, düzeltildi: dailyGoal
+   gün içinde artınca havuz bir sonraki `GET /userwords/today` çağrısında fark
+   kadar genişler; cevaplananlar korunur. (Azaltma bugünü etkilemez.)
+4. **Dikkatine**: 17.07 15:55'teki session kaydında 7 cevabın 7'si de "empty"
+   düşmüş, doğru bildiklerin dahil. Yazma sorusunda `{ wordId, answer: "<metin>" }`
+   gönderdiğinden emin ol — `answer` boş string giderse backend onu "boş
+   bırakıldı" (empty) sayar.
