@@ -10,6 +10,7 @@ const StudySessionService = require('../studysession/studysession.service');
 const NotificationService = require('../notification/notification.service');
 const { startOfDayInTz } = require('../../utils/date.util');
 const logEvent = require('../../utils/event.util');
+const { normalizeAnswer, meaningVariants, gradeTyping } = require('../../utils/answer.util');
 
 const NEW_WORD_DAILY_LIMIT = parseInt(process.env.NEW_WORD_DAILY_LIMIT) || 10;
 const REVIEW_DAILY_LIMIT = parseInt(process.env.REVIEW_DAILY_LIMIT) || 10;
@@ -57,6 +58,52 @@ const computeMasteryLevel = ({ repetitions, interval }) => {
     return 2;                          // 1. başarılı tekrar
 };
 
+// Günün havuzunu "kaldığın yerden devam" bilgisiyle işaretler: ders yarıda
+// kalıp yeniden açıldığında istemci answeredToday=false olanlardan sürdürür,
+// progress sayaçlarıyla da çemberi çizer. Yanıt geriye uyumludur (alan ekler).
+const decorateTodayWords = async (userId, today, reviewWordsRaw, newWordsRaw) => {
+    const reviewWords = reviewWordsRaw.map(uw => {
+        const answeredToday = !!uw.lastReviewDate && uw.lastReviewDate >= today;
+        return {
+            ...uw.toObject(),
+            answeredToday,
+            todayResult: answeredToday ? uw.lastResult ?? null : null
+        };
+    });
+
+    // Yeni kelimelerin bugünkü cevabı (ilk cevapta UserWord oluşur) tek sorguyla
+    const answeredNew = newWordsRaw.length > 0
+        ? await UserWord.find({
+            user: userId,
+            word: { $in: newWordsRaw.map(w => w._id) },
+            lastReviewDate: { $gte: today }
+        }).select('word lastResult')
+        : [];
+    const newResultByWord = new Map(answeredNew.map(uw => [String(uw.word), uw.lastResult ?? null]));
+
+    const newWords = newWordsRaw.map(w => {
+        // $sample'dan gelen düz objeler hydrate ile doc'a çevrilir ki
+        // isKana virtual'ı burada da hesaplansın
+        const obj = typeof w.toObject === 'function' ? w.toObject() : Word.hydrate(w).toObject();
+        const answeredToday = newResultByWord.has(String(w._id));
+        return {
+            ...obj,
+            answeredToday,
+            todayResult: answeredToday ? newResultByWord.get(String(w._id)) : null
+        };
+    });
+
+    const answered = reviewWords.filter(w => w.answeredToday).length
+        + newWords.filter(w => w.answeredToday).length;
+    const total = reviewWords.length + newWords.length;
+
+    return {
+        reviewWords,
+        newWords,
+        progress: { total, answered, remaining: total - answered }
+    };
+};
+
 const UserWordService = {
     async getTodayWords(userId, jlptLevel) {
         const user = await User.findById(userId).select('dailyGoal timezone');
@@ -79,7 +126,7 @@ const UserWordService = {
                 _id: { $in: pool.newWordIds }
             });
 
-            return { reviewWords, newWords };
+            return decorateTodayWords(userId, today, reviewWords, newWords);
         }
 
         // Havuz yok, yeni oluştur.
@@ -157,16 +204,28 @@ const UserWordService = {
             // Bildirim hatası kelime akışını bozmasın
         }
 
-        return { reviewWords: reviewWordsRaw, newWords: newWordsRaw };
+        return decorateTodayWords(userId, today, reviewWordsRaw, newWordsRaw);
     },
 
-    async submitAnswer(userId, wordId, result) {
-        const quality = qualityMap[result];
-        if (!quality) throw new AppError('Invalid result, use: correct, easy, empty, wrong', 400);
-
+    async submitAnswer(userId, wordId, result, answer) {
         // wordId gerçekten var mı kontrol et
         const wordExists = await Word.findById(wordId);
         if (!wordExists) throw new AppError('Word not found', 404);
+
+        // Yazma sorusunda istemci result yerine yazılan metni (answer) gönderir;
+        // puanlama quiz ile aynı mantıkla BURADA yapılır (tek doğruluk kaynağı:
+        // "to see / watch" gibi çok varyantlı anlamlarda her varyant kabul edilir)
+        let correctAnswer;
+        if (result == null && answer !== undefined) {
+            const variants = meaningVariants(wordExists.meaning);
+            correctAnswer = variants[0];
+            result = !normalizeAnswer(answer) ? 'empty'
+                : gradeTyping(answer, variants) ? 'correct'
+                : 'wrong';
+        }
+
+        const quality = qualityMap[result];
+        if (!quality) throw new AppError('Invalid result, use: correct, easy, empty, wrong', 400);
 
         let userWord = await UserWord.findOne({ user: userId, word: wordId });
 
@@ -191,6 +250,7 @@ const UserWordService = {
             userWord.nextReviewDate = nextReviewDate;
         }
         userWord.lastReviewDate = new Date();
+        userWord.lastResult = result;
 
         const previousLevel = userWord.masteryLevel || 1;
         userWord.masteryLevel = computeMasteryLevel(userWord);
@@ -228,10 +288,15 @@ const UserWordService = {
         await StreakService.updateStreak(userId);
         await ProgressService.checkAndUnlockNextLevel(userId, wordExists.jlptLevel);
 
-        try {
-            await StudySessionService.updateSession(userId, result);
-        } catch (err) {
-            // Session yoksa sessizce geç, hata fırlatma
+        // Aynı-gün tekrarı session sayaçlarına da SAYILMAZ (SM-2 kuralıyla
+        // tutarlı: ilk cevap geçerli). Ders yarıda kalıp yeniden başlayınca
+        // ana ekran çemberi 19/30 gibi şişmez, hedefi aşamaz.
+        if (!reviewedToday) {
+            try {
+                await StudySessionService.updateSession(userId, result);
+            } catch (err) {
+                // Session yoksa sessizce geç, hata fırlatma
+            }
         }
 
         logEvent(userId, 'answer_submitted', {
@@ -242,7 +307,13 @@ const UserWordService = {
             levelDropped
         });
 
-        return { ...userWord.toObject(), levelDropped, previousLevel };
+        return {
+            ...userWord.toObject(),
+            levelDropped,
+            previousLevel,
+            result, // backend puanlamasında istemci sonucu buradan öğrenir
+            ...(correctAnswer !== undefined && { correctAnswer })
+        };
     },
 
     // Günlük cron: uzun süre tekrar edilmeyen kelimelerin GÖRÜNEN seviyesini

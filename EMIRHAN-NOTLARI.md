@@ -55,3 +55,27 @@ Not: Uygulaman kelime başına gerçekten iki `POST /answer` atıyorsa backend a
 buna dayanıklı; ama gereksiz istekse istemcide teke düşürmek isteyebilirsin.
 Hesabındaki mevcut şişkin seviyeler geriye dönük düzelmez — kelimeler vadesi
 gelince gerçek performansa oturur (zaten test verisi; DB temizliği de planda).
+
+## 4. WhatsApp'ta bildirdiğin ders bug'ları — 17.07.2026
+
+Detaylı sözleşmeler API.md'de; senin tarafta değişmesi gerekenler:
+
+1. **Ders kaldığı yerden devam eder**: `GET /userwords/today` artık her kelimede
+   `answeredToday` + `todayResult`, kökte `progress: {total, answered, remaining}`
+   döner. Derse girerken `answeredToday: false` olanlardan başla — baştan sorma.
+   İlerleme çemberini `progress`'ten çiz.
+2. **Sayaç şişmesi bitti**: aynı gün tekrar cevaplanan kelime session sayaçlarına
+   bir daha eklenmiyor (15→19 sorunu). Çember artık hedefi aşamaz.
+3. **Yazma sorusunu backend puanlasın**: `POST /userwords/answer`'a `result`
+   yerine `{ wordId, answer: "to see" }` gönder. "to see / watch", "down / below"
+   gibi anlamlarda her varyant kabul edilir, parantez içleri opsiyonel, büyük/küçük
+   harf ve noktalama önemsiz. Yanıtta `result` (correct/wrong/empty) ve yanlışsa
+   "Cevap: ..." satırı için `correctAnswer` gelir. **İstemcideki elle metin
+   karşılaştırma kodunu tamamen sil.**
+4. **Bitiş ekranı**: `PUT /sessions/complete` yanıtında hazır `accuracy` yüzdesi
+   var — %0 Accuracy sorunu için istemcide hesap yapma, bu alanı göster.
+5. **それから/いつも "kanji değil"**: tüm Word yanıtlarında `isKana` alanı var.
+   `true` ise "kanji" etiketini ve kanjiyle aynı olan okunuş satırını gizle.
+
+Türkçe anlamlar (`meaningTr`) ayrı iş olarak planda; şablon/çeviri kararı verilince
+gelecek.

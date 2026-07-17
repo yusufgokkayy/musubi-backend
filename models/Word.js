@@ -55,6 +55,17 @@ const WordSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     }
+}, {
+    // isKana virtual'ı JSON yanıtlara da girsin
+    toJSON: { virtuals: true },
+    toObject: { virtuals: true }
+});
+
+// Kana-only kelime (それから, いつも): kanji alanında hiç CJK ideografı yok.
+// Client bu bayrakla "kanji" etiketini ve yinelenen okunuş satırını gizler.
+const KANJI_RE = /[㐀-䶿一-鿿]/;
+WordSchema.virtual('isKana').get(function () {
+    return !KANJI_RE.test(this.kanji || '');
 });
 
 WordSchema.index({ jlptLevel: 1, isCore: 1 });

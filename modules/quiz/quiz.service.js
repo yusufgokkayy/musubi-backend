@@ -4,6 +4,7 @@ const Progress = require('../../models/Progress');
 const AppError = require('../../utils/AppError');
 const ProgressService = require('../progress/progress.service');
 const logEvent = require('../../utils/event.util');
+const { meaningVariants, gradeTyping } = require('../../utils/answer.util');
 
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
 
@@ -33,29 +34,6 @@ const sanitizeQuestions = (questions) =>
         prompt: q.prompt,
         ...(q.format !== 'typing' && { choices: q.choices })
     }));
-
-// Yazma cevabı puanlama: Türkçe küçük harf, parantez içleri opsiyonel,
-// noktalama/fazla boşluk yok sayılır
-const normalizeAnswer = (s) => String(s ?? '')
-    .toLocaleLowerCase('tr')
-    .replace(/\([^)]*\)/g, ' ')
-    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-const gradeTyping = (answer, correctAnswers) => {
-    const typed = normalizeAnswer(answer);
-    if (!typed) return false; // boş bırakılan ("Şimdilik Geç") yanlış sayılır
-    return correctAnswers.some(c => normalizeAnswer(c) === typed);
-};
-
-// "gelecek yıl, seneye" gibi anlamlarda her varyant tek başına da kabul edilir
-const meaningVariants = (meaning) => {
-    const variants = [meaning, ...meaning.split(/[,;/]/)]
-        .map(v => v.trim())
-        .filter(Boolean);
-    return [...new Set(variants)];
-};
 
 const attemptResponse = (attempt) => ({
     quizId: attempt._id,

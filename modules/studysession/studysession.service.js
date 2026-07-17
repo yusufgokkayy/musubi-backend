@@ -71,7 +71,11 @@ const StudySessionService = {
             duration: session.duration
         });
 
-        return session;
+        // Bitiş ekranındaki "Accuracy %" hazır gelsin — istemci hesaplamasın
+        const accuracy = session.totalWords > 0
+            ? Math.round((session.correctCount / session.totalWords) * 100)
+            : 0;
+        return { ...session.toObject(), accuracy };
     },
 
     async getTodaySession(userId) {

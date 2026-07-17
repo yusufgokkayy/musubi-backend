@@ -606,7 +606,9 @@ describe('Öğrenme döngüsü (SRS)', () => {
     });
 
     it('easy doğru sayılır ve SM-2\'yi ilerletir (studysession ile tutarlı)', async () => {
-        const w = (await api('GET', '/userwords/today?jlptLevel=N5', { token })).json.data.newWords[1];
+        // Sıralama havuz sırasıyla aynı olmayabilir; cevaplanmamış bir kelime seç
+        const w = (await api('GET', '/userwords/today?jlptLevel=N5', { token }))
+            .json.data.newWords.find(x => !x.answeredToday);
         const res = await api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'easy' } });
         assert.equal(res.status, 200);
         assert.equal(res.json.data.masteryLevel, 2);
@@ -852,6 +854,96 @@ describe('İçerikli soru tipleri (boşluk doldurma & görselli)', () => {
         assert.equal(a2.json.data.correctIndex, 0);
         assert.equal(a2.json.data.finished, true);
         assert.equal(a2.json.data.result.score, 50);
+    });
+});
+
+describe('Ders akışı (devam + backend puanlama + session)', () => {
+    let token, w0, w1;
+
+    before(async () => {
+        await createVerifiedUser('ders@test.com', { dailyGoal: 20 });
+        token = (await login('ders@test.com')).accessToken;
+        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        [w0, w1] = today.json.data.newWords;
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
+    });
+
+    it('aynı gün ikinci cevap session sayaçlarını şişirmez', async () => {
+        await api('POST', '/userwords/answer', { token, body: { wordId: w0._id, result: 'correct' } });
+        let s = await api('GET', '/sessions/today', { token });
+        assert.equal(s.json.data.totalWords, 1);
+
+        // Ders yarıda kalıp yeniden başladı: aynı kelime tekrar cevaplanıyor
+        await api('POST', '/userwords/answer', { token, body: { wordId: w0._id, result: 'correct' } });
+        s = await api('GET', '/sessions/today', { token });
+        assert.equal(s.json.data.totalWords, 1, 'aynı gün tekrarı sayaca EKLENMEMELİ (19/30 şişmesi)');
+        assert.equal(s.json.data.correctCount, 1);
+
+        await api('POST', '/userwords/answer', { token, body: { wordId: w1._id, result: 'wrong' } });
+        s = await api('GET', '/sessions/today', { token });
+        assert.equal(s.json.data.totalWords, 2, 'farklı kelime normal sayılır');
+    });
+
+    it('yazılan cevabı backend puanlar: varyantlar kabul, yanlışta cevap döner, boş empty', async () => {
+        const miru = await Word.create({ kanji: '見る', romaji: 'miru', meaning: 'to see / watch', type: 'fiil', jlptLevel: 'N5' });
+        const shita = await Word.create({ kanji: '下', romaji: 'shita', meaning: 'down / below', type: 'isim', jlptLevel: 'N5' });
+        const itsumo = await Word.create({ kanji: 'いつも', romaji: 'itsumo', meaning: 'always, usually, every time, never (with neg. verb)', type: 'zarf', jlptLevel: 'N5' });
+
+        // "to see / watch" → "to see" tek başına doğru (Emirhan'ın bug'ı)
+        let res = await api('POST', '/userwords/answer', { token, body: { wordId: miru._id, answer: 'to see' } });
+        assert.equal(res.status, 200);
+        assert.equal(res.json.data.result, 'correct');
+        assert.equal(res.json.data.masteryLevel, 2);
+
+        // "down / below" → "Down" (büyük harf) doğru
+        res = await api('POST', '/userwords/answer', { token, body: { wordId: shita._id, answer: 'Down' } });
+        assert.equal(res.json.data.result, 'correct');
+
+        // Parantez içi opsiyonel: "never" tek başına kabul
+        res = await api('POST', '/userwords/answer', { token, body: { wordId: itsumo._id, answer: 'never' } });
+        assert.equal(res.json.data.result, 'correct');
+
+        // Yanlış metin → wrong + "Cevap: ..." satırı için correctAnswer
+        const wrong = await Word.create({ kanji: '上', romaji: 'ue', meaning: 'up / above', type: 'isim', jlptLevel: 'N5' });
+        res = await api('POST', '/userwords/answer', { token, body: { wordId: wrong._id, answer: 'aşağı' } });
+        assert.equal(res.json.data.result, 'wrong');
+        assert.equal(res.json.data.correctAnswer, 'up / above');
+
+        // Boş bırakılan → empty
+        const empty = await Word.create({ kanji: '右', romaji: 'migi', meaning: 'right', type: 'isim', jlptLevel: 'N5' });
+        res = await api('POST', '/userwords/answer', { token, body: { wordId: empty._id, answer: '  ' } });
+        assert.equal(res.json.data.result, 'empty');
+    });
+
+    it('today yanıtı kaldığın yerden devam bilgisi ve isKana verir', async () => {
+        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const d = today.json.data;
+
+        assert.deepEqual(d.progress, { total: 20, answered: 2, remaining: 18 },
+            'havuzdan yalnızca w0 ve w1 cevaplandı');
+
+        const a0 = d.newWords.find(w => w._id === w0._id);
+        const a1 = d.newWords.find(w => w._id === w1._id);
+        assert.equal(a0.answeredToday, true);
+        assert.equal(a0.todayResult, 'correct');
+        assert.equal(a1.todayResult, 'wrong');
+        assert.ok(d.newWords.filter(w => !w.answeredToday).length === 18, 'kalanlar işaretsiz');
+
+        assert.equal(a0.isKana, false, 'kanji içeren kelimede isKana false');
+        const itsumo = await Word.findOne({ romaji: 'itsumo' });
+        const detail = await api('GET', `/words/${itsumo._id}`, { token });
+        assert.equal(detail.json.data.isKana, true, 'kana-only kelimede isKana true');
+    });
+
+    it('sessions/complete hazır accuracy yüzdesi döner', async () => {
+        const res = await api('PUT', '/sessions/complete', { token });
+        assert.equal(res.status, 200);
+        const d = res.json.data;
+        // w0 correct, w1 wrong, miru/shita/itsumo correct, ue wrong, migi empty → 4/7
+        assert.equal(d.totalWords, 7);
+        assert.equal(d.correctCount, 4);
+        assert.equal(d.accuracy, 57);
+        assert.equal(d.isCompleted, true);
     });
 });
 

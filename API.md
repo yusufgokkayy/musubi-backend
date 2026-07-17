@@ -305,6 +305,10 @@ Gövde `Word` alanlarıdır; mobil uygulamanın kullanması gerekmez.
 
 ### GET /userwords/today?jlptLevel=N5 🔒✉️
 Günün havuzunu döner; gün içinde (kullanıcının saat diliminde) tekrar çağrılırsa **aynı liste** döner.
+
+Kaldığın yerden devam: her öğede `answeredToday`/`todayResult`, kökte `progress`
+sayaçları vardır. Ders yarıda kalıp yeniden açıldığında istemci
+`answeredToday: false` olan kelimelerden sürdürmelidir — baştan başlamak yerine.
 ```jsonc
 // 200
 {
@@ -313,7 +317,7 @@ Günün havuzunu döner; gün içinde (kullanıcının saat diliminde) tekrar ç
     "reviewWords": [           // vadesi gelmiş tekrarlar — UserWord + gömülü word
       {
         "_id": "665f3c...",    // UserWord id'si (cevap gönderirken KULLANILMAZ)
-        "word": { /* Word */ },
+        "word": { /* Word — isKana dahil, aşağıya bak */ },
         "status": "learning",  // new | learning | learned
         "interval": 6,
         "easeFactor": 2.5,
@@ -321,18 +325,30 @@ Günün havuzunu döner; gün içinde (kullanıcının saat diliminde) tekrar ç
         "nextReviewDate": "2026-07-10T04:00:00.000Z",
         "masteryLevel": 3,     // 1-5
         "correctCount": 4,
-        "wrongCount": 1
+        "wrongCount": 1,
+        "answeredToday": true, // bugün cevaplanmışsa true — devam ederken atla
+        "todayResult": "wrong" // bugünkü son sonuç (answeredToday false ise null)
       }
     ],
-    "newWords": [ /* Word[] — bugüne atanmış yeni kelimeler */ ]
+    "newWords": [ /* Word[] + answeredToday/todayResult — bugüne atanmış yeni kelimeler */ ],
+    "progress": { "total": 30, "answered": 12, "remaining": 18 } // ilerleme çemberi
   }
 }
 ```
+Not: tüm `Word` yanıtlarında türetilmiş `isKana` alanı vardır — `true` ise kelime
+kana-only'dir (それから, いつも): istemci "kanji" etiketini ve kanjiyle aynı olan
+okunuş satırını gizlemelidir.
 
 ### POST /userwords/answer 🔒✉️
 ```jsonc
 // İstek — wordId, Word'ün _id'sidir (UserWord id'si DEĞİL)
 { "wordId": "665f2b...", "result": "correct" }   // correct | easy | empty | wrong
+
+// VEYA yazma sorusunda result yerine yazılan metin gönderilir; puanlamayı
+// BACKEND yapar ("to see / watch" gibi çok varyantlı anlamlarda her varyant
+// tek başına kabul edilir, parantez içleri opsiyoneldir, büyük/küçük harf
+// ve noktalama önemsizdir). Boş metin "empty" sayılır.
+{ "wordId": "665f2b...", "answer": "to see" }
 
 // 200 — güncellenmiş SRS durumu
 {
@@ -348,8 +364,11 @@ Günün havuzunu döner; gün içinde (kullanıcının saat diliminde) tekrar ç
     "masteryLevel": 3,
     "correctCount": 5,
     "wrongCount": 1,
+    "lastResult": "correct",
     "levelDropped": false,     // true ise UI seviye düşüşü animasyonu gösterebilir
-    "previousLevel": 3
+    "previousLevel": 3,
+    "result": "correct",       // kullanılan sonuç — answer gönderildiyse puanlama budur
+    "correctAnswer": "to see"  // yalnızca answer gönderildiyse: "Cevap: ..." satırı için
   }
 }
 ```
@@ -357,10 +376,11 @@ Hatalar: `400 "Invalid result, use: correct, easy, empty, wrong"`, `404 "Word no
 
 Aynı-gün kuralı: bir kelimeye gün içinde (kullanıcının saat diliminde) ikinci kez
 verilen **doğru** cevap SM-2 durumunu (`interval`/`repetitions`/`nextReviewDate`/
-`masteryLevel`) İLERLETMEZ — yalnızca `correctCount` işler. Bu yüzden aynı kelimeyi
-öğrenme + test aşamalarında iki kez cevaplatmak seviyeyi şişirmez; istemcinin bunu
-dert etmesine gerek yoktur. **Yanlış** cevap ise her koşulda sıfırlar (unutma
-sinyali gün içinde de geçerlidir).
+`masteryLevel`) İLERLETMEZ — yalnızca `correctCount` işler; **session sayaçlarına
+da eklenmez** (ana ekran çemberi 19/30 gibi hedefi aşamaz). Bu yüzden aynı kelimeyi
+öğrenme + test aşamalarında iki kez cevaplatmak seviyeyi ve günlük ilerlemeyi
+şişirmez; istemcinin bunu dert etmesine gerek yoktur. **Yanlış** cevap ise SM-2'yi
+her koşulda sıfırlar (unutma sinyali gün içinde de geçerlidir).
 
 ### GET /userwords/stats 🔒✉️
 ```jsonc
@@ -451,8 +471,10 @@ Hata: `404 "No active session found"`.
 
 ### PUT /sessions/complete 🔒✉️
 ```jsonc
-// 200 — gövde yok; isCompleted=true, duration hesaplanır
-{ "success": true, "data": { /* StudySession */ } }
+// 200 — gövde yok; isCompleted=true, duration hesaplanır.
+// accuracy: bitiş ekranındaki "Accuracy %" — correctCount/totalWords'ten
+// hazır yüzde olarak döner, istemci hesaplamamalıdır
+{ "success": true, "data": { /* StudySession */, "accuracy": 40 } }
 ```
 Hata: `404 "No active session found"`.
 

@@ -43,6 +43,13 @@ const UserWordSchema = new mongoose.Schema({
     lastReviewDate: {
         type: Date
     },
+    // Son cevabın sonucu — "bugün cevaplandı mı, sonucu neydi" bilgisini
+    // /userwords/today'in kaldığı-yerden-devam işaretlemesi buradan okur
+    // (Event log'u fire-and-forget olduğu için güvenilir kaynak değildir)
+    lastResult: {
+        type: String,
+        enum: ['correct', 'easy', 'empty', 'wrong']
+    },
     masteryLevel: {
         type: Number,
         min: 1,

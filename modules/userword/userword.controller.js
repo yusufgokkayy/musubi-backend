@@ -9,8 +9,9 @@ const UserWordController = {
     }),
 
     submitAnswer: catchAsync(async (req, res) => {
-        const { wordId, result } = req.body;
-        const data = await UserWordService.submitAnswer(req.user.id, wordId, result);
+        // result (şıklı/kart akışı) VEYA answer (yazma sorusu, backend puanlar)
+        const { wordId, result, answer } = req.body;
+        const data = await UserWordService.submitAnswer(req.user.id, wordId, result, answer);
         res.status(200).json({ success: true, data: data });
     }),
 
