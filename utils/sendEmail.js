@@ -1,4 +1,4 @@
-const resend = require('../config/resend');
+const getResend = require('../config/resend');
 
 // Test ortamında gerçek gönderim yapılmaz: mailler outbox'ta biriktirilir ki
 // testler alıcıyı/linki doğrulayabilsin. failNextSend() bir sonraki gönderimi
@@ -28,7 +28,7 @@ const sendEmail = async ({ to, subject, html }) => {
     // işlem maili normal öncelikte gitmeli. Spam'i belirleyen asıl şeyler:
     // SPF/DKIM/DMARC (Resend domain doğrulaması), linkin gerçek HTTPS adres
     // olması (CLIENT_URL!) ve domain'in zamanla oluşan gönderim itibarı.
-    const { data, error } = await resend.emails.send({
+    const { data, error } = await getResend().emails.send({
         from: process.env.EMAIL_FROM,
         to,
         subject,
