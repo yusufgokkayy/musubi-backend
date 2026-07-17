@@ -356,7 +356,8 @@ describe('E-posta akışları', () => {
         const page = await pageGet(`/reset-password/${fp.json.resetToken}`);
         assert.equal(page.status, 200);
         assert.ok(page.text.includes(`musubi://reset-password/${fp.json.resetToken}`));
-        assert.ok(page.text.includes('reset-form'), 'yeni şifre formu olmalı');
+        assert.ok(page.text.includes('show-form-btn'), '"Şifreyi Burada Değiştir" butonu olmalı');
+        assert.ok(page.text.includes('id="reset-form" class="hidden"'), 'şifre formu butona basılana dek gizli olmalı');
 
         const rp = await api('POST', '/auth/reset-password', {
             body: { token: fp.json.resetToken, password: 'websifre123' }

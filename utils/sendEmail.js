@@ -27,7 +27,16 @@ const sendEmail = async ({ to, subject, html }) => {
         from: process.env.EMAIL_FROM,
         to,
         subject,
-        html
+        html,
+        // Doğrulama/sıfırlama mailleri zamana duyarlı işlem mailleridir: yüksek
+        // öncelik başlıkları istemcide öne çıkarır. Not: spam'e düşmemenin asıl
+        // belirleyicisi bu başlıklar değil, EMAIL_FROM domain'inin Resend'de
+        // SPF+DKIM+DMARC ile doğrulanmış olmasıdır.
+        headers: {
+            'X-Priority': '1',
+            'X-MSMail-Priority': 'High',
+            'Importance': 'high'
+        }
     });
 
     if (error) {

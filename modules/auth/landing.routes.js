@@ -150,9 +150,10 @@ router.get('/reset-password/:token', async (req, res, next) => {
             body: `
   <div class="logo">結</div>
   <h1>Yeni Şifre Belirle</h1>
-  <p>Musubi hesabın için yeni şifreni oluştur (en az 8 karakter) ya da uygulamada devam et.</p>
+  <p>Şifreni uygulamada değiştir ya da burada devam et.</p>
   <a class="btn btn-primary" href="${deepLink}">Uygulamada Aç</a>
-  <form id="reset-form">
+  <button class="btn btn-secondary" id="show-form-btn">Şifreyi Burada Değiştir</button>
+  <form id="reset-form" class="hidden">
     <input type="password" name="p1" placeholder="Yeni şifre" minlength="8" required autocomplete="new-password">
     <input type="password" name="p2" placeholder="Yeni şifre (tekrar)" minlength="8" required autocomplete="new-password">
     <button class="btn btn-secondary" type="submit">Şifreyi Güncelle</button>
@@ -161,6 +162,13 @@ router.get('/reset-password/:token', async (req, res, next) => {
             script: `
 var form = document.getElementById('reset-form');
 var msg = document.getElementById('msg');
+var showBtn = document.getElementById('show-form-btn');
+// Şifre alanları istenmedikçe görünmez: önce buton, sonra form (verify ile aynı akış)
+showBtn.addEventListener('click', function () {
+  showBtn.classList.add('hidden');
+  form.classList.remove('hidden');
+  form.p1.focus();
+});
 form.addEventListener('submit', function (e) {
   e.preventDefault();
   msg.className = '';
