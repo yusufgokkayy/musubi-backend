@@ -23,20 +23,16 @@ const sendEmail = async ({ to, subject, html }) => {
     // Resend SDK hata durumunda exception ATMAZ, { data, error } döner.
     // error kontrol edilmezse başarısız gönderim sessizce başarılı sanılır
     // ve register/reset akışlarındaki rollback'ler hiç tetiklenmez.
+    // NOT: X-Priority/Importance başlıkları BİLEREK yok. Denendi ve maili
+    // spam'den kurtarmadığı gibi filtrelere gereksiz agresif sinyal veriyor;
+    // işlem maili normal öncelikte gitmeli. Spam'i belirleyen asıl şeyler:
+    // SPF/DKIM/DMARC (Resend domain doğrulaması), linkin gerçek HTTPS adres
+    // olması (CLIENT_URL!) ve domain'in zamanla oluşan gönderim itibarı.
     const { data, error } = await resend.emails.send({
         from: process.env.EMAIL_FROM,
         to,
         subject,
-        html,
-        // Doğrulama/sıfırlama mailleri zamana duyarlı işlem mailleridir: yüksek
-        // öncelik başlıkları istemcide öne çıkarır. Not: spam'e düşmemenin asıl
-        // belirleyicisi bu başlıklar değil, EMAIL_FROM domain'inin Resend'de
-        // SPF+DKIM+DMARC ile doğrulanmış olmasıdır.
-        headers: {
-            'X-Priority': '1',
-            'X-MSMail-Priority': 'High',
-            'Importance': 'high'
-        }
+        html
     });
 
     if (error) {
