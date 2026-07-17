@@ -20,13 +20,18 @@ const StreakService = require('./modules/streak/streak.service');
 const NotificationService = require('./modules/notification/notification.service');
 const UserWordService = require('./modules/userword/userword.service');
 
+// Cron logları "[cron]" önekiyle basılır: deploy loglarında bu kelimeyle
+// filtreleyince görevlerin çalıştığı/çalışmadığı doğrudan görülür
+console.log('[cron] 3 görev zamanlandı: streak reset (saatlik :05), bildirim üretimi (saatlik :10), mastery decay (03:00 UTC)');
+
 // Her saat başı çalışır: her kullanıcının KENDİ saat diliminde günü geçmişse
 // serisi sıfırlanır (timezone-aware, idempotent)
 cron.schedule('5 * * * *', async () => {
     try {
         await StreakService.resetExpiredStreaks();
+        console.log('[cron] streak reset tamamlandı');
     } catch (err) {
-        console.error('Streak reset hatası:', err.message);
+        console.error('[cron] Streak reset hatası:', err.message);
     }
 });
 
@@ -35,8 +40,9 @@ cron.schedule('5 * * * *', async () => {
 cron.schedule('10 * * * *', async () => {
     try {
         await NotificationService.generateDailyNotifications();
+        console.log('[cron] bildirim üretimi tamamlandı');
     } catch (err) {
-        console.error('Bildirim üretim hatası:', err.message);
+        console.error('[cron] Bildirim üretim hatası:', err.message);
     }
 });
 
@@ -45,11 +51,9 @@ cron.schedule('10 * * * *', async () => {
 cron.schedule('0 3 * * *', async () => {
     try {
         const result = await UserWordService.applyMasteryDecay();
-        if (result.affectedWords > 0) {
-            console.log(`Mastery decay: ${result.affectedWords} kelime, ${result.affectedUsers} kullanıcı`);
-        }
+        console.log(`[cron] mastery decay tamamlandı: ${result.affectedWords} kelime, ${result.affectedUsers} kullanıcı`);
     } catch (err) {
-        console.error('Mastery decay hatası:', err.message);
+        console.error('[cron] Mastery decay hatası:', err.message);
     }
 });
 
