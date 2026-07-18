@@ -3,7 +3,10 @@
 // Mail istemcilerinin link tarayıcıları (Gmail prefetch, Outlook SafeLinks)
 // GET linklerini kullanıcı tıklamadan takip edebilir; bu yüzden bu sayfalar
 // YAN ETKİSİZDİR. Doğrulama/sıfırlama, kullanıcının sayfada tetiklediği
-// POST /api/auth/... çağrısıyla ya da uygulamaya deep link ile geçilerek yapılır.
+// POST /api/auth/... çağrısıyla TAMAMEN WEB'DE yapılır (ürün kararı: deep link
+// yok). Kullanıcı sonrasında uygulamaya kendisi döner; uygulama /auth/me'yi
+// yeniden deneyerek durumu fark eder. Mail linkleri hep bu sayfalara geldiği
+// için ileride deep link'e dönüş şablonlara dokunmadan buradan yapılabilir.
 const express = require('express');
 const crypto = require('crypto');
 const AuthService = require('./auth.service');
@@ -11,8 +14,6 @@ const { generalLimiter } = require('../../middlewares/rateLimiter');
 
 const router = express.Router();
 router.use(generalLimiter);
-
-const APP_SCHEME = 'musubi';
 
 // crypto.randomBytes(20).toString('hex') → 40 hex karakter. Uymayan token
 // DB'ye hiç sorulmadan reddedilir; HTML'e yalnızca bu desenden geçen değer
@@ -79,12 +80,9 @@ const invalidLinkPage = (res) => sendPage(res, {
   <p>Bu bağlantı geçersiz veya süresi dolmuş. Uygulamadan yeni bir bağlantı isteyebilirsin.</p>`
 });
 
-// Mobil cihazda sayfa açılır açılmaz uygulamayı dener; kurulu değilse veya
-// masaüstündeyse sayfadaki butonlar devrededir. (Link tarayıcıları genelde
-// JS çalıştırmaz; çalıştırsa bile şema yönlendirmesi yan etkisizdir.)
-const autoOpenSnippet = (deepLink) =>
-    `if (/android|iphone|ipad|ipod/i.test(navigator.userAgent)) location.href = '${deepLink}';`;
-
+// Doğrulama/sıfırlama bilinçli olarak WEB'de tamamlanır (deep link yok):
+// kullanıcı butona basıp işlemi bitirir, ardından uygulamaya kendisi döner —
+// uygulama /auth/me'yi yeniden deneyerek doğrulamayı fark eder.
 router.get('/verify-email/:token', async (req, res, next) => {
     try {
         const { token } = req.params;
@@ -92,15 +90,13 @@ router.get('/verify-email/:token', async (req, res, next) => {
             return invalidLinkPage(res);
         }
 
-        const deepLink = `${APP_SCHEME}://verify-email/${token}`;
         sendPage(res, {
             title: 'E-posta Doğrulama',
             body: `
   <div class="logo">結</div>
   <h1>E-posta Doğrulama</h1>
-  <p>Musubi hesabını doğrulamak için uygulamada aç ya da doğrudan burada doğrula.</p>
-  <a class="btn btn-primary" href="${deepLink}">Uygulamada Aç</a>
-  <button class="btn btn-secondary" id="verify-btn">Burada Doğrula</button>
+  <p>Musubi hesabını doğrulamak için aşağıdaki butona bas.</p>
+  <button class="btn btn-primary" id="verify-btn">E-postamı Doğrula</button>
   <div id="msg"></div>`,
             script: `
 var btn = document.getElementById('verify-btn');
@@ -117,22 +113,21 @@ btn.addEventListener('click', function () {
       if (r.ok) {
         btn.classList.add('hidden');
         msg.className = 'msg ok';
-        msg.textContent = 'E-postan doğrulandı. Artık uygulamaya dönebilirsin.';
+        msg.textContent = 'E-postan doğrulandı. Uygulamaya dönüp devam edebilirsin.';
       } else {
         btn.disabled = false;
-        btn.textContent = 'Burada Doğrula';
+        btn.textContent = 'E-postamı Doğrula';
         msg.className = 'msg err';
         msg.textContent = j.message || 'Doğrulama başarısız, tekrar dene.';
       }
     });
   }).catch(function () {
     btn.disabled = false;
-    btn.textContent = 'Burada Doğrula';
+    btn.textContent = 'E-postamı Doğrula';
     msg.className = 'msg err';
     msg.textContent = 'Bağlantı hatası, tekrar dene.';
   });
-});
-${autoOpenSnippet(deepLink)}`
+});`
         });
     } catch (err) { next(err); }
 });
@@ -144,15 +139,13 @@ router.get('/reset-password/:token', async (req, res, next) => {
             return invalidLinkPage(res);
         }
 
-        const deepLink = `${APP_SCHEME}://reset-password/${token}`;
         sendPage(res, {
             title: 'Yeni Şifre Belirle',
             body: `
   <div class="logo">結</div>
   <h1>Yeni Şifre Belirle</h1>
-  <p>Şifreni uygulamada değiştir ya da burada devam et.</p>
-  <a class="btn btn-primary" href="${deepLink}">Uygulamada Aç</a>
-  <button class="btn btn-secondary" id="show-form-btn">Şifreyi Burada Değiştir</button>
+  <p>Musubi hesabın için yeni şifreni burada belirle (en az 8 karakter).</p>
+  <button class="btn btn-primary" id="show-form-btn">Şifreyi Değiştir</button>
   <form id="reset-form" class="hidden">
     <input type="password" name="p1" placeholder="Yeni şifre" minlength="8" required autocomplete="new-password">
     <input type="password" name="p2" placeholder="Yeni şifre (tekrar)" minlength="8" required autocomplete="new-password">
@@ -206,8 +199,7 @@ form.addEventListener('submit', function (e) {
     msg.className = 'msg err';
     msg.textContent = 'Bağlantı hatası, tekrar dene.';
   });
-});
-${autoOpenSnippet(deepLink)}`
+});`
         });
     } catch (err) { next(err); }
 });

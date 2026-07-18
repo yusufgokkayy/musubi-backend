@@ -98,3 +98,21 @@ gelecek.
    düşmüş, doğru bildiklerin dahil. Yazma sorusunda `{ wordId, answer: "<metin>" }`
    gönderdiğinden emin ol — `answer` boş string giderse backend onu "boş
    bırakıldı" (empty) sayar.
+
+## 6. Web-only doğrulama kararın uygulandı — 18.07.2026
+
+Senin kararınla deep link akışı kaldırıldı; **2. bölümdeki deep link maddeleri
+(musubi:// route'ları) artık GEÇERSİZ.** Yeni akış:
+
+- Maildeki link web sayfasını açar; kullanıcı "E-postamı Doğrula" butonuna
+  basar, doğrulama webde biter. Şifre sıfırlama da aynı şekilde webdeki formda.
+- Uygulamada yapman gerekenler:
+  1. Register sonrası **"e-postanı doğrula" bekleme ekranı** — kullanıcıyı ana
+     ekrana alma (`isEmailVerified: false` / ✉️ endpoint'lerden 403).
+  2. Ekranda **"Doğruladım" butonu** → `GET /auth/me`'yi yeniden dene; 200
+     dönüyorsa içeri al. İstersen ekran açıkken birkaç saniyede bir sessiz
+     `/auth/me` yoklaması da yapabilirsin — ikisi için de yeni endpoint gerekmez,
+     register'ın verdiği token'lar bunun için var.
+  3. **"Tekrar gönder"** → `POST /auth/resend-verification-email` (mevcut).
+- `POST /api/auth/verify-email`'i artık uygulamadan çağırmana gerek yok
+  (web sayfası çağırıyor); endpoint Postman/ileriye dönük için duruyor.

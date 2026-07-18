@@ -303,13 +303,14 @@ describe('E-posta akışları', () => {
         assert.ok(!rMail.html.includes('/api/auth/'));
     });
 
-    it('verify landing: geçerli tokende deep link, geçersizde hata sayfası; sayfa yan etkisizdir', async () => {
+    it('verify landing: geçerli tokende doğrulama butonu, geçersizde hata sayfası; sayfa yan etkisizdir', async () => {
         const reg = await api('POST', '/auth/register', registerBody('landing-verify@test.com'));
         const token = reg.json.verificationToken;
 
         const page = await pageGet(`/verify-email/${token}`);
         assert.equal(page.status, 200);
-        assert.ok(page.text.includes(`musubi://verify-email/${token}`), 'deep link sayfada olmalı');
+        assert.ok(page.text.includes('verify-btn'), 'doğrulama butonu olmalı');
+        assert.ok(!page.text.includes('musubi://'), 'ürün kararı: deep link YOK, doğrulama webde biter');
 
         // Sayfayı açmak (scanner prefetch senaryosu) doğrulamaz
         const user = await User.findOne({ email: 'landing-verify@test.com' });
@@ -355,8 +356,8 @@ describe('E-posta akışları', () => {
         const fp = await api('POST', '/auth/forgot-password', { body: { email: 'landing-reset@test.com' } });
         const page = await pageGet(`/reset-password/${fp.json.resetToken}`);
         assert.equal(page.status, 200);
-        assert.ok(page.text.includes(`musubi://reset-password/${fp.json.resetToken}`));
-        assert.ok(page.text.includes('show-form-btn'), '"Şifreyi Burada Değiştir" butonu olmalı');
+        assert.ok(!page.text.includes('musubi://'), 'ürün kararı: deep link YOK, sıfırlama webde biter');
+        assert.ok(page.text.includes('show-form-btn'), '"Şifreyi Değiştir" butonu olmalı');
         assert.ok(page.text.includes('id="reset-form" class="hidden"'), 'şifre formu butona basılana dek gizli olmalı');
 
         const rp = await api('POST', '/auth/reset-password', {

@@ -215,15 +215,21 @@ POST varyantının eski GET biçimi (geriye uyumluluk). `User-Agent` cihaz adı 
 her zaman oturum açılıp taze çift döner. Yeni istemciler POST kullanmalı.
 
 ### Tarayıcı sayfaları (API dışı)
-E-postalardaki linkler artık `/api`'ye değil şu HTML sayfalarına gider:
+E-postalardaki linkler `/api`'ye değil şu HTML sayfalarına gider ve akış
+**tamamen web'de tamamlanır** (ürün kararı: deep link yok):
 
-- `GET /verify-email/:token` — deep link (`musubi://verify-email/<token>`) ile
-  uygulamada açma + "Burada Doğrula" butonu (`POST /api/auth/verify-email` çağırır).
-- `GET /reset-password/:token` — deep link (`musubi://reset-password/<token>`) +
-  tarayıcıda yeni şifre formu (`POST /api/auth/reset-password` çağırır).
+- `GET /verify-email/:token` — "E-postamı Doğrula" butonu
+  (`POST /api/auth/verify-email` çağırır, oturum açılmaz).
+- `GET /reset-password/:token` — "Şifreyi Değiştir" butonu → yeni şifre formu
+  (`POST /api/auth/reset-password` çağırır, oturum açılmaz).
 
 Sayfalar yan etkisizdir (mail istemcilerinin link tarayıcıları GET'i takip
 edebilir); geçersiz/süresi dolmuş tokende hata ekranı basar.
+
+Uygulama akışı: register sonrası istemci "e-postanı doğrula" bekleme ekranı
+gösterir; kullanıcı webde doğrulayıp uygulamaya dönünce istemci `GET /auth/me`'yi
+yeniden dener (403 → 200'e döner) — register'da verilen token çifti bu yüzden
+vardır. Yeni bağlantı için `POST /auth/resend-verification-email`.
 
 ### POST /auth/resend-verification-email
 ```jsonc
