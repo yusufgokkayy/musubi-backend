@@ -140,3 +140,14 @@ sözleşme API.md'de; senin tarafta yapılacaklar:
 5. **Oturum**: `POST /sessions/start` artık bitmiş oturumu yeniden açar, aynı
    güne ikinci kayıt oluşmaz — her ders girişinde çağırman güvenli.
    `PUT /sessions/complete`'i `progress.remaining === 0` olunca çağır.
+
+## 8. Şifre kuralları — 18.07.2026
+
+1. **Yeni şifre eskisiyle aynı olamaz**: `change-password` ve `reset-password`
+   artık `400 "Yeni şifre eski şifrenle aynı olamaz"` dönebilir — bu metni
+   ekranda göster. Reset'te bu 400 token'ı tüketmez; kullanıcı aynı linkle
+   farklı şifre deneyebilir.
+2. **`update-info` artık `password` kabul etmiyor** (400 döner): uygulaman
+   şifreyi update-info ile gönderiyorsa `PUT /auth/change-password`'e
+   (`{oldPassword, newPassword, deviceName}`) taşı — eski şifre doğrulaması ve
+   oturum rotasyonu yalnızca orada var.

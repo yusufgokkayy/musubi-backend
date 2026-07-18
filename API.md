@@ -136,7 +136,6 @@ Hata: `401 "No refresh token"` / `401 "Invalid refresh token"` (oturum kapatılm
   "name": "Yusuf",
   "surname": "Gökkaya",
   "email": "yeni@ornek.com",          // değişirse doğrulama sıfırlanır, yeni adrese mail gider
-  "password": "yenisifre123",
   "dailyGoal": 30,                    // 5-50 arası
   "fcmToken": "fcm-cihaz-tokeni",     // push için Firebase SDK'dan alınan token
   "timezone": "Europe/Berlin",        // geçersiz değer varsayılana (Europe/Istanbul) düşer
@@ -147,7 +146,7 @@ Hata: `401 "No refresh token"` / `401 "Invalid refresh token"` (oturum kapatılm
 // 200 — güncellenmiş kullanıcı (GET /auth/me ile aynı biçim)
 { "success": true, "data": { /* ... */ } }
 ```
-Hatalar: `400 "Bu e-posta adresi zaten kullanımda"`, `400` enum validasyonu (geçersiz theme/fontSize), `500 "Doğrulama maili gönderilemedi, e-posta değiştirilmedi"`. `isPremium` bu endpoint'ten **değiştirilemez** (gönderilirse yok sayılır).
+Hatalar: `400 "Bu e-posta adresi zaten kullanımda"`, `400` enum validasyonu (geçersiz theme/fontSize), `500 "Doğrulama maili gönderilemedi, e-posta değiştirilmedi"`. `isPremium` bu endpoint'ten **değiştirilemez** (gönderilirse yok sayılır). `password` da **değiştirilemez** — gönderilirse `400 "Şifre bu uçtan değiştirilemez..."`: şifre değişiminin tek kapısı `change-password` (eski şifre doğrulamalı) ve `reset-password` (mail token'lı); ikisi de oturum rotasyonu yapar.
 
 ### POST /auth/verify-password 🔒✉️
 Ayarlardaki adım adım şifre değiştirme akışının ilk ekranı ("Şifre Girin" alt sayfası): mevcut şifre doğrulanmadan yeni şifre ekranına geçilmez.
@@ -172,7 +171,7 @@ Hatalar: `401 "Şifreniz yanlış. Lütfen tekrar deneyin."` (ekrandaki hata met
   "data": { "accessToken": "eyJ...", "refreshToken": "eyJ..." }
 }
 ```
-Hata: `401 "Old password is incorrect"`.
+Hatalar: `401 "Old password is incorrect"`, `400 "Yeni şifre eski şifrenle aynı olamaz"`.
 
 ### POST /auth/forgot-password
 ```jsonc
@@ -195,7 +194,9 @@ Hata: `401 "Old password is incorrect"`.
 // deviceName gönderilmediyse (web landing sayfası) oturum açılmaz: data boş döner
 { "success": true, "data": {} }
 ```
-Hata: `400 "Invalid or expired token"` (link 1 saat geçerli).
+Hatalar: `400 "Invalid or expired token"` (link 1 saat geçerli), `400 "Yeni şifre
+eski şifrenle aynı olamaz"` (aynı-şifre 400'ü token'ı TÜKETMEZ; kullanıcı aynı
+linkle farklı şifre deneyebilir).
 
 ### POST /auth/verify-email
 ```jsonc

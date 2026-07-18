@@ -145,7 +145,7 @@ describe('Auth', () => {
 
         const cp = await api('PUT', '/auth/change-password', {
             token: devA.accessToken,
-            body: { oldPassword: 'testsifre123', newPassword: 'testsifre123', deviceName: 'test-suite' }
+            body: { oldPassword: 'testsifre123', newPassword: 'yepyenisifre123', deviceName: 'test-suite' }
         });
         assert.equal(cp.status, 200);
         assert.ok(cp.json.data.accessToken && cp.json.data.refreshToken);
@@ -282,6 +282,47 @@ describe('E-posta akışları', () => {
         const fp = await api('POST', '/auth/forgot-password', { body: { email: 'dogrulanmamis@test.com' } });
         assert.equal(fp.status, 200);
         assert.ok(fp.json.resetToken, 'doğrulanmamış hesaba 403 dönülmemeli — link sahipliği zaten kanıtlar');
+    });
+
+    it('yeni şifre eskisiyle aynı olamaz: change-password, reset-password ve update-info kapıları', async () => {
+        await createVerifiedUser('aynisifre@test.com');
+        const token = (await login('aynisifre@test.com')).accessToken;
+
+        // change-password: eski === yeni → 400 (oturumlar sebepsiz düşürülmez)
+        const cp = await api('PUT', '/auth/change-password', {
+            token, body: { oldPassword: 'testsifre123', newPassword: 'testsifre123' }
+        });
+        assert.equal(cp.status, 400);
+        assert.match(cp.json.message, /aynı olamaz/);
+
+        // reset-password: eski şifre yazılmadan geldiği için hash'e karşı kontrol
+        const fp = await api('POST', '/auth/forgot-password', { body: { email: 'aynisifre@test.com' } });
+        const rp = await api('POST', '/auth/reset-password', {
+            body: { token: fp.json.resetToken, password: 'testsifre123' }
+        });
+        assert.equal(rp.status, 400);
+        assert.match(rp.json.message, /aynı olamaz/);
+
+        // Aynı token farklı şifreyle hâlâ kullanılabilir (400 token'ı tüketmez)
+        const rp2 = await api('POST', '/auth/reset-password', {
+            body: { token: fp.json.resetToken, password: 'apayrisifre123' }
+        });
+        assert.equal(rp2.status, 200);
+
+        // update-info şifre kabul ETMEZ: eski şifre doğrulamasız + rotasyonsuz
+        // değişim güvenlik açığıydı — tek kapı change/reset akışları
+        const newToken = (await api('POST', '/auth/login', {
+            body: { email: 'aynisifre@test.com', password: 'apayrisifre123', deviceName: 'test-suite' }
+        })).json.accessToken;
+        const upd = await api('PUT', '/auth/update-info', {
+            token: newToken, body: { password: 'baskabirsifre123' }
+        });
+        assert.equal(upd.status, 400);
+
+        const still = await api('POST', '/auth/login', {
+            body: { email: 'aynisifre@test.com', password: 'apayrisifre123' }
+        });
+        assert.equal(still.status, 200, 'şifre update-info ile değişmemiş olmalı');
     });
 
     // HTML landing sayfaları /api dışında yaşar

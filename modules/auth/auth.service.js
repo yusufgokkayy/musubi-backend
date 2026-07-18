@@ -248,12 +248,19 @@ const AuthService = {
             .update(resetToken)
             .digest('hex');
 
+        // +password: aynı-şifre kontrolü için hash gerekli (select: false alandır)
         const user = await User.findOne({
             resetPasswordToken: hashedToken,
             resetPasswordExpire: { $gt: Date.now() }
-        });
+        }).select('+password');
 
         if (!user) throw new AppError('Invalid or expired token', 400);
+
+        // Sıfırlamada eski şifre yazılmadığı için karşılaştırma hash'e karşı
+        // yapılır; şifresiz (sosyal) hesap resetle İLK şifresini belirleyebilir
+        if (user.password && await user.comparePassword(newPassword)) {
+            throw new AppError('Yeni şifre eski şifrenle aynı olamaz', 400);
+        }
 
         user.password = newPassword;
         user.resetPasswordToken = undefined;
@@ -310,7 +317,13 @@ const AuthService = {
             user.emailVerificationExpire = Date.now() + 24 * 60 * 60 * 1000;
         }
 
-        if (updates.password) user.password = updates.password;
+        // Şifre bu uçtan DEĞİŞTİRİLEMEZ: eski şifre doğrulaması ve oturum
+        // rotasyonu olmadan şifre değişimi, telefonu eline geçirenin şifreyi
+        // bilmeden değiştirebilmesi demekti. Tek kapı: change-password (bilen)
+        // ve reset-password (unutan) — ikisi de doğrulama + rotasyon garantili.
+        if (updates.password) {
+            throw new AppError('Şifre bu uçtan değiştirilemez; şifre değiştirme akışını kullan', 400);
+        }
         if (updates.dailyGoal) user.dailyGoal = updates.dailyGoal;
         if (updates.fcmToken) user.fcmToken = updates.fcmToken;
         if (updates.timezone) user.timezone = safeTimezone(updates.timezone);
@@ -437,6 +450,12 @@ const AuthService = {
 
         const isMatch = await user.comparePassword(oldPassword);
         if (!isMatch) throw new AppError('Old password is incorrect', 401);
+
+        // Aynı şifreye "değişim" hem anlamsız hem zararlı: kullanıcı fark etmeden
+        // tüm diğer oturumları düşürmüş olurdu (rotateAllSessions)
+        if (oldPassword === newPassword) {
+            throw new AppError('Yeni şifre eski şifrenle aynı olamaz', 400);
+        }
 
         user.password = newPassword;
         await user.save();
