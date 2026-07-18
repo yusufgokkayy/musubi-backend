@@ -312,12 +312,16 @@ Gövde `Word` alanlarıdır; mobil uygulamanın kullanması gerekmez.
 ### GET /userwords/today?jlptLevel=N5 🔒✉️
 Günün havuzunu döner; gün içinde (kullanıcının saat diliminde) tekrar çağrılırsa **aynı liste** döner.
 Tek istisna: `dailyGoal` gün içinde **artarsa** havuz bir sonraki çağrıda fark
-kadar yeni kelimeyle genişler (cevaplanmışlar korunur). Hedef azalırsa bugünü
-etkilemez, yarınki havuz yeni hedefle kurulur.
+kadar genişler — kontenjana önce **vadesi gelmiş tekrarlar**, kalan yer rastgele
+yeni kelimeler girer (cevaplanmışlar korunur). Hedef azalırsa bugünü etkilemez,
+yarınki havuz yeni hedefle kurulur.
 
 Kaldığın yerden devam: her öğede `answeredToday`/`todayResult`, kökte `progress`
 sayaçları vardır. Ders yarıda kalıp yeniden açıldığında istemci
 `answeredToday: false` olan kelimelerden sürdürmelidir — baştan başlamak yerine.
+`answeredToday` yalnızca günün **nihai cevabı** (correct/easy/wrong) verildiyse
+true olur; **"Şimdilik Geç" (empty) ertelemedir**: kelime `remaining`'de kalır
+(`todayResult: "empty"` ile işaretli) ve yeniden sorulmalıdır.
 ```jsonc
 // 200
 {
@@ -335,8 +339,8 @@ sayaçları vardır. Ders yarıda kalıp yeniden açıldığında istemci
         "masteryLevel": 3,     // 1-5
         "correctCount": 4,
         "wrongCount": 1,
-        "answeredToday": true, // bugün cevaplanmışsa true — devam ederken atla
-        "todayResult": "wrong" // bugünkü son sonuç (answeredToday false ise null)
+        "answeredToday": true, // günün NİHAİ cevabı verildiyse true — devam ederken atla
+        "todayResult": "wrong" // bugünkü son sonuç; "empty" = ertelendi (answeredToday false kalır)
       }
     ],
     "newWords": [ /* Word[] + answeredToday/todayResult — bugüne atanmış yeni kelimeler */ ],
@@ -377,19 +381,27 @@ okunuş satırını gizlemelidir.
     "levelDropped": false,     // true ise UI seviye düşüşü animasyonu gösterebilir
     "previousLevel": 3,
     "result": "correct",       // kullanılan sonuç — answer gönderildiyse puanlama budur
-    "correctAnswer": "to see"  // yalnızca answer gönderildiyse: "Cevap: ..." satırı için
+    "correctAnswer": "to see", // yalnızca answer gönderildiyse: "Cevap: ..." satırı için
+    "counted": true            // false ise cevap kaydedilmedi (tekrar çalışma turu)
   }
 }
 ```
 Hatalar: `400 "Invalid result, use: correct, easy, empty, wrong"`, `404 "Word not found"`.
 
-Aynı-gün kuralı: bir kelimeye gün içinde (kullanıcının saat diliminde) ikinci kez
-verilen **doğru** cevap SM-2 durumunu (`interval`/`repetitions`/`nextReviewDate`/
-`masteryLevel`) İLERLETMEZ — yalnızca `correctCount` işler; **session sayaçlarına
-da eklenmez** (ana ekran çemberi 19/30 gibi hedefi aşamaz). Bu yüzden aynı kelimeyi
-öğrenme + test aşamalarında iki kez cevaplatmak seviyeyi ve günlük ilerlemeyi
-şişirmez; istemcinin bunu dert etmesine gerek yoktur. **Yanlış** cevap ise SM-2'yi
-her koşulda sıfırlar (unutma sinyali gün içinde de geçerlidir).
+**Günün cevabı kuralı** (kullanıcının saat diliminde):
+
+- Bir kelimenin günün **nihai cevabı**, o gün verilen İLK `correct/easy/wrong`'tur.
+  SM-2, session sayaçları ve streak yalnızca onunla işler (`counted: true`).
+- **Nihai cevaptan sonraki her cevap tekrar çalışma turudur ve TAM NÖTRDÜR**
+  (`counted: false`): seviye ne çıkar ne iner, hiçbir sayaç oynamaz. Yanıt yine
+  puanlanıp döner — istemci "Doğru!/Yanlış!" geri bildirimini gösterebilir.
+  Kullanıcı günün havuzunu istediği kadar yeniden çalışabilir, hiçbir şey şişmez.
+- **`empty` ("Şimdilik Geç") ertelemedir, nihai cevap değildir**: SM-2'ye
+  dokunmaz (vadesi gelmiş kelimeyi geçmek programını bozmaz), session'a kelime
+  başına bir kez `emptyCount` olarak işler, streak'i tetiklemez. Kelime gün
+  içinde yeniden sorulur; gelen ilk gerçek cevap normal sayılır ve session
+  sayacı düzeltilir (`emptyCount--`, sonuç sayacı `++`, toplam değişmez).
+- Ertesi gün her şey gerçek sinyaldir: doğru ilerletir, yanlış sıfırlar.
 
 ### GET /userwords/stats 🔒✉️
 ```jsonc
@@ -466,7 +478,10 @@ yanlışları bugüne taşınmaz ve bugün doğruya dönen kelime listeden düş
 // İstek
 { "jlptLevel": "N5" }
 
-// 200 — bugün açık oturum varsa yenisi açılmaz, mevcut döner
+// 200 — GÜNLÜK TEK OTURUM: bugünün kaydı varsa o döner (bitirilmişse
+// yeniden açılır, isCompleted=false olur); aynı güne ikinci kayıt açılmaz.
+// Oturum "günün ilk gerçek cevaplarının" özetidir — tekrar çalışma turları
+// sayaçlara yazılmaz.
 { "success": true, "data": { /* StudySession */ } }
 ```
 
@@ -698,7 +713,8 @@ Not: Streak, günün ilk `/userwords/answer` çağrısıyla otomatik güncelleni
   "success": true,
   "data": {
     "name": "Emirhan",         // "Merhaba Emirhan" başlığı
-    "dailyGoal": 20,           // ilerleme çemberinin paydası (14/20'deki 20)
+    "goal": 20,                // çemberin PAYDASI: bugünün havuz boyutu (havuz yoksa dailyGoal)
+    "dailyGoal": 20,           // ayarlardaki tercih — çember için goal'u kullan, bunu DEĞİL
     "today": { "totalWords": 14, "correctCount": 10, "wrongCount": 3, "emptyCount": 1, "isCompleted": false },
     "streak": { "current": 12, "longest": 21, "lastStudyDate": "2026-07-10T06:45:00.000Z" },  // "12 Günlük Seri" + "En iyi: 21"
     "progress": [

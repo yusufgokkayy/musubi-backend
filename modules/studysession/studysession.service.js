@@ -5,38 +5,53 @@ const { startOfTodayForUser } = require('../../utils/date.util');
 const logEvent = require('../../utils/event.util');
 
 const StudySessionService = {
+    // GÜNLÜK TEK OTURUM: gün içinde tekrar giriş aynı kaydı sürdürür,
+    // bitirilmiş oturum yeniden açılır. Aynı güne ikinci doküman asla oluşmaz
+    // (eskiden complete sonrası start yeni doküman açıyor, home rastgele
+    // birini okuyordu). Oturum "günün ilk gerçek cevaplarının" özetidir;
+    // tekrar çalışma turları buraya yazılmaz (submitAnswer nötr geçer).
     async startSession(userId, jlptLevel) {
-        // Bugün zaten açık session var mı
         const today = await startOfTodayForUser(userId);
 
         const existingSession = await StudySession.findOne({
             user: userId,
-            date: { $gte: today },
-            isCompleted: false
+            date: { $gte: today }
         });
 
-        if (existingSession) return existingSession;
+        if (existingSession) {
+            if (existingSession.isCompleted) {
+                existingSession.isCompleted = false;
+                await existingSession.save();
+            }
+            return existingSession;
+        }
 
-        const session = await StudySession.create({
+        return StudySession.create({
             user: userId,
             jlptLevel
         });
-
-        return session;
     },
 
-    async updateSession(userId, result) {
+    // fromEmpty: ertelenmiş ("Şimdilik Geç") kelimenin günün ilk gerçek cevabı —
+    // kelime totalWords'e empty olarak zaten sayılmıştı; sayaç devredilir
+    // (emptyCount--, sonuç sayacı++), toplam değişmez
+    async updateSession(userId, result, { fromEmpty = false } = {}) {
         const today = await startOfTodayForUser(userId);
 
+        // isCompleted filtresi YOK: kullanıcı oturumu bitirdikten sonra ertelenmiş
+        // kelimeyi cevaplarsa düzeltme yine günün kaydına işlenir
         const session = await StudySession.findOne({
             user: userId,
-            date: { $gte: today },
-            isCompleted: false
+            date: { $gte: today }
         });
 
         if (!session) throw new AppError('No active session found', 404);
 
-        session.totalWords += 1;
+        if (fromEmpty) {
+            session.emptyCount = Math.max(0, session.emptyCount - 1);
+        } else {
+            session.totalWords += 1;
+        }
         if (result === 'correct' || result === 'easy') session.correctCount += 1;
         else if (result === 'wrong') session.wrongCount += 1;
         else if (result === 'empty') session.emptyCount += 1;
@@ -50,8 +65,7 @@ const StudySessionService = {
 
         const session = await StudySession.findOne({
             user: userId,
-            date: { $gte: today },
-            isCompleted: false
+            date: { $gte: today }
         });
 
         if (!session) throw new AppError('No active session found', 404);

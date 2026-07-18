@@ -25,6 +25,10 @@ const qualityMap = {
     wrong: 1
 };
 
+// Günün NİHAİ cevabı bunlardan biridir; 'empty' ("Şimdilik Geç") erteleme
+// sayılır — kelime gün içinde yeniden sorulabilir ve ilk gerçek cevabı sayılır
+const FINAL_RESULTS = ['correct', 'easy', 'wrong'];
+
 const sm2 = (userWord, quality) => {
     // quality: 0-5 arası (0-2 yanlış, 3-5 doğru)
     let { easeFactor, interval, repetitions } = userWord;
@@ -62,12 +66,17 @@ const computeMasteryLevel = ({ repetitions, interval }) => {
 // kalıp yeniden açıldığında istemci answeredToday=false olanlardan sürdürür,
 // progress sayaçlarıyla da çemberi çizer. Yanıt geriye uyumludur (alan ekler).
 const decorateTodayWords = async (userId, today, reviewWordsRaw, newWordsRaw) => {
+    // answeredToday = günün NİHAİ cevabı verildi (correct/easy/wrong).
+    // "Şimdilik Geç" (empty) erteleme olduğu için false kalır: kelime
+    // remaining'de durur ve sonraki oturuşta yeniden sorulur; o gün verilen
+    // İLK gerçek cevap sayılır. todayResult yine 'empty' gösterir ki istemci
+    // isterse "ertelendi" rozetini basabilsin.
     const reviewWords = reviewWordsRaw.map(uw => {
-        const answeredToday = !!uw.lastReviewDate && uw.lastReviewDate >= today;
+        const touched = !!uw.lastReviewDate && uw.lastReviewDate >= today;
         return {
             ...uw.toObject(),
-            answeredToday,
-            todayResult: answeredToday ? uw.lastResult ?? null : null
+            answeredToday: touched && FINAL_RESULTS.includes(uw.lastResult),
+            todayResult: touched ? uw.lastResult ?? null : null
         };
     });
 
@@ -85,11 +94,12 @@ const decorateTodayWords = async (userId, today, reviewWordsRaw, newWordsRaw) =>
         // $sample'dan gelen düz objeler hydrate ile doc'a çevrilir ki
         // isKana virtual'ı burada da hesaplansın
         const obj = typeof w.toObject === 'function' ? w.toObject() : Word.hydrate(w).toObject();
-        const answeredToday = newResultByWord.has(String(w._id));
+        const touched = newResultByWord.has(String(w._id));
+        const todayResult = touched ? newResultByWord.get(String(w._id)) : null;
         return {
             ...obj,
-            answeredToday,
-            todayResult: answeredToday ? newResultByWord.get(String(w._id)) : null
+            answeredToday: FINAL_RESULTS.includes(todayResult),
+            todayResult
         };
     });
 
@@ -123,22 +133,50 @@ const UserWordService = {
             const currentGoal = user?.dailyGoal || (NEW_WORD_DAILY_LIMIT + REVIEW_DAILY_LIMIT);
             const poolSize = pool.reviewWordIds.length + pool.newWordIds.length;
             if (currentGoal > poolSize) {
-                const knownWordIds = await UserWord.find({ user: userId }).distinct('word');
-                const extra = await Word.aggregate([
-                    {
-                        $match: {
-                            _id: { $nin: [...knownWordIds, ...pool.newWordIds] },
-                            isCore: true,
-                            ...(jlptLevel && { jlptLevel })
-                        }
-                    },
-                    { $sample: { size: currentGoal - poolSize } }
-                ]);
-                if (extra.length > 0) {
-                    pool.newWordIds.push(...extra.map(w => w._id));
+                let need = currentGoal - poolSize;
+
+                // Önce VADESİ GELMİŞ tekrarlar: "daha çok çalışmak istiyorum"
+                // diyen kullanıcıya önce borcu (due review) verilir; sabahki %70
+                // kotasına sığmayanlar burada havuza girer
+                const extraReviewFilter = {
+                    user: userId,
+                    _id: { $nin: pool.reviewWordIds },
+                    word: { $nin: pool.newWordIds }, // bugün ertelenen kelime çift girmesin
+                    nextReviewDate: { $lte: new Date() },
+                    status: { $in: ['learning', 'learned'] }
+                };
+                if (jlptLevel) {
+                    extraReviewFilter.word.$in = await Word.find({ jlptLevel }).distinct('_id');
+                }
+                const extraReviews = await UserWord.find(extraReviewFilter)
+                    .sort({ nextReviewDate: 1, masteryLevel: 1 })
+                    .limit(need);
+                if (extraReviews.length > 0) {
+                    pool.reviewWordIds.push(...extraReviews.map(uw => uw._id));
+                    need -= extraReviews.length;
+                }
+
+                // Kalan kontenjan rastgele yeni kelimeyle dolar
+                if (need > 0) {
+                    const knownWordIds = await UserWord.find({ user: userId }).distinct('word');
+                    const extraNew = await Word.aggregate([
+                        {
+                            $match: {
+                                _id: { $nin: [...knownWordIds, ...pool.newWordIds] },
+                                isCore: true,
+                                ...(jlptLevel && { jlptLevel })
+                            }
+                        },
+                        { $sample: { size: need } }
+                    ]);
+                    if (extraNew.length > 0) pool.newWordIds.push(...extraNew.map(w => w._id));
+                }
+
+                if (pool.isModified()) {
                     await pool.save();
                     logEvent(userId, 'daily_pool_extended', {
-                        jlptLevel, added: extra.length, goal: currentGoal
+                        jlptLevel, goal: currentGoal,
+                        total: pool.reviewWordIds.length + pool.newWordIds.length
                     });
                 }
             }
@@ -260,22 +298,72 @@ const UserWordService = {
             userWord = await UserWord.create({ user: userId, word: wordId });
         }
 
-        // SM-2 aralıklı tekrar varsayar: aynı gün içinde tekrar verilen doğru
-        // cevap SM-2 durumunu İLERLETMEZ (istemci bir kelimeyi öğrenme + test
-        // aşamalarında iki kez sorabiliyor; dakikalar arayla iki doğru, kelimeyi
-        // 6 günlük interval'a zıplatıp tek oturumda "ustalık 3" yapıyordu).
-        // Yanlış cevap ise her koşulda sıfırlar — unutma sinyali gün içinde de geçerli.
+        // GÜNÜN CEVABI KURALI: bir kelimenin günün nihai cevabı, o gün verilen
+        // İLK correct/easy/wrong'tur — SM-2 ve sayaçlar yalnızca onunla işler.
+        // Nihai cevaptan SONRAKİ her cevap (tekrar çalışma turu) TAM NÖTRDÜR:
+        // seviye ne çıkar ne iner ("pratik yap, sadece riske gir" olmasın diye
+        // yanlış da düşürmez — yarınki gerçek tekrar zaten dürüst sinyali verir).
+        // "Şimdilik Geç" (empty) ise ERTELEMEDİR: nihai cevap değildir, kelime
+        // gün içinde yeniden sorulur ve gelen ilk gerçek cevap sayılır.
         const user = await User.findById(userId).select('timezone');
         const today = startOfDayInTz(user?.timezone);
-        const reviewedToday = !!userWord.lastReviewDate && userWord.lastReviewDate >= today;
+        const touchedToday = !!userWord.lastReviewDate && userWord.lastReviewDate >= today;
+        const finalToday = touchedToday && FINAL_RESULTS.includes(userWord.lastResult);
+        const emptyToday = touchedToday && userWord.lastResult === 'empty';
 
-        if (!(quality >= 3 && reviewedToday)) {
-            const { easeFactor, interval, repetitions, nextReviewDate } = sm2(userWord, quality);
-            userWord.easeFactor = easeFactor;
-            userWord.interval = interval;
-            userWord.repetitions = repetitions;
-            userWord.nextReviewDate = nextReviewDate;
+        const baseResponse = () => ({
+            ...userWord.toObject(),
+            result, // backend puanlamasında istemci sonucu buradan öğrenir
+            ...(correctAnswer !== undefined && { correctAnswer })
+        });
+
+        // 1) Tekrar çalışma (nihai cevap zaten var) veya boş geçilenin yeniden
+        // boş geçilmesi: hiçbir şey kaydedilmez, yanıt yalnızca puanlama taşır
+        if (finalToday || (emptyToday && result === 'empty')) {
+            logEvent(userId, 'answer_submitted', {
+                wordId, jlptLevel: wordExists.jlptLevel, result, practice: true
+            });
+            return {
+                ...baseResponse(),
+                levelDropped: false,
+                previousLevel: userWord.masteryLevel || 1,
+                counted: false
+            };
         }
+
+        // 2) Erteleme ("Şimdilik Geç" — günün ilk dokunuşu): SM-2'ye DOKUNULMAZ
+        // (vadesi gelmiş kelimeyi geçmek programını sıfırlamamalı), yalnızca iz
+        // bırakılır. Yeni kelime 'learning'e alınır ki yarın tekrar olarak dönsün.
+        if (result === 'empty') {
+            if (userWord.status === 'new') userWord.status = 'learning';
+            userWord.lastReviewDate = new Date();
+            userWord.lastResult = 'empty';
+            await userWord.save();
+
+            try {
+                await StudySessionService.updateSession(userId, 'empty');
+            } catch (err) {
+                // Session yoksa sessizce geç
+            }
+
+            logEvent(userId, 'answer_submitted', {
+                wordId, jlptLevel: wordExists.jlptLevel, result: 'empty'
+            });
+            return {
+                ...baseResponse(),
+                levelDropped: false,
+                previousLevel: userWord.masteryLevel || 1,
+                counted: true
+            };
+        }
+
+        // 3) Günün nihai cevabı (ilk gerçek cevap — doğrudan ya da ertelenmişin
+        // yükseltmesi): SM-2 + sayaçlar + streak burada, günde bir kez işler
+        const { easeFactor, interval, repetitions, nextReviewDate } = sm2(userWord, quality);
+        userWord.easeFactor = easeFactor;
+        userWord.interval = interval;
+        userWord.repetitions = repetitions;
+        userWord.nextReviewDate = nextReviewDate;
         userWord.lastReviewDate = new Date();
         userWord.lastResult = result;
 
@@ -311,19 +399,16 @@ const UserWordService = {
             }
         }
 
-        // İlk cevapta streak güncelle (kısmi ilerleme bile sayılsın)
+        // İlk gerçek cevapta streak güncelle (kısmi ilerleme bile sayılsın;
+        // boş geçmek çalışma sinyali değildir, streak'i 2. adım tetiklemez)
         await StreakService.updateStreak(userId);
         await ProgressService.checkAndUnlockNextLevel(userId, wordExists.jlptLevel);
 
-        // Aynı-gün tekrarı session sayaçlarına da SAYILMAZ (SM-2 kuralıyla
-        // tutarlı: ilk cevap geçerli). Ders yarıda kalıp yeniden başlayınca
-        // ana ekran çemberi 19/30 gibi şişmez, hedefi aşamaz.
-        if (!reviewedToday) {
-            try {
-                await StudySessionService.updateSession(userId, result);
-            } catch (err) {
-                // Session yoksa sessizce geç, hata fırlatma
-            }
+        try {
+            // Ertelenmiş kelimenin yükseltmesinde sayaç düzeltilir: empty--, sonuç++
+            await StudySessionService.updateSession(userId, result, { fromEmpty: emptyToday });
+        } catch (err) {
+            // Session yoksa sessizce geç, hata fırlatma
         }
 
         logEvent(userId, 'answer_submitted', {
@@ -335,11 +420,10 @@ const UserWordService = {
         });
 
         return {
-            ...userWord.toObject(),
+            ...baseResponse(),
             levelDropped,
             previousLevel,
-            result, // backend puanlamasında istemci sonucu buradan öğrenir
-            ...(correctAnswer !== undefined && { correctAnswer })
+            counted: true
         };
     },
 

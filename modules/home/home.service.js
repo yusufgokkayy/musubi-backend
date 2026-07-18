@@ -16,7 +16,7 @@ const HomeService = {
         const tomorrow = addDays(today, 1);
         const tomorrowEnd = addDays(today, 2);
 
-        const [todaySession, streak, progress, reviewCount, tomorrowReviews, todayMistakeCount] = await Promise.all([
+        const [todaySession, streak, progress, reviewCount, tomorrowReviews, todayMistakeCount, todayPools] = await Promise.all([
             // Bugünün session'ı
             StudySession.findOne({
                 user: userId,
@@ -47,12 +47,23 @@ const HomeService = {
                 user: userId,
                 lastReviewDate: { $gte: today },
                 lastResult: 'wrong'
-            })
+            }),
+
+            // Çemberin paydası için bugünün havuz(lar)ı
+            DailyWordPool.find({ user: userId, date: { $gte: today } })
         ]);
+
+        // Çemberin paydası = BUGÜNÜN HAVUZU (günün sözleşmesi). dailyGoal canlı
+        // tercih değeridir: gün içinde değişince payda anında oynamamalı —
+        // havuz genişlerse (hedef artışı) goal zaten onunla birlikte büyür.
+        const todayPoolSize = todayPools.reduce(
+            (sum, p) => sum + p.newWordIds.length + p.reviewWordIds.length, 0
+        );
 
         return {
             name: user?.name || '',        // "Merhaba Emirhan" başlığı
-            dailyGoal: user?.dailyGoal || 20, // ilerleme çemberinin paydası (14/20)
+            goal: todayPoolSize || user?.dailyGoal || 20, // ilerleme çemberinin PAYDASI
+            dailyGoal: user?.dailyGoal || 20, // ayarlardaki tercih (çember için KULLANMA)
             today: {
                 totalWords: todaySession?.totalWords || 0,
                 correctCount: todaySession?.correctCount || 0,
@@ -95,10 +106,14 @@ const HomeService = {
             DailyWordPool.find({ user: userId, date: { $gte: dayStart, $lt: dayEnd } })
         ]);
 
-        // Kelime başına o günkü son cevap geçerlidir (kronolojik sıra korunur)
+        // Kelime başına o günkü son SAYILAN cevap geçerlidir (kronolojik sıra
+        // korunur); tekrar çalışma turlarının nötr cevapları (practice) günün
+        // sonucunu ezmez
         const resultByWord = new Map();
         for (const e of events) {
-            if (e.data?.wordId) resultByWord.set(String(e.data.wordId), e.data.result);
+            if (e.data?.wordId && !e.data.practice) {
+                resultByWord.set(String(e.data.wordId), e.data.result);
+            }
         }
 
         const wordDocs = await Word.find({ _id: { $in: [...resultByWord.keys()] } })

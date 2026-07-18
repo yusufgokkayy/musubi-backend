@@ -116,3 +116,27 @@ Senin kararınla deep link akışı kaldırıldı; **2. bölümdeki deep link ma
   3. **"Tekrar gönder"** → `POST /auth/resend-verification-email` (mevcut).
 - `POST /api/auth/verify-email`'i artık uygulamadan çağırmana gerek yok
   (web sayfası çağırıyor); endpoint Postman/ileriye dönük için duruyor.
+
+## 7. Ders akışı yeniden tasarımı — 18.07.2026 (BÜYÜK GÜNCELLEME)
+
+Yusuf'la kararlaştırdığımız model: günlük TEK havuz + TEK oturum; havuz
+bitince/yarıda kalınca tekrar çalışılabilir ama hiçbir şey şişmez. Detaylı
+sözleşme API.md'de; senin tarafta yapılacaklar:
+
+1. **Çemberi `GET /home/summary` yanıtındaki YENİ `goal` alanından çiz** —
+   `dailyGoal`'dan DEĞİL. `goal` bugünün havuz boyutudur; kullanıcı ayarlardan
+   hedefi değiştirince çember artık anında oynamaz (20/40 tutarsızlığı bitti).
+   Ders içi çember için de `GET /userwords/today` → `progress.answered/total`.
+2. **Ders kuyruğu**: `answeredToday: false` olanlardan kur. Artık
+   "Şimdilik Geç" denen kelimeler de burada kalır (`todayResult: "empty"`) —
+   yani ertelenen kelime sonraki oturuşta otomatik yeniden gelir.
+3. **Tekrar çalışma modu bedava**: kullanıcı havuzu bitirdikten sonra "tekrar
+   çalış" istersen tüm havuzu yeniden sorabilirsin — backend nihai cevabı
+   verilmiş kelimede tamamen nötr davranır (`counted: false` döner; seviye ne
+   çıkar ne iner, sayaçlar oynamaz). Puanlama yine döner, "Doğru!/Yanlış!"
+   kartını normal gösterebilirsin. Tur içi skoru göstermek istersen kendin say.
+4. **`counted` alanı**: cevabın kaydedilip kaydedilmediğini söyler — kaydedilen
+   cevapta true, tekrar turunda false. UI'da fark göstermek istersen kullan.
+5. **Oturum**: `POST /sessions/start` artık bitmiş oturumu yeniden açar, aynı
+   güne ikinci kayıt oluşmaz — her ders girişinde çağırman güvenli.
+   `PUT /sessions/complete`'i `progress.remaining === 0` olunca çağır.
