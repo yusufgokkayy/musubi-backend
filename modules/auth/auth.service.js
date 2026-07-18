@@ -107,10 +107,24 @@ const AuthService = {
 
     async login(email, password, deviceName) {
         const user = await User.findOne({ email }).select('+password');
-        if (!user) throw new AppError('Invalid credentials', 401);
+
+        // E-posta enumeration koruması BİLEREK yalnızca forgot-password'de:
+        // check-email onboarding gereği hesap varlığını zaten söylüyor; login'de
+        // netlik UX kazancıdır. Mağaza yayını öncesi yeniden değerlendirilecek.
+        if (!user) throw new AppError('Bu e-postayla kayıtlı bir hesap yok', 404);
+
+        // Sosyal hesabın şifresi yoktur: "Invalid credentials" çıkmazı yerine
+        // kullanıcıyı doğru giriş yöntemine yönlendir
+        if (!user.password) {
+            const providerName =
+                user.provider === 'google' ? 'Google'
+                : user.provider === 'apple' ? 'Apple'
+                : 'sosyal';
+            throw new AppError(`Bu hesap ${providerName} girişiyle açılmış; ${providerName} ile giriş yap`, 400);
+        }
 
         const isMatch = await user.comparePassword(password);
-        if (!isMatch) throw new AppError('Invalid credentials', 401);
+        if (!isMatch) throw new AppError('Şifreniz yanlış. Lütfen tekrar deneyin.', 401);
 
         const accessToken = signAccessToken(user._id);
         const refreshToken = signRefreshToken(user._id);
@@ -397,9 +411,10 @@ const AuthService = {
 
     async resendVerificationEmail(email) {
         const user = await User.findOne({ email });
-        // E-posta enumeration koruması: kayıt yoksa veya zaten doğrulanmışsa
-        // da sessizce başarılı dön (forgot-password ile aynı davranış)
-        if (!user || user.isEmailVerified) return;
+        // Enum koruması yalnızca forgot-password'de (login'deki notla aynı karar):
+        // burada net hata, kullanıcının yazım hatasını fark etmesini sağlar
+        if (!user) throw new AppError('Bu e-postayla kayıtlı bir hesap yok', 404);
+        if (user.isEmailVerified) throw new AppError('E-posta zaten doğrulanmış', 400);
 
         const verificationToken = crypto.randomBytes(20).toString('hex');
         user.emailVerificationToken = crypto

@@ -84,7 +84,16 @@ Hatalar: `400 "email already in use"`, `400` validasyon (kısa şifre, geçersiz
   "data": { "id": "665f1a...", "name": "Yusuf" }
 }
 ```
-Hata: `401 "Invalid credentials"` (e-posta da şifre de yanlış olsa aynı mesaj). `isEmailVerified: false` ise client doğrulama bekleme ekranına yönlendirmelidir.
+Hatalar (üçü ayrı durumdur, mesajlar ekranda gösterilebilir):
+- `404 "Bu e-postayla kayıtlı bir hesap yok"` — client "kayıt ol" önerebilir
+- `400 "Bu hesap Google/Apple girişiyle açılmış; ... ile giriş yap"` — sosyal butonları vurgula
+- `401 "Şifreniz yanlış. Lütfen tekrar deneyin."`
+
+`isEmailVerified: false` ise client doğrulama bekleme ekranına yönlendirmelidir.
+
+Not: e-posta enumeration koruması BİLİNÇLİ olarak yalnızca `forgot-password`'dedir
+(check-email onboarding gereği hesap varlığını zaten söylüyor); mağaza yayını
+öncesi yeniden değerlendirilecek.
 
 ### POST /auth/refresh
 ```jsonc
@@ -237,9 +246,11 @@ vardır. Yeni bağlantı için `POST /auth/resend-verification-email`.
 // İstek
 { "email": "yusuf@ornek.com" }
 
-// 200 — hesap olsa da olmasa da aynı yanıt (enumeration koruması)
+// 200 — doğrulanmamış kayıtlı hesaba yeni bağlantı gönderildi
 { "success": true, "message": "Verification email sent" }
 ```
+Hatalar: `404 "Bu e-postayla kayıtlı bir hesap yok"`, `400 "E-posta zaten doğrulanmış"`
+(client login'e yönlendirebilir).
 
 ### DELETE /auth/delete-account 🔒✉️
 ```jsonc

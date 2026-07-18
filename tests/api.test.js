@@ -105,12 +105,20 @@ after(async () => {
 });
 
 describe('Auth', () => {
-    it('yanlış şifreyle login 401 döner', async () => {
+    it('login hata ayrımı: yanlış şifre 401, bilinmeyen e-posta 404', async () => {
         await createVerifiedUser('auth@test.com');
         const res = await api('POST', '/auth/login', {
             body: { email: 'auth@test.com', password: 'yanlis-sifre' }
         });
         assert.equal(res.status, 401);
+        assert.match(res.json.message, /Şifreniz yanlış/);
+
+        // Enum koruması bilinçli olarak yalnızca forgot-password'de
+        const unknown = await api('POST', '/auth/login', {
+            body: { email: 'hicyok@test.com', password: 'testsifre123' }
+        });
+        assert.equal(unknown.status, 404);
+        assert.match(unknown.json.message, /kayıtlı bir hesap yok/);
     });
 
     it('login access+refresh çifti döner, /me çalışır', async () => {
@@ -218,11 +226,15 @@ describe('E-posta akışları', () => {
         assert.deepEqual(after, before, 'yetim Progress/Streak/oturum kalmamalı');
     });
 
-    it('resend-verification: bilinmeyen adres de 200 döner, bilinene yeni token gider', async () => {
+    it('resend-verification: bilinmeyen adres 404, doğrulanmış 400, bilinene yeni token gider', async () => {
         const outLenBefore = sendEmail.outbox.length;
         const unknown = await api('POST', '/auth/resend-verification-email', { body: { email: 'yok@test.com' } });
-        assert.equal(unknown.status, 200, 'enumeration koruması: hesap yoksa da 200');
+        assert.equal(unknown.status, 404, 'yazım hatası kullanıcıya söylenir (enum koruması yalnızca forgot-password)');
         assert.equal(sendEmail.outbox.length, outLenBefore, 'bilinmeyen adrese mail atılmamalı');
+
+        await createVerifiedUser('zatendogru@test.com');
+        const verified = await api('POST', '/auth/resend-verification-email', { body: { email: 'zatendogru@test.com' } });
+        assert.equal(verified.status, 400, 'zaten doğrulanmışa tekrar mail atılmaz');
 
         await api('POST', '/auth/register', registerBody('tekrar@test.com'));
         const res = await api('POST', '/auth/resend-verification-email', { body: { email: 'tekrar@test.com' } });
@@ -547,11 +559,12 @@ describe('Onboarding — e-posta kontrolü ve sosyal giriş', () => {
         assert.equal(noToken.status, 400);
     });
 
-    it('sosyal hesaba şifreyle giriş denemesi 401 döner (crash değil)', async () => {
+    it('sosyal hesaba şifreyle giriş denemesi sağlayıcıya yönlendirir (400)', async () => {
         const res = await api('POST', '/auth/login', {
             body: { email: 'sosyal@test.com', password: 'rastgele-sifre' }
         });
-        assert.equal(res.status, 401);
+        assert.equal(res.status, 400, '"Invalid credentials" çıkmazı yerine yol gösterilir');
+        assert.match(res.json.message, /Google girişiyle açılmış/);
     });
 
     it('sosyal hesap şifre değiştiremez (400), silme taze idToken ile onaylanır', async () => {

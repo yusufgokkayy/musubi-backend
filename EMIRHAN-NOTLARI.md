@@ -151,3 +151,17 @@ sözleşme API.md'de; senin tarafta yapılacaklar:
    şifreyi update-info ile gönderiyorsa `PUT /auth/change-password`'e
    (`{oldPassword, newPassword, deviceName}`) taşı — eski şifre doğrulaması ve
    oturum rotasyonu yalnızca orada var.
+
+## 9. Login hataları artık ayrışıyor — 18.07.2026
+
+Login "Invalid credentials" tekdüzeliği bitti; üç durumu ayrı göster:
+
+| Durum | Kod | Mesaj (aynen gösterebilirsin) | UI önerisi |
+|---|---|---|---|
+| Mail kayıtlı değil | 404 | "Bu e-postayla kayıtlı bir hesap yok" | "Kayıt ol" yönlendirmesi |
+| Hesap sosyal | 400 | "Bu hesap Google/Apple girişiyle açılmış; ... ile giriş yap" | Sosyal butonları vurgula |
+| Şifre yanlış | 401 | "Şifreniz yanlış. Lütfen tekrar deneyin." | Şifre alanını temizle |
+
+`resend-verification-email` de netleşti: bilinmeyen mail 404, zaten doğrulanmış
+400 "E-posta zaten doğrulanmış" (login'e yönlendir). Şifremi-unuttum ise bilerek
+hâlâ her durumda 200 döner (enumeration koruması orada duruyor).
