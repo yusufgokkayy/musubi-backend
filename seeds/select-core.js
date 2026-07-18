@@ -53,17 +53,28 @@ async function selectCore() {
     const ranks = await loadFrequencyRanks();
     const UNMATCHED_RANK = 999999;
 
+    // Aynı kanji yazımı yalnız bir seviyede core olabilir (homograf çakışması
+    // quiz cevap uzayını bozuyor). Seviyeler kolaydan zora işlendiğinden
+    // kelime en erken seviyesinde core kalır, üst seviyedeki kopyası havuz dışı.
+    const coreKanji = new Set();
+
     for (const [level, target] of Object.entries(CORE_TARGETS)) {
         const words = await Word.find({ jlptLevel: level }).select('kanji romaji');
 
         const ranked = words.map(w => ({
             id: w._id,
+            kanji: w.kanji,
             // kanji formu, yoksa kana (romaji alanı) formu ile eşleştir
             rank: ranks.get(w.kanji) ?? ranks.get(w.romaji) ?? UNMATCHED_RANK
         })).sort((a, b) => a.rank - b.rank);
 
-        const core = ranked.slice(0, target);
-        const rest = ranked.slice(target);
+        const eligible = ranked.filter(w => !coreKanji.has(w.kanji));
+        const skipped = ranked.length - eligible.length;
+
+        const core = eligible.slice(0, target);
+        const rest = ranked.filter(w => !core.includes(w));
+        core.forEach(w => coreKanji.add(w.kanji));
+        if (skipped) console.log(`${level}: ${skipped} kelime alt seviyede core olduğu için atlandı`);
         const matched = core.filter(w => w.rank !== UNMATCHED_RANK).length;
 
         await Word.bulkWrite([
