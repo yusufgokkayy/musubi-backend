@@ -19,6 +19,12 @@ const WordSchema = new mongoose.Schema({
         type: String,
         required: [true, 'Please provide meaning']
     },
+    // Türkçe anlam (kısa, quiz cevabı olarak gösterilebilir; ≤40 karakter).
+    // content-pipeline Faz 1 üretimiyle dolar (06-import-tr.js); boş olabilir,
+    // client boşsa İngilizce meaning'e düşer.
+    meaningTr: {
+        type: String
+    },
     type: {
         type: String,
         enum: ['fiil', 'sıfat', 'isim', 'zarf', 'diğer'],
