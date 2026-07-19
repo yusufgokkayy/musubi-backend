@@ -1,2009 +1,2009 @@
 {
- "sliceNo": "001",
- "hedefDosya": "out/meaningtr-001.jsonl",
+ "sliceNo": "002",
+ "hedefDosya": "out/meaningtr-002.jsonl",
  "toplamKelime": 7900,
- "uretilen": 20,
- "kalan": 7880,
+ "uretilen": 270,
+ "kalan": 7630,
  "dilim": [
   {
-   "id": "6a5a2c6d4743caeb1e82399f",
-   "kanji": "ない",
-   "kana": "ない",
+   "id": "6a5a2c6e4743caeb1e823a46",
+   "kanji": "南",
+   "kana": "みなみ",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "South"
+  },
+  {
+   "id": "6a5a2c6d4743caeb1e8238bb",
+   "kanji": "公園",
+   "kana": "こうえん",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "a park"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823a0c",
+   "kanji": "冬",
+   "kana": "ふゆ",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "winter"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e8239e9",
+   "kanji": "パン",
+   "kana": "パン",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "bread"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823a2b",
+   "kanji": "毎年",
+   "kana": "まいねん; まいとし",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "every year, yearly, annually"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e8239e0",
+   "kanji": "早い",
+   "kana": "はやい",
    "jlptLevel": "N5",
    "type": "sıfat",
-   "meaningEn": "there isn't, doesn't have"
+   "meaningEn": "early"
   },
   {
-   "id": "6a5a2c6d4743caeb1e82391d",
-   "kanji": "する",
-   "kana": "する",
+   "id": "6a5a2c6d4743caeb1e823967",
+   "kanji": "つける",
+   "kana": "つける",
    "jlptLevel": "N5",
    "type": "fiil",
-   "meaningEn": "to do, to try; to wear small items (e.g., necktie, watch, etc.)"
+   "meaningEn": "to turn on (e.g., a light); to take"
   },
   {
-   "id": "6a5a2c6e4743caeb1e8239f5",
-   "kanji": "人",
-   "kana": "ひと",
+   "id": "6a5a2c6e4743caeb1e823a37",
+   "kanji": "窓",
+   "kana": "まど",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "man, person"
+   "meaningEn": "window"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8238ce",
-   "kanji": "この",
-   "kana": "この",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "this"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823933",
-   "kanji": "その",
-   "kana": "その",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "that"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82398d",
-   "kanji": "年",
-   "kana": "とし",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "year, age"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a8a",
-   "kanji": "私",
-   "kana": "わたくし",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "I, myself"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823936",
-   "kanji": "それ",
-   "kana": "それ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "that one"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238d2",
-   "kanji": "これ",
-   "kana": "これ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "this one"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8239b0",
-   "kanji": "なる",
-   "kana": "なる",
-   "jlptLevel": "N5",
-   "type": "fiil",
-   "meaningEn": "to become"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8239a1",
-   "kanji": "中",
-   "kana": "なか",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "inside, middle, among"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82392c",
-   "kanji": "そう",
-   "kana": "そう",
-   "jlptLevel": "N5",
-   "type": "fiil",
-   "meaningEn": "yes; appears, to be the case"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8237ff",
-   "kanji": "一",
-   "kana": "いち",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "one"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8239aa",
-   "kanji": "何",
-   "kana": "なん; なに",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "what"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238f8",
-   "kanji": "自分",
-   "kana": "じぶん",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "myself, oneself"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82386a",
-   "kanji": "方",
-   "kana": "かた",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "-- honorific form for 人 (ひと) --; way of doing"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a59",
-   "kanji": "問題",
-   "kana": "もんだい",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "a problem"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8237f2",
-   "kanji": "いい",
-   "kana": "いい",
+   "id": "6a5a2c6e4743caeb1e823a5e",
+   "kanji": "安い",
+   "kana": "やすい",
    "jlptLevel": "N5",
    "type": "sıfat",
-   "meaningEn": "good"
+   "meaningEn": "inexpensive; cheap (things)"
   },
   {
-   "id": "6a5a2c6e4743caeb1e823a31",
-   "kanji": "また",
-   "kana": "また",
+   "id": "6a5a2c6e4743caeb1e823a5f",
+   "kanji": "休み",
+   "kana": "やすみ",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "and; furthermore"
+   "meaningEn": "holiday; day off; absence"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823808",
-   "kanji": "今",
-   "kana": "いま",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "now"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823977",
-   "kanji": "でも",
-   "kana": "でも",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "but, however"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823972",
-   "kanji": "できる",
-   "kana": "できる",
+   "id": "6a5a2c6e4743caeb1e823a88",
+   "kanji": "分かる",
+   "kana": "わかる",
    "jlptLevel": "N5",
    "type": "fiil",
-   "meaningEn": "to be able to (to accomplish)"
+   "meaningEn": "to understand"
   },
   {
-   "id": "6a5a2c6e4743caeb1e823a2d",
-   "kanji": "前",
-   "kana": "まえ",
+   "id": "6a5a2c6d4743caeb1e82399b",
+   "kanji": "取る",
+   "kana": "とる",
+   "jlptLevel": "N5",
+   "type": "fiil",
+   "meaningEn": "to take (a class); to get (a grade)"
+  },
+  {
+   "id": "6a5a2c6d4743caeb1e8238d5",
+   "kanji": "今週",
+   "kana": "こんしゅう",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "before, in front"
+   "meaningEn": "this week"
   },
   {
-   "id": "6a5a2c6d4743caeb1e82392e",
-   "kanji": "そして",
-   "kana": "そして",
+   "id": "6a5a2c6d4743caeb1e82390a",
+   "kanji": "白",
+   "kana": "しろ",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "and, like that"
+   "meaningEn": "white"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823982",
-   "kanji": "どう",
-   "kana": "どう",
+   "id": "6a5a2c6d4743caeb1e8237f9",
+   "kanji": "いくら",
+   "kana": "いくら",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "how much, how many"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e8239d2",
+   "kanji": "初め",
+   "kana": "はじめ",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "beginning, start"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e8239ce",
+   "kanji": "箱",
+   "kana": "はこ",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "box"
+  },
+  {
+   "id": "6a5a2c6d4743caeb1e8238db",
+   "kanji": "魚",
+   "kana": "さかな",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "fish"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823a77",
+   "kanji": "来年",
+   "kana": "らいねん",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "next year"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823a78",
+   "kanji": "ラジオ",
+   "kana": "ラジオ",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "radio"
+  },
+  {
+   "id": "6a5a2c6d4743caeb1e823993",
+   "kanji": "隣",
+   "kana": "となり",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "next to, next door to"
+  },
+  {
+   "id": "6a5a2c6d4743caeb1e8238ae",
+   "kanji": "黒",
+   "kana": "くろ",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "black"
+  },
+  {
+   "id": "6a5a2c6d4743caeb1e823999",
+   "kanji": "鳥",
+   "kana": "とり",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "chicken (lit., bird)"
+  },
+  {
+   "id": "6a5a2c6d4743caeb1e8237f6",
+   "kanji": "いかが",
+   "kana": "いかが",
    "jlptLevel": "N5",
    "type": "isim",
    "meaningEn": "how, in what way"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8238ec",
-   "kanji": "時間",
-   "kana": "じかん",
+   "id": "6a5a2c6d4743caeb1e82398e",
+   "kanji": "図書館",
+   "kana": "としょかん",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "time"
+   "meaningEn": "library"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8239b2",
-   "kanji": "二",
-   "kana": "に",
+   "id": "6a5a2c6d4743caeb1e8239b4",
+   "kanji": "肉",
+   "kana": "にく",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "two"
+   "meaningEn": "meat"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8238eb",
-   "kanji": "しかし",
-   "kana": "しかし",
+   "id": "6a5a2c6e4743caeb1e8239d1",
+   "kanji": "始まる",
+   "kana": "はじまる",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "however; but"
+   "meaningEn": "(something) begins"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823812",
-   "kanji": "上",
-   "kana": "うえ",
+   "id": "6a5a2c6d4743caeb1e8238f4",
+   "kanji": "自転車",
+   "kana": "じてんしゃ",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "above (up, top, etc.), over, on top of"
+   "meaningEn": "bicycle"
   },
   {
-   "id": "6a5a2c6e4743caeb1e8239dd",
-   "kanji": "話",
-   "kana": "はなし",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "talk (chat), story"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a22",
-   "kanji": "本",
-   "kana": "ほん",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "book"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238c2",
-   "kanji": "ここ",
-   "kana": "ここ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "here, this place"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823900",
-   "kanji": "十",
-   "kana": "(〜を) とお",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "ten"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a4f",
-   "kanji": "目",
-   "kana": "め",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "eye(s)"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823892",
-   "kanji": "今日",
-   "kana": "きょう",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "today, this day"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8237e1",
-   "kanji": "後",
-   "kana": "あと",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "afterwards (later); in the future; the rest; since then"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8237f5",
-   "kanji": "家",
-   "kana": "いえ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "house, home"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a39",
-   "kanji": "万",
-   "kana": "まん",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "ten thousand"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a52",
-   "kanji": "もう",
-   "kana": "もう",
-   "jlptLevel": "N5",
-   "type": "zarf",
-   "meaningEn": "already; again; more"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8237f4",
-   "kanji": "言う",
-   "kana": "いう",
+   "id": "6a5a2c6e4743caeb1e8239d8",
+   "kanji": "働く",
+   "kana": "はたらく",
    "jlptLevel": "N5",
    "type": "fiil",
-   "meaningEn": "to say"
+   "meaningEn": "to work"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8238ee",
-   "kanji": "仕事",
-   "kana": "しごと",
+   "id": "6a5a2c6e4743caeb1e823a5c",
+   "kanji": "野菜",
+   "kana": "やさい",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "work, job, occupation, employment"
+   "meaningEn": "vegetable"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823843",
-   "kanji": "同じ",
-   "kana": "おなじ",
+   "id": "6a5a2c6d4743caeb1e8237cb",
+   "kanji": "赤",
+   "kana": "あか",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "same, identical"
+   "meaningEn": "red"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8238a5",
-   "kanji": "国",
-   "kana": "くに",
+   "id": "6a5a2c6d4743caeb1e823952",
+   "kanji": "誰か",
+   "kana": "だれか",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "country; place of origin"
+   "meaningEn": "someone"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8238e6",
-   "kanji": "三",
-   "kana": "さん",
+   "id": "6a5a2c6d4743caeb1e82380b",
+   "kanji": "嫌",
+   "kana": "いや",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "three"
+   "meaningEn": "disagreeable, detestable, unpleasant"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823809",
-   "kanji": "意味",
-   "kana": "いみ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "meaning, significance"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a6d",
-   "kanji": "よく",
-   "kana": "よく",
-   "jlptLevel": "N5",
-   "type": "zarf",
-   "meaningEn": "frequently, often (much); well, skillfully"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823858",
-   "kanji": "会社",
-   "kana": "かいしゃ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "company, corporation"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823960",
-   "kanji": "ちょっと",
-   "kana": "ちょっと",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "a little, somewhat; just a little, somewhat"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823963",
-   "kanji": "次",
-   "kana": "つぎ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "next"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238cc",
-   "kanji": "言葉",
-   "kana": "ことば",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "language; word(s); expression(s)"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823828",
-   "kanji": "多い",
-   "kana": "おおい",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "many; there are a lot"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8237e2",
-   "kanji": "あなた",
-   "kana": "あなた",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "you"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82396c",
-   "kanji": "手",
-   "kana": "て",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "hand"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82392f",
-   "kanji": "そこ",
-   "kana": "そこ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "that place, there; bottom, sole"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8237f1",
-   "kanji": "あれ",
-   "kana": "あれ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "that one (over there)"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82381e",
-   "kanji": "映画",
-   "kana": "えいが",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "movie, film"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823929",
-   "kanji": "先生",
-   "kana": "せんせい",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "teacher, professor; master; doctor"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a3f",
-   "kanji": "店",
-   "kana": "みせ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "store, shop"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a32",
-   "kanji": "まだ",
-   "kana": "まだ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "yet, still, besides"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e8239f6",
-   "kanji": "一つ",
-   "kana": "ひとつ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "one thing"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a48",
-   "kanji": "見る",
-   "kana": "みる",
+   "id": "6a5a2c6e4743caeb1e8239de",
+   "kanji": "話す",
+   "kana": "はなす",
    "jlptLevel": "N5",
    "type": "fiil",
-   "meaningEn": "to see, to look"
+   "meaningEn": "to speak"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8238fd",
-   "kanji": "写真",
-   "kana": "しゃしん",
+   "id": "6a5a2c6d4743caeb1e8239b5",
+   "kanji": "西",
+   "kana": "にし",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "a picture; a photograph"
+   "meaningEn": "west"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8238cd",
-   "kanji": "子供",
-   "kana": "こども",
+   "id": "6a5a2c6d4743caeb1e823971",
+   "kanji": "手紙",
+   "kana": "てがみ",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "child(ren)"
+   "meaningEn": "letter"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823915",
-   "kanji": "少し",
-   "kana": "すこし",
+   "id": "6a5a2c6d4743caeb1e823895",
+   "kanji": "去年",
+   "kana": "きょねん",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "little, few"
+   "meaningEn": "last year"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8239ac",
-   "kanji": "名前",
-   "kana": "なまえ",
+   "id": "6a5a2c6d4743caeb1e8238c9",
+   "kanji": "こっち",
+   "kana": "こっち",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "name"
+   "meaningEn": "this person; this direction; this side"
   },
   {
-   "id": "6a5a2c6d4743caeb1e82382a",
-   "kanji": "大きな",
-   "kana": "おおきな",
+   "id": "6a5a2c6e4743caeb1e8239c8",
+   "kanji": "はい",
+   "kana": "はい",
    "jlptLevel": "N5",
    "type": "sıfat",
-   "meaningEn": "big"
+   "meaningEn": "yes"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823817",
-   "kanji": "うち",
-   "kana": "うち",
+   "id": "6a5a2c6d4743caeb1e82385a",
+   "kanji": "買い物",
+   "kana": "かいもの",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "home; house; my place"
+   "meaningEn": "shopping"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823994",
-   "kanji": "どの",
-   "kana": "どの",
+   "id": "6a5a2c6e4743caeb1e823a82",
+   "kanji": "レストラン",
+   "kana": "レストラン",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "which"
+   "meaningEn": "restaurant"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823911",
-   "kanji": "好き",
-   "kana": "すき",
+   "id": "6a5a2c6e4743caeb1e823a64",
+   "kanji": "夕方",
+   "kana": "ゆうがた",
    "jlptLevel": "N5",
    "type": "isim",
-   "meaningEn": "liking, fondness, love"
+   "meaningEn": "late afternoon (typically just before dinner time), evening"
   },
   {
-   "id": "6a5a2c6d4743caeb1e82398b",
-   "kanji": "どこ",
-   "kana": "どこ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "where, what place"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238d6",
-   "kanji": "こんな",
-   "kana": "こんな",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "such, like this"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238b9",
-   "kanji": "五",
-   "kana": "ご",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "five"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a11",
-   "kanji": "ページ",
-   "kana": "ページ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "a page"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238dc",
-   "kanji": "先",
-   "kana": "さき",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "future; recent, previous"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823951",
-   "kanji": "誰",
-   "kana": "だれ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "who"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82393a",
-   "kanji": "大学",
-   "kana": "だいがく",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "college; university"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82386e",
-   "kanji": "学校",
-   "kana": "がっこう",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "a school"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823991",
-   "kanji": "とても",
-   "kana": "とても",
-   "jlptLevel": "N5",
-   "type": "zarf",
-   "meaningEn": "very (much), greatly, exceedingly"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82397d",
-   "kanji": "電話",
-   "kana": "でんわ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "a telephone"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8237f7",
-   "kanji": "行く",
-   "kana": "いく; ゆく",
+   "id": "6a5a2c6d4743caeb1e823865",
+   "kanji": "かける",
+   "kana": "かける",
    "jlptLevel": "N5",
    "type": "fiil",
-   "meaningEn": "to go"
+   "meaningEn": "to dial/call (e.g., phone); to sit down"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8238e8",
-   "kanji": "四",
+   "id": "6a5a2c6d4743caeb1e8238c1",
+   "kanji": "コーヒー",
+   "kana": "コーヒー",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "coffee"
+  },
+  {
+   "id": "6a5a2c6d4743caeb1e82397a",
+   "kanji": "天気",
+   "kana": "てんき",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "weather"
+  },
+  {
+   "id": "6a5a2c6d4743caeb1e823938",
+   "kanji": "それでは",
+   "kana": "それでは",
+   "jlptLevel": "N5",
+   "type": "isim",
+   "meaningEn": "in that situation, well then..."
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823ad8",
+   "kanji": "日",
+   "kana": "ひ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "sun, sunshine, day"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823ae9",
+   "kanji": "月",
+   "kana": "つき",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "moon"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b01",
+   "kanji": "思う",
+   "kana": "おもう",
+   "jlptLevel": "N4",
+   "type": "fiil",
+   "meaningEn": "to think, to feel"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b31",
+   "kanji": "場合",
+   "kana": "ばあい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "case, situation"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823adf",
+   "kanji": "必要",
+   "kana": "ひつよう",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "necessary"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b54",
+   "kanji": "事",
+   "kana": "こと",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "thing(s), matter(s), fact"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823d11",
+   "kanji": "関係",
+   "kana": "かんけい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "relation(ship), connection"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b38",
+   "kanji": "世界",
+   "kana": "せかい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "world"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823ab9",
+   "kanji": "気",
+   "kana": "き",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "spirit, mood"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823ac9",
+   "kanji": "点",
+   "kana": "てん",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "mark, score, grade; point, dot"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823d27",
+   "kanji": "社会",
+   "kana": "しゃかい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "society"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823acf",
+   "kanji": "彼",
+   "kana": "かれ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "he, boyfriend"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823cae",
+   "kanji": "君",
+   "kana": "きみ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "you (informal for men)"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b2b",
+   "kanji": "力",
+   "kana": "ちから",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "strength, power"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c44",
+   "kanji": "以上",
+   "kana": "いじょう",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "more than; this is all"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b2f",
+   "kanji": "そんな",
+   "kana": "そんな",
+   "jlptLevel": "N4",
+   "type": "sıfat",
+   "meaningEn": "such, like that, that sort of"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c53",
+   "kanji": "間",
+   "kana": "あいだ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "space, interval"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bed",
+   "kanji": "アメリカ",
+   "kana": "アメリカ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "America, U.S.A."
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823aa5",
+   "kanji": "僕",
+   "kana": "ぼく",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "I (used by men towards those of equal or lower status)"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c21",
+   "kanji": "経済",
+   "kana": "けいざい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "economics, finance, economy"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c04",
+   "kanji": "最近",
+   "kana": "さいきん",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "recently, nowadays, in recent years, most recent, latest"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823d0f",
+   "kanji": "生活",
+   "kana": "せいかつする",
+   "jlptLevel": "N4",
+   "type": "fiil",
+   "meaningEn": "living, life; to live"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b03",
+   "kanji": "時代",
+   "kana": "じだい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "age, period, epoch, era"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b86",
+   "kanji": "心",
+   "kana": "こころ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "heart, mind"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c3f",
+   "kanji": "説明",
+   "kana": "せつめい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "explanation"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bfb",
+   "kanji": "女性",
+   "kana": "じょせい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "woman"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b21",
+   "kanji": "利用",
+   "kana": "りよう",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "use, utilization"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823cd3",
+   "kanji": "紹介",
+   "kana": "しょうかい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "an introduction"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bb1",
+   "kanji": "技術",
+   "kana": "ぎじゅつ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "technique, technology, skill"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823a9b",
+   "kanji": "やはり",
+   "kana": "やはり",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "as I thought, absolutely"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c1c",
+   "kanji": "特に",
+   "kana": "とくに",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "particularly"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c2b",
+   "kanji": "市",
    "kana": "し",
-   "jlptLevel": "N5",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "four"
+   "meaningEn": "city"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8237db",
-   "kanji": "新しい",
-   "kana": "あたらしい",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "new"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8237e6",
-   "kanji": "あの",
-   "kana": "あの",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823a9a",
+   "kanji": "意見",
+   "kana": "いけん",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "that over there; like that, that way; um..."
+   "meaningEn": "opinion, view, idea"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823851",
-   "kanji": "音楽",
-   "kana": "おんがく",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6f4743caeb1e823c8e",
+   "kanji": "最後",
+   "kana": "さいご",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "Music"
+   "meaningEn": "last, end"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823801",
-   "kanji": "一番",
-   "kana": "いちばん",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823c52",
+   "kanji": "彼女",
+   "kana": "かのじょ",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "best (most), first, number one"
+   "meaningEn": "girlfriend; she"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823941",
-   "kanji": "高い",
-   "kana": "たかい",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "tall, high; expensive"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a56",
-   "kanji": "もっと",
-   "kana": "もっと",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "more"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238c8",
-   "kanji": "こちら",
-   "kana": "こちら",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "this person (polite); this way (polite)"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a3e",
-   "kanji": "水",
-   "kana": "みず",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "water"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823820",
-   "kanji": "英語",
-   "kana": "えいご",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "English (language)"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82398c",
-   "kanji": "所",
-   "kana": "ところ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "place"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238f3",
-   "kanji": "質問",
-   "kana": "しつもん",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "question, inquiry"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82383d",
-   "kanji": "男",
-   "kana": "おとこ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "man, male"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238f1",
-   "kanji": "下",
-   "kana": "した",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "under, below, beneath"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823806",
-   "kanji": "いつも",
-   "kana": "いつも",
-   "jlptLevel": "N5",
-   "type": "zarf",
-   "meaningEn": "always, usually, every time, never (with neg. verb)"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238ad",
-   "kanji": "車",
-   "kana": "くるま",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "car, vehicle"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238bf",
-   "kanji": "声",
-   "kana": "こえ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "voice"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823879",
-   "kanji": "体",
-   "kana": "からだ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "body; health"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823958",
-   "kanji": "違う",
-   "kana": "ちがう",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6f4743caeb1e823cc5",
+   "kanji": "考える",
+   "kana": "かんがえる",
+   "jlptLevel": "N4",
    "type": "fiil",
-   "meaningEn": "to be different; to differ; wrong"
+   "meaningEn": "to think (about); to consider"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823940",
-   "kanji": "大変",
-   "kana": "たいへん",
-   "jlptLevel": "N5",
-   "type": "zarf",
-   "meaningEn": "very; difficult, hard"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e8239fa",
-   "kanji": "百",
-   "kana": "ひゃく",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823b9b",
+   "kanji": "用",
+   "kana": "よう",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "hundred"
+   "meaningEn": "errand, task, business (to take care of)"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8237da",
-   "kanji": "頭",
-   "kana": "あたま",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823c6e",
+   "kanji": "日記",
+   "kana": "にっき",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "head"
+   "meaningEn": "diary, journal"
   },
   {
-   "id": "6a5a2c6d4743caeb1e82388e",
-   "kanji": "昨日",
-   "kana": "きのう",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823b7b",
+   "kanji": "もちろん",
+   "kana": "もちろん",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "yesterday"
+   "meaningEn": "certainly, of course"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8238cb",
-   "kanji": "今年",
-   "kana": "ことし",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823b7e",
+   "kanji": "内",
+   "kana": "うち",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "this year"
+   "meaningEn": "within, inside"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8239b9",
-   "kanji": "ニュース",
-   "kana": "ニュース",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6f4743caeb1e823c9c",
+   "kanji": "最初",
+   "kana": "さいしょ",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "news"
+   "meaningEn": "beginning, first"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823979",
-   "kanji": "テレビ",
-   "kana": "テレビ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6f4743caeb1e823c9a",
+   "kanji": "様",
+   "kana": "よう",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "television, TV"
+   "meaningEn": "way, manner, kind"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823804",
-   "kanji": "一緒",
-   "kana": "いっしょ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823bbd",
+   "kanji": "おる",
+   "kana": "おる",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "together"
+   "meaningEn": "-- extra-modest expression for いる --"
   },
   {
-   "id": "6a5a2c6d4743caeb1e82385e",
-   "kanji": "顔",
-   "kana": "かお",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823ba0",
+   "kanji": "形",
+   "kana": "かたち",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "face (body part)"
+   "meaningEn": "shape"
   },
   {
-   "id": "6a5a2c6e4743caeb1e823a41",
-   "kanji": "道",
-   "kana": "みち",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823abb",
+   "kanji": "ほとんど",
+   "kana": "ほとんど",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "road, street; way, directions"
+   "meaningEn": "mostly, almost"
   },
   {
-   "id": "6a5a2c6e4743caeb1e823a49",
-   "kanji": "みんな",
-   "kana": "みんな",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "all, everyone, everybody"
+   "id": "6a5a2c6e4743caeb1e823c34",
+   "kanji": "まず",
+   "kana": "まず",
+   "jlptLevel": "N4",
+   "type": "fiil",
+   "meaningEn": "first (of all), to start with"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823926",
-   "kanji": "千",
+   "id": "6a5a2c6e4743caeb1e823bb7",
+   "kanji": "はず",
+   "kana": "はず",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "it should be so"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bef",
+   "kanji": "理由",
+   "kana": "りゆう",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "reason"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c22",
+   "kanji": "こう",
+   "kana": "こう",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "like this, this way"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b79",
+   "kanji": "場所",
+   "kana": "ばしょ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "place, location"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bfc",
+   "kanji": "米",
+   "kana": "こめ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "uncooked rice"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bfe",
+   "kanji": "国際",
+   "kana": "こくさい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "international"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c1e",
+   "kanji": "計画",
+   "kana": "けいかくする",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "plan, project, schedule"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c5e",
+   "kanji": "政治",
+   "kana": "せいじ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "politics"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823ca8",
+   "kanji": "億",
+   "kana": "おく",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "hundred million"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823caa",
+   "kanji": "文化",
+   "kana": "ぶんか",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "culture"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823beb",
+   "kanji": "彼ら",
+   "kana": "かれら",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "they (usually male)"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c18",
+   "kanji": "子",
+   "kana": "こ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "child"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823cc7",
+   "kanji": "自由",
+   "kana": "じゆう",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "freedom"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823d25",
+   "kanji": "これから",
+   "kana": "これから",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "from now on, after this"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c06",
+   "kanji": "歴史",
+   "kana": "れきし",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "history"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bde",
+   "kanji": "気持ち",
+   "kana": "きもち",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "feeling, sensation, mood"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b91",
+   "kanji": "予定",
+   "kana": "よてい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "plans, arrangement, schedule"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823ce0",
+   "kanji": "経験",
+   "kana": "けいけんする",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "experience"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c28",
+   "kanji": "以外",
+   "kana": "いがい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "other than, with the exception of, excepting"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b13",
+   "kanji": "だから",
+   "kana": "だから",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "so; therefore"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823cd4",
+   "kanji": "けれど",
+   "kana": "けれど",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "but, although"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b8c",
+   "kanji": "確か",
+   "kana": "たしか",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "if I remember correctly; certain, definite"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c0c",
+   "kanji": "例えば",
+   "kana": "たとえば",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "for example, e.g."
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c32",
+   "kanji": "音",
+   "kana": "おと",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "sound, note"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823ce6",
+   "kanji": "簡単",
+   "kana": "かんたん",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "simple"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b83",
+   "kanji": "以下",
+   "kana": "いか",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "less than, below"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c1f",
+   "kanji": "通り",
+   "kana": "とおり",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "~ Street, ~ Avenue"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c57",
+   "kanji": "専門",
+   "kana": "せんもん",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "major; speciality"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c77",
+   "kanji": "普通",
+   "kana": "ふつう",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "common; usual"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bdb",
+   "kanji": "科学",
+   "kana": "かがく",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "science"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bf0",
+   "kanji": "生産",
+   "kana": "せいさんする",
+   "jlptLevel": "N4",
+   "type": "fiil",
+   "meaningEn": "production; to produce"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b3f",
+   "kanji": "戦争",
+   "kana": "せんそう",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "war"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bb8",
+   "kanji": "法律",
+   "kana": "ほうりつ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "law"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823c8a",
+   "kanji": "あ",
+   "kana": "あ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "Ah"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b34",
+   "kanji": "行う",
+   "kana": "おこなう",
+   "jlptLevel": "N4",
+   "type": "fiil",
+   "meaningEn": "to carry out; to conduct (typically used in written language)"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c31",
+   "kanji": "十分",
+   "kana": "じゅうぶん",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "enough"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823aad",
+   "kanji": "もし",
+   "kana": "もし",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "if"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b56",
+   "kanji": "試合",
+   "kana": "しあい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "match, game, competition"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823d0b",
+   "kanji": "会議",
+   "kana": "かいぎ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "business meeting; conference"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b50",
+   "kanji": "昔",
+   "kana": "むかし",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "old days; past"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c02",
+   "kanji": "夢",
+   "kana": "ゆめ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "a dream"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823cfd",
+   "kanji": "安全",
+   "kana": "あんぜん",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "safety, security"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823c8b",
+   "kanji": "最も",
+   "kana": "もっとも",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "most"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823aab",
+   "kanji": "運動",
+   "kana": "うんどうする",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "exercise"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823ce9",
+   "kanji": "特別",
+   "kana": "とくべつ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "special"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c6c",
+   "kanji": "訳",
+   "kana": "わけ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "reason; explanation"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bee",
+   "kanji": "男性",
+   "kana": "だんせい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "man; male"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c3c",
+   "kanji": "産業",
+   "kana": "さんぎょう",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "industry"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823d20",
+   "kanji": "楽しみ",
+   "kana": "たのしみ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "pleasure, joy"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bbf",
+   "kanji": "試験",
+   "kana": "しけん",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "an exam"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c5d",
+   "kanji": "放送",
+   "kana": "ほうそうする",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "broadcasting"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b75",
+   "kanji": "原因",
+   "kana": "げんいん",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "cause, origin, source"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bbc",
+   "kanji": "反対",
+   "kana": "はんたい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "oppose, opposition, resistance"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823be6",
+   "kanji": "パソコン",
+   "kana": "パソコン",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "(personal) computer"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823d14",
+   "kanji": "番組",
+   "kana": "ばんぐみ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "broadcast program"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823acb",
+   "kanji": "今度",
+   "kana": "こんど",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "now, this time, near future, one of these days, next time"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b37",
+   "kanji": "準備",
+   "kana": "じゅんびする",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "prepare"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b81",
+   "kanji": "または",
+   "kana": "または",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "or, otherwise"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b0b",
+   "kanji": "社長",
+   "kana": "しゃちょう",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "president of a company"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823afe",
+   "kanji": "親",
+   "kana": "おや",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "a parent"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823acc",
+   "kanji": "機会",
+   "kana": "きかい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "chance, opportunity"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823ba9",
+   "kanji": "火",
+   "kana": "ひ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "fire"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bd5",
+   "kanji": "興味",
+   "kana": "きょうみ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "interest (in something)"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823d00",
+   "kanji": "相談",
+   "kana": "そうだんする",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "consultation"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823ad6",
+   "kanji": "注意",
+   "kana": "ちゅうい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "caution, attention"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823a96",
+   "kanji": "しっかり",
+   "kana": "しっかり",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "firmly, steady"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823ca7",
+   "kanji": "将来",
+   "kana": "しょうらい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "(in the) future; prospects"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c25",
+   "kanji": "為",
+   "kana": "ため",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "good, advantage, in order to"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b4d",
+   "kanji": "連絡",
+   "kana": "れんらく",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "communication, contact, connection"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823d08",
+   "kanji": "娘",
+   "kana": "むすめ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "daughter (humble)"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823abc",
+   "kanji": "つもり",
+   "kana": "つもり",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "intention, plan"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823ad2",
+   "kanji": "大事",
+   "kana": "だいじ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "important, valuable, serious matter"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823ab2",
+   "kanji": "心配",
+   "kana": "しんぱいする",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "worry, concern"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b14",
+   "kanji": "残念",
+   "kana": "ざんねん",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "regret; regrettable"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c30",
+   "kanji": "見える",
+   "kana": "みえる",
+   "jlptLevel": "N4",
+   "type": "fiil",
+   "meaningEn": "to be visible; -- polite verb meaning 来る (くる) --"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c5f",
+   "kanji": "市民",
+   "kana": "しみん",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "citizen"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c4f",
+   "kanji": "危険",
+   "kana": "きけん",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "danger, risk, hazard"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823aa6",
+   "kanji": "必ず",
+   "kana": "かならず",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "surely, certainly"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bdc",
+   "kanji": "はっきり",
+   "kana": "はっきり",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "clearly, distinctly"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b6e",
+   "kanji": "事故",
+   "kana": "じこ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "accident"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823d1d",
+   "kanji": "ソフト",
+   "kana": "ソフト",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "soft; soft hat; software"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c81",
+   "kanji": "光",
+   "kana": "ひかり",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "light"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823cf8",
+   "kanji": "途中",
+   "kana": "とちゅう",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "on the way, midway"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b2d",
+   "kanji": "気分",
+   "kana": "きぶん",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "feeling, mood"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b3c",
+   "kanji": "倍",
+   "kana": "ばい",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "double"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b3e",
+   "kanji": "線",
    "kana": "せん",
-   "jlptLevel": "N5",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "thousand"
+   "meaningEn": "line, wire"
   },
   {
-   "id": "6a5a2c6d4743caeb1e82389f",
-   "kanji": "下さい",
-   "kana": "ください",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "(with te-form verb) please do for me"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a73",
-   "kanji": "夜",
-   "kana": "よる",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6f4743caeb1e823d19",
+   "kanji": "タイプ",
+   "kana": "タイプ",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "evening, night"
+   "meaningEn": "type, style"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8239a5",
-   "kanji": "なぜ",
-   "kana": "なぜ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823b1c",
+   "kanji": "無理",
+   "kana": "むり",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "why (same as どうして)"
+   "meaningEn": "unreasonable, impossible"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8237d2",
-   "kanji": "朝",
-   "kana": "あさ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823c33",
+   "kanji": "きっと",
+   "kana": "きっと",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "morning"
+   "meaningEn": "surely, definitely, undoubtedly, certainly"
   },
   {
-   "id": "6a5a2c6e4743caeb1e823a85",
-   "kanji": "六",
-   "kana": "ろく",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823b5b",
+   "kanji": "終わり",
+   "kana": "おわり",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "six"
+   "meaningEn": "end"
   },
   {
-   "id": "6a5a2c6d4743caeb1e82386b",
-   "kanji": "家族",
-   "kana": "かぞく",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823c6f",
+   "kanji": "高校",
+   "kana": "こうこう",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "family, members of a family"
+   "meaningEn": "high school; senior high school"
   },
   {
-   "id": "6a5a2c6e4743caeb1e823a63",
-   "kanji": "やる",
-   "kana": "やる",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6f4743caeb1e823cc8",
+   "kanji": "仕方",
+   "kana": "しかた",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "way (of doing something)"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b64",
+   "kanji": "もらう",
+   "kana": "もらう",
+   "jlptLevel": "N4",
    "type": "fiil",
-   "meaningEn": "to do; to give (to pets, parents, siblings, etc.)"
+   "meaningEn": "to receive"
   },
   {
-   "id": "6a5a2c6e4743caeb1e823a8d",
-   "kanji": "悪い",
-   "kana": "わるい",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "bad, sinful; inferior"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e8239d3",
-   "kanji": "初めて",
-   "kana": "はじめて",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823bcf",
+   "kanji": "味",
+   "kana": "あじ",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "for the first time"
+   "meaningEn": "flavor, taste"
   },
   {
-   "id": "6a5a2c6e4743caeb1e823a18",
-   "kanji": "勉強",
-   "kana": "べんきょう (する)",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6f4743caeb1e823ce3",
+   "kanji": "警察",
+   "kana": "けいさつ",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "study"
+   "meaningEn": "police; police station"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823932",
-   "kanji": "外",
-   "kana": "ほか",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "outside, exterior"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a33",
-   "kanji": "町",
-   "kana": "まち",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "town; city"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823862",
-   "kanji": "学生",
-   "kana": "がくせい",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "student"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823819",
-   "kanji": "海",
-   "kana": "うみ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "sea, beach"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a55",
-   "kanji": "持つ",
-   "kana": "もつ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6f4743caeb1e823cef",
+   "kanji": "戻る",
+   "kana": "もどる",
+   "jlptLevel": "N4",
    "type": "fiil",
-   "meaningEn": "to hold, to carry; to possess"
+   "meaningEn": "to return (v.i.); to come back"
   },
   {
-   "id": "6a5a2c6d4743caeb1e82399e",
-   "kanji": "どんな",
-   "kana": "どんな",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "what, what kind of"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82388f",
-   "kanji": "九",
-   "kana": "く",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823b4b",
+   "kanji": "決して",
+   "kana": "けっして",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "nine"
+   "meaningEn": "never"
   },
   {
-   "id": "6a5a2c6e4743caeb1e823a72",
-   "kanji": "読む",
-   "kana": "よむ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823c88",
+   "kanji": "アジア",
+   "kana": "アジア",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "Asia"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c7d",
+   "kanji": "会場",
+   "kana": "かいじょう",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "venue, meeting place"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823afd",
+   "kanji": "小説",
+   "kana": "しょうせつ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "novel"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b2c",
+   "kanji": "受ける",
+   "kana": "うける",
+   "jlptLevel": "N4",
    "type": "fiil",
-   "meaningEn": "to read"
+   "meaningEn": "to take (an examination, interview, etc.); to receive"
   },
   {
-   "id": "6a5a2c6d4743caeb1e82390d",
-   "kanji": "新聞",
-   "kana": "しんぶん",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6f4743caeb1e823d06",
+   "kanji": "食事",
+   "kana": "しょくじする",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "newspaper"
+   "meaningEn": "meal"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823868",
-   "kanji": "風",
-   "kana": "かぜ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823aae",
+   "kanji": "表",
+   "kana": "おもて",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "wind, breeze"
+   "meaningEn": "surface; front; outside"
   },
   {
-   "id": "6a5a2c6e4743caeb1e8239d9",
-   "kanji": "八",
-   "kana": "はち",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823b45",
+   "kanji": "夫",
+   "kana": "おっと",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "eight"
+   "meaningEn": "husband"
   },
   {
-   "id": "6a5a2c6e4743caeb1e823a2a",
-   "kanji": "毎日",
-   "kana": "まいにち",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6f4743caeb1e823ccc",
+   "kanji": "失敗",
+   "kana": "しっぱい",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "every day"
+   "meaningEn": "failure, mistake"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8238f2",
-   "kanji": "七",
-   "kana": "しち",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823c40",
+   "kanji": "島",
+   "kana": "しま",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "seven"
+   "meaningEn": "island"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823961",
-   "kanji": "使う",
-   "kana": "つかう",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823c7b",
+   "kanji": "息子",
+   "kana": "むすこ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "(humble) son"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c49",
+   "kanji": "妻",
+   "kana": "つま",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "wife (humble)"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b4f",
+   "kanji": "客",
+   "kana": "きゃく",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "guest, customer"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823cb4",
+   "kanji": "続ける",
+   "kana": "つづける",
+   "jlptLevel": "N4",
    "type": "fiil",
-   "meaningEn": "to use"
+   "meaningEn": "to continue, to keep up"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823802",
-   "kanji": "いつ",
-   "kana": "いつ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823c1b",
+   "kanji": "しばらく",
+   "kana": "しばらく",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "when"
+   "meaningEn": "little while"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823861",
-   "kanji": "書く",
-   "kana": "かく",
-   "jlptLevel": "N5",
-   "type": "fiil",
-   "meaningEn": "to write"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823959",
-   "kanji": "近く",
-   "kana": "ちかく",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "nearby; in the neighborhood"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82396b",
-   "kanji": "強い",
-   "kana": "つよい",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "strong, powerful"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a45",
-   "kanji": "皆さん",
-   "kana": "みなさん",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "all of you, everyone"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823852",
-   "kanji": "女",
-   "kana": "おんな",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "woman, female"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8237d6",
-   "kanji": "明日",
-   "kana": "あした",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "tomorrow"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a7e",
-   "kanji": "旅行",
-   "kana": "りょこう",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "travel, trip"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823937",
-   "kanji": "それから",
-   "kana": "それから",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "and then, after that"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82393e",
-   "kanji": "大切",
-   "kana": "たいせつ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "important"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823856",
-   "kanji": "外国",
-   "kana": "がいこく",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "foreign country; abroad"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82382e",
-   "kanji": "お金",
-   "kana": "おかね",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "money"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a15",
-   "kanji": "部屋",
-   "kana": "へや",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "a room"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a4c",
-   "kanji": "難しい",
-   "kana": "むずかしい",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "difficult"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a1d",
-   "kanji": "欲しい",
-   "kana": "ほしい",
-   "jlptLevel": "N5",
-   "type": "fiil",
-   "meaningEn": "to want, in need of"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238b3",
-   "kanji": "結構",
-   "kana": "けっこう",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "splendid; enough, tolerably"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823978",
-   "kanji": "出る",
-   "kana": "でる",
-   "jlptLevel": "N5",
-   "type": "fiil",
-   "meaningEn": "to appear, to leave"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823822",
-   "kanji": "駅",
-   "kana": "えき",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "station"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a7d",
-   "kanji": "料理",
-   "kana": "りょうり",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "cooking; cuisine"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8237d5",
-   "kanji": "足",
-   "kana": "あし",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "foot; leg"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238ac",
-   "kanji": "来る",
-   "kana": "くる",
-   "jlptLevel": "N5",
-   "type": "fiil",
-   "meaningEn": "to come"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e8239fb",
-   "kanji": "病院",
-   "kana": "びょういん",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "hospital"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8239a6",
-   "kanji": "夏",
-   "kana": "なつ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "summer"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238c3",
-   "kanji": "午後",
-   "kana": "ごご",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "afternoon, P.M."
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238a2",
-   "kanji": "口",
-   "kana": "くち",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "job opening; mouth"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238b4",
-   "kanji": "結婚",
-   "kana": "けっこん (する)",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "marriage (get married)"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823903",
-   "kanji": "授業",
-   "kana": "じゅぎょう",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "a class (of school)"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a21",
-   "kanji": "ホテル",
-   "kana": "ホテル",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "hotel"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82392b",
-   "kanji": "全部",
-   "kana": "ぜんぶ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "all, entire, whole"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82384d",
-   "kanji": "面白い",
-   "kana": "おもしろい",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "interesting, amusing"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e8239cb",
-   "kanji": "入る",
-   "kana": "はいる",
-   "jlptLevel": "N5",
-   "type": "fiil",
-   "meaningEn": "to enter, to contain, to hold"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8239a2",
-   "kanji": "長い",
-   "kana": "ながい",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "long, lengthy"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e8239db",
-   "kanji": "花",
-   "kana": "はな",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "flower"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823966",
-   "kanji": "作る",
-   "kana": "つくる",
-   "jlptLevel": "N5",
-   "type": "fiil",
-   "meaningEn": "to make, to create"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82398f",
-   "kanji": "どちら",
-   "kana": "どちら",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "which (one) (way); where (polite)"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82389c",
-   "kanji": "銀行",
-   "kana": "ぎんこう",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "bank"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a83",
-   "kanji": "練習",
-   "kana": "れんしゅう (する)",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "(to) practice"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823913",
-   "kanji": "少ない",
-   "kana": "すくない",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "a little; a few"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823956",
-   "kanji": "小さな",
-   "kana": "ちいさな",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "small, little"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a62",
-   "kanji": "山",
-   "kana": "やま",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "mountain"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82399d",
-   "kanji": "どれ",
-   "kana": "どれ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "which one"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82391a",
-   "kanji": "スポーツ",
-   "kana": "スポーツ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "sport(s)"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823957",
-   "kanji": "近い",
-   "kana": "ちかい",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "near, close by, short"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823870",
-   "kanji": "家庭",
-   "kana": "かてい",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "home; family"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a10",
-   "kanji": "文章",
-   "kana": "ぶんしょう",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "sentence, text"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823997",
-   "kanji": "友達",
-   "kana": "ともだち",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "friend"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823945",
-   "kanji": "出す",
-   "kana": "だす",
-   "jlptLevel": "N5",
-   "type": "fiil",
-   "meaningEn": "to take (something) out; to hand in (something)"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823829",
-   "kanji": "大きい",
-   "kana": "おおきい",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "big, large"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823887",
-   "kanji": "聞く",
-   "kana": "きく",
-   "jlptLevel": "N5",
-   "type": "fiil",
-   "meaningEn": "to hear, to listen, to ask"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e8239d5",
-   "kanji": "バス",
-   "kana": "バス",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "bus; bath; bass"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e8239df",
-   "kanji": "母",
-   "kana": "はは",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "(my) mother"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238a3",
-   "kanji": "靴",
-   "kana": "くつ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "shoes, footwear"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8237eb",
-   "kanji": "雨",
-   "kana": "あめ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "rain"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82381d",
-   "kanji": "絵",
-   "kana": "え",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "a painting; a picture; a drawing"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a87",
-   "kanji": "若い",
-   "kana": "わかい",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "young"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a68",
-   "kanji": "有名",
-   "kana": "ゆうめい",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "famous"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82394a",
-   "kanji": "楽しい",
-   "kana": "たのしい",
-   "jlptLevel": "N5",
-   "type": "sıfat",
-   "meaningEn": "enjoyable, fun"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823811",
-   "kanji": "色々",
-   "kana": "いろいろ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "various"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823875",
-   "kanji": "紙",
-   "kana": "かみ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "paper"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823807",
-   "kanji": "犬",
-   "kana": "いぬ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "dog"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82385f",
-   "kanji": "かかる",
-   "kana": "かかる",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "it takes (amount of time, money) (v.i.)"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238e1",
-   "kanji": "雑誌",
-   "kana": "ざっし",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "magazine, journal"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823841",
-   "kanji": "大人",
-   "kana": "おとな",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "adult"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823920",
-   "kanji": "生徒",
-   "kana": "せいと",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "student; pupil"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8237c7",
-   "kanji": "ああ",
-   "kana": "ああ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "Ah!, Oh!"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e8239f4",
-   "kanji": "左",
-   "kana": "ひだり",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "left hand side"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a25",
-   "kanji": "本当",
-   "kana": "ほんとう",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "real, true"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238aa",
-   "kanji": "クラス",
-   "kana": "クラス",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "a class"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238c6",
-   "kanji": "午前",
-   "kana": "ごぜん",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "morning, A.M."
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823986",
-   "kanji": "どうも",
-   "kana": "どうも",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "Thank you; somehow; no matter how hard one may try"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823980",
-   "kanji": "ドア",
-   "kana": "ドア",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "door (Western style)"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a4e",
-   "kanji": "村",
-   "kana": "むら",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "village"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823815",
-   "kanji": "歌",
-   "kana": "うた",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "a song"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e8239d0",
-   "kanji": "箸",
-   "kana": "はし",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "chopsticks"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823909",
-   "kanji": "知る",
-   "kana": "しる",
-   "jlptLevel": "N5",
-   "type": "fiil",
-   "meaningEn": "to know, to understand"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823949",
-   "kanji": "建物",
-   "kana": "たてもの",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "building"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82395c",
-   "kanji": "父",
-   "kana": "ちち",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "(my) father"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e8238b7",
-   "kanji": "元気",
-   "kana": "げんき",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "health(y), energetic"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a07",
-   "kanji": "二つ",
-   "kana": "ふたつ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "two things"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823985",
-   "kanji": "動物",
-   "kana": "どうぶつ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "animal"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82385b",
-   "kanji": "買う",
-   "kana": "かう",
-   "jlptLevel": "N5",
-   "type": "fiil",
-   "meaningEn": "to buy"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a3c",
-   "kanji": "右",
-   "kana": "みぎ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "right hand side"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82380f",
-   "kanji": "入れる",
-   "kana": "いれる",
-   "jlptLevel": "N5",
-   "type": "fiil",
-   "meaningEn": "to put in"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823974",
-   "kanji": "テスト",
-   "kana": "テスト",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "test"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823935",
-   "kanji": "空",
-   "kana": "そら",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "sky"
-  },
-  {
-   "id": "6a5a2c6e4743caeb1e823a47",
-   "kanji": "耳",
-   "kana": "みみ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "ear"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823876",
-   "kanji": "カメラ",
-   "kana": "カメラ",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "camera"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823888",
-   "kanji": "北",
-   "kana": "きた",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "north"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82389e",
-   "kanji": "薬",
-   "kana": "くすり",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "medicine"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82394f",
-   "kanji": "食べる",
-   "kana": "たべる",
-   "jlptLevel": "N5",
-   "type": "fiil",
-   "meaningEn": "to eat"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e823983",
-   "kanji": "どうして",
-   "kana": "どうして",
-   "jlptLevel": "N5",
-   "type": "isim",
-   "meaningEn": "why, for what reason"
-  },
-  {
-   "id": "6a5a2c6d4743caeb1e82393d",
-   "kanji": "大好き",
-   "kana": "だいすき",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823b55",
+   "kanji": "どんどん",
+   "kana": "どんどん",
+   "jlptLevel": "N4",
    "type": "zarf",
-   "meaningEn": "very like-able, like very much"
+   "meaningEn": "quickly and steadily; at a rapid pace"
   },
   {
-   "id": "6a5a2c6d4743caeb1e82397c",
-   "kanji": "電車",
-   "kana": "でんしゃ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6f4743caeb1e823d0a",
+   "kanji": "競争",
+   "kana": "きょうそう",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "electric train"
+   "meaningEn": "competition, contest"
   },
   {
-   "id": "6a5a2c6d4743caeb1e82397b",
-   "kanji": "電気",
-   "kana": "でんき",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6f4743caeb1e823ca2",
+   "kanji": "続く",
+   "kana": "つづく",
+   "jlptLevel": "N4",
+   "type": "fiil",
+   "meaningEn": "to be continued"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823ce8",
+   "kanji": "全然",
+   "kana": "ぜんぜん",
+   "jlptLevel": "N4",
+   "type": "zarf",
+   "meaningEn": "not at all; wholly, entirely"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c83",
+   "kanji": "席",
+   "kana": "せき",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "electricity, (electric) light"
+   "meaningEn": "a seat"
   },
   {
-   "id": "6a5a2c6e4743caeb1e8239e2",
-   "kanji": "春",
-   "kana": "はる",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823b4c",
+   "kanji": "事務所",
+   "kana": "じむしょ",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "spring"
+   "meaningEn": "office"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823955",
-   "kanji": "小さい",
-   "kana": "ちいさい",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6f4743caeb1e823c9e",
+   "kanji": "安心",
+   "kana": "あんしん",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "peace of mind, relief"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c38",
+   "kanji": "正しい",
+   "kana": "ただしい",
+   "jlptLevel": "N4",
    "type": "sıfat",
-   "meaningEn": "small, little"
+   "meaningEn": "correct"
   },
   {
-   "id": "6a5a2c6e4743caeb1e8239be",
-   "kanji": "猫",
-   "kana": "ねこ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823c3b",
+   "kanji": "都",
+   "kana": "と",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "cat"
+   "meaningEn": "metropolitan"
   },
   {
-   "id": "6a5a2c6d4743caeb1e82393c",
-   "kanji": "大丈夫",
-   "kana": "だいじょうぶ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823bce",
+   "kanji": "皆",
+   "kana": "みな",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "It's ok (all right); No need to worry; Everything is under control"
+   "meaningEn": "everyone"
   },
   {
-   "id": "6a5a2c6e4743caeb1e8239f2",
-   "kanji": "低い",
-   "kana": "ひくい",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823b5c",
+   "kanji": "壁",
+   "kana": "かべ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "wall"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c23",
+   "kanji": "是非",
+   "kana": "ぜひ",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "certainly, by all means; without fail"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823ae8",
+   "kanji": "人口",
+   "kana": "じんこう",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "population"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823cd2",
+   "kanji": "工場",
+   "kana": "こうじょう",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "factory"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b5d",
+   "kanji": "一度",
+   "kana": "いちど",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "once, one time"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b26",
+   "kanji": "ビル",
+   "kana": "ビル",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "(abbr.) building"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bae",
+   "kanji": "案内",
+   "kana": "あんないする",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "information, guidance"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b58",
+   "kanji": "素晴らしい",
+   "kana": "すばらしい",
+   "jlptLevel": "N4",
    "type": "sıfat",
-   "meaningEn": "short, low"
+   "meaningEn": "wonderful; terrific"
   },
   {
-   "id": "6a5a2c6e4743caeb1e8239e6",
-   "kanji": "半",
-   "kana": "はん",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823b9e",
+   "kanji": "用意",
+   "kana": "ようい",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "half (e.g., にじはん | half-past two)"
+   "meaningEn": "preparation"
   },
   {
-   "id": "6a5a2c6e4743caeb1e823a69",
-   "kanji": "雪",
-   "kana": "ゆき",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823c05",
+   "kanji": "周り",
+   "kana": "まわり",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "snow"
+   "meaningEn": "surroundings"
   },
   {
-   "id": "6a5a2c6e4743caeb1e8239fc",
-   "kanji": "病気",
-   "kana": "びょうき",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823add",
+   "kanji": "レポート",
+   "kana": "レポート",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "illness; sickness"
+   "meaningEn": "report"
   },
   {
-   "id": "6a5a2c6d4743caeb1e8238f5",
-   "kanji": "自動車",
-   "kana": "じどうしゃ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823c24",
+   "kanji": "裏",
+   "kana": "うら",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "automobile"
+   "meaningEn": "reverse side, back"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823975",
-   "kanji": "では",
-   "kana": "では",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823bea",
+   "kanji": "教会",
+   "kana": "きょうかい",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "then, well, so"
+   "meaningEn": "church"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823853",
-   "kanji": "女の子",
-   "kana": "おんなのこ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823bca",
+   "kanji": "交通",
+   "kana": "こうつう",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "girl"
+   "meaningEn": "traffic, transportation"
   },
   {
-   "id": "6a5a2c6e4743caeb1e823a6e",
-   "kanji": "横",
-   "kana": "よこ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823b8f",
+   "kanji": "森",
+   "kana": "もり",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "beside; side; width"
+   "meaningEn": "forest"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823984",
-   "kanji": "どうぞ",
-   "kana": "どうぞ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823b4e",
+   "kanji": "小学校",
+   "kana": "しょうがっこう",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "please, kindly, by all means"
+   "meaningEn": "elementary school"
   },
   {
-   "id": "6a5a2c6d4743caeb1e82387f",
-   "kanji": "川",
-   "kana": "かわ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823bc8",
+   "kanji": "会話",
+   "kana": "かいわ",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "river"
+   "meaningEn": "conversation"
   },
   {
-   "id": "6a5a2c6e4743caeb1e8239eb",
-   "kanji": "番号",
-   "kana": "ばんごう",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823c4a",
+   "kanji": "帰り",
+   "kana": "かえり",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "number, series of digits"
+   "meaningEn": "return, coming back"
   },
   {
-   "id": "6a5a2c6e4743caeb1e823a0e",
-   "kanji": "古い",
-   "kana": "ふるい",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823b32",
+   "kanji": "やっと",
+   "kana": "やっと",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "at last, finally"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c54",
+   "kanji": "卒業",
+   "kana": "そつぎょう",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "graduation"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823c92",
+   "kanji": "久しぶり",
+   "kana": "ひさしぶり",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "it has been a long time; for the first time in a long time"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b51",
+   "kanji": "美しい",
+   "kana": "うつくしい",
+   "jlptLevel": "N4",
    "type": "sıfat",
-   "meaningEn": "old (in reference to objects, not people), aged, ancient"
+   "meaningEn": "beautiful, lovely"
   },
   {
-   "id": "6a5a2c6e4743caeb1e8239ed",
-   "kanji": "半分",
-   "kana": "はんぶん",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823c39",
+   "kanji": "輸入",
+   "kana": "ゆにゅう",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "half"
+   "meaningEn": "import"
   },
   {
-   "id": "6a5a2c6d4743caeb1e823893",
-   "kanji": "教室",
-   "kana": "きょうしつ",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823c2d",
+   "kanji": "遊び",
+   "kana": "あそび",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "classroom"
+   "meaningEn": "play"
   },
   {
-   "id": "6a5a2c6e4743caeb1e8239ee",
-   "kanji": "東",
-   "kana": "ひがし",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823b30",
+   "kanji": "星",
+   "kana": "ほし",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "east"
+   "meaningEn": "star"
   },
   {
-   "id": "6a5a2c6d4743caeb1e82394d",
-   "kanji": "多分",
-   "kana": "たぶん",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6f4743caeb1e823c8f",
+   "kanji": "値段",
+   "kana": "ねだん",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "perhaps, probably, maybe"
+   "meaningEn": "price"
   },
   {
-   "id": "6a5a2c6e4743caeb1e823a19",
-   "kanji": "便利",
-   "kana": "べんり",
-   "jlptLevel": "N5",
+   "id": "6a5a2c6e4743caeb1e823c36",
+   "kanji": "大体",
+   "kana": "だいたい",
+   "jlptLevel": "N4",
+   "type": "fiil",
+   "meaningEn": "approximately; in most cases; in general; to begin with (same as もともと)"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823ae6",
+   "kanji": "厳しい",
+   "kana": "きびしい",
+   "jlptLevel": "N4",
+   "type": "sıfat",
+   "meaningEn": "hard; rigorous; strict"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823c67",
+   "kanji": "そんなに",
+   "kana": "そんなに",
+   "jlptLevel": "N4",
    "type": "isim",
-   "meaningEn": "convenient, handy"
+   "meaningEn": "so much, like that"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823b6f",
+   "kanji": "変",
+   "kana": "へん",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "strange, odd"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823bc9",
+   "kanji": "空気",
+   "kana": "くうき",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "air, atmosphere"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823d05",
+   "kanji": "翻訳",
+   "kana": "ほんやく",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "translation"
+  },
+  {
+   "id": "6a5a2c6f4743caeb1e823d1b",
+   "kanji": "嬉しい",
+   "kana": "うれしい",
+   "jlptLevel": "N4",
+   "type": "fiil",
+   "meaningEn": "to be happy; to be glad"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823be1",
+   "kanji": "予約",
+   "kana": "よやく",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "reservation"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823ae1",
+   "kanji": "地震",
+   "kana": "じしん",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "earthquake"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823a97",
+   "kanji": "生きる",
+   "kana": "いきる",
+   "jlptLevel": "N4",
+   "type": "fiil",
+   "meaningEn": "to live"
+  },
+  {
+   "id": "6a5a2c6e4743caeb1e823ba1",
+   "kanji": "運転",
+   "kana": "うんてんする",
+   "jlptLevel": "N4",
+   "type": "isim",
+   "meaningEn": "driving"
   }
  ]
 }
