@@ -48,6 +48,7 @@ yeniden yazılır; çözülemeyen İNSAN-KUYRUĞU bölümüne düşer.
 | 001 | 250 (N5 core) | TAMAM 19.07 ~01:50, 0 hata 0 uyarı | out/meaningtr-001.jsonl |
 | 002 | 250 (46 N5 + 204 N4 core) | TAMAM 19.07 ~02:55 (kota kesintisi sonrası 09:48'de doğrulandı), 0 hata 0 uyarı | out/meaningtr-002.jsonl |
 | 003 | 250 (192 N4 + 58 N3 core) | TAMAM 19.07 ~09:55, 0 hata (1 yanlış-pozitif uyarı: "şoför") | out/meaningtr-003.jsonl |
+| 004 | 250 (N3 core) | TAMAM 19.07 ~10:05, 0 hata 0 uyarı | out/meaningtr-004.jsonl |
 
 ## İnsan kuyruğu
 
@@ -59,6 +60,11 @@ yeniden yazılır; çözülemeyen İNSAN-KUYRUĞU bölümüne düşer.
   temizlik adayı): 十 "(〜を) とお", 勉強・結婚・練習 "...(する)",
   何 "なん; なに", 行く "いく; ゆく" — TTS kana okuyacağı için mağaza öncesi
   temizlenmeli.
+- 額 (6a5a2c704743caeb1e823f6c, N3): kana ひたい ("alın") ama meaningEn
+  "amount; frame" (がく okunuşunun anlamı) — kaynak veride okunuş/anlam
+  uyuşmazlığı. meaningTr kana'ya göre "alın" yazıldı; Yusuf karar versin.
+- より (6a5a2c714743caeb1e82419c, N3): meaningEn "twist, ply" saçma (kaynak
+  hatası); karşılaştırma edatı olarak "-den (karşılaştırma)" yazıldı — bilgi.
 
 ## Sıradaki iş
 
