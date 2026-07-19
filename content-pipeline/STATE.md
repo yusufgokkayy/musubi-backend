@@ -49,6 +49,7 @@ yeniden yazılır; çözülemeyen İNSAN-KUYRUĞU bölümüne düşer.
 | 002 | 250 (46 N5 + 204 N4 core) | TAMAM 19.07 ~02:55 (kota kesintisi sonrası 09:48'de doğrulandı), 0 hata 0 uyarı | out/meaningtr-002.jsonl |
 | 003 | 250 (192 N4 + 58 N3 core) | TAMAM 19.07 ~09:55, 0 hata (1 yanlış-pozitif uyarı: "şoför") | out/meaningtr-003.jsonl |
 | 004 | 250 (N3 core) | TAMAM 19.07 ~10:05, 0 hata 0 uyarı | out/meaningtr-004.jsonl |
+| 005 | 250 (238 N3 + 12 N2 core) | TAMAM 19.07 ~10:12, 0 hata 0 uyarı | out/meaningtr-005.jsonl |
 
 ## İnsan kuyruğu
 
