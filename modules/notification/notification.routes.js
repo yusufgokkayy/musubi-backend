@@ -5,6 +5,7 @@ const { protect, isEmailVerified } = require('../../middlewares/auth.middleware'
 const router = express.Router();
 
 router.get('/',             protect, isEmailVerified, NotificationController.getNotifications);
+router.post('/test',        protect, isEmailVerified, NotificationController.sendTest);
 router.put('/read-all',     protect, isEmailVerified, NotificationController.markAllAsRead);
 router.put('/:id/read',     protect, isEmailVerified, NotificationController.markAsRead);
 

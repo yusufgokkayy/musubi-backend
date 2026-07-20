@@ -833,6 +833,16 @@ Hata: `404 "Notification not found"`.
 { "success": true, "data": { "modifiedCount": 5 } }
 ```
 
+### POST /notifications/test 🔒✉️
+Elle push testi — giriş yapmış kullanıcının kayıtlı `fcmToken`'ına anında gönderir, `notificationSettings` tercihlerinden bağımsız (mobil uygulama/geliştirme ortamı doğrulaması içindir).
+```jsonc
+// İstek — ikisi de opsiyonel
+{ "title": "Test", "body": "Deneme bildirimi" }
+
+// 200
+{ "success": true, "data": { /* Notification, type: "test" */ } }
+```
+
 ---
 
 ## Sağlık kontrolü

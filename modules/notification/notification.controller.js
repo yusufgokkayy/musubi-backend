@@ -17,6 +17,19 @@ const NotificationController = {
     markAllAsRead: catchAsync(async (req, res) => {
         const result = await NotificationService.markAllAsRead(req.user.id);
         res.status(200).json({ success: true, data: result });
+    }),
+
+    // Elle push testi: giriş yapmış kullanıcının kayıtlı fcmToken'ına anında
+    // gönderir, notificationSettings'ten bağımsız (test tipi SETTING_MAP'te yok)
+    sendTest: catchAsync(async (req, res) => {
+        const { title, body } = req.body;
+        const notification = await NotificationService.create(req.user.id, {
+            type: 'test',
+            title: title || 'Test Bildirimi',
+            body: body || 'Bu bir test bildirimidir.',
+            data: { test: true }
+        });
+        res.status(200).json({ success: true, data: notification });
     })
 };
 
