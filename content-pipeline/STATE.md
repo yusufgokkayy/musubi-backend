@@ -50,6 +50,7 @@ yeniden yazılır; çözülemeyen İNSAN-KUYRUĞU bölümüne düşer.
 | 003 | 250 (192 N4 + 58 N3 core) | TAMAM 19.07 ~09:55, 0 hata (1 yanlış-pozitif uyarı: "şoför") | out/meaningtr-003.jsonl |
 | 004 | 250 (N3 core) | TAMAM 19.07 ~10:05, 0 hata 0 uyarı | out/meaningtr-004.jsonl |
 | 005 | 250 (238 N3 + 12 N2 core) | TAMAM 19.07 ~10:12, 0 hata 0 uyarı | out/meaningtr-005.jsonl |
+| 006 | 250 (N2 core) | TAMAM 19.07 ~10:22, 0 hata (1 yanlış-pozitif uyarı) | out/meaningtr-006.jsonl |
 
 ## İnsan kuyruğu
 
