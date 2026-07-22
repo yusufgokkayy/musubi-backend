@@ -76,11 +76,8 @@ Push bildirimleri için ayrıca `config/firebase-service-account.json` konur (gi
 ### 4. Veriyi hazırlama
 
 ```bash
-npm run seed          # CSV'lerden ~7900 kelimeyi DB'ye yazar (idempotent, tekrar çalıştırılabilir)
-npm run select-core   # Frekans listesine göre 3000 çekirdek kelimeyi işaretler
+npm run seed:veri-seti   # veri-seti/musubi_n{1-5}.json'dan 5816 kelimeyi DB'ye yazar (idempotent, tekrar çalıştırılabilir)
 ```
-
-`select-core` ilk çalıştırmada Wikipedia tabanlı frekans listesini indirir ve `seeds/data/` altına cache'ler.
 
 ### 5. Çalıştırma
 
@@ -104,7 +101,7 @@ middlewares/               # auth (protect, isEmailVerified, isAdmin), rateLimit
 models/                    # Mongoose şemaları
 modules/<özellik>/         # her özellik: routes → controller → service üçlüsü
 utils/                     # jwt, catchAsync, AppError, sendEmail, notification (FCM), date.util, event.util
-seeds/                     # seed-csv.js, select-core.js
+seeds/                     # seed-veri-seti.js, export-vocab.js (kotoba-analyzer ihracı), PLAN.md
 tests/                     # API sözleşme testleri (npm test)
 ```
 
