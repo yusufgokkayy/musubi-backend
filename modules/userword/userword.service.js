@@ -15,6 +15,8 @@ const { normalizeAnswer, meaningVariants, gradeTyping } = require('../../utils/a
 const NEW_WORD_DAILY_LIMIT = parseInt(process.env.NEW_WORD_DAILY_LIMIT) || 10;
 const REVIEW_DAILY_LIMIT = parseInt(process.env.REVIEW_DAILY_LIMIT) || 10;
 
+const JLPT_LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
+
 // 'easy' StudySession sayaçlarında öteden beri doğru sayılıyordu ama burada
 // reddediliyordu; SM-2'nin en yüksek kalitesi olarak eklendi (easeFactor'ü
 // 'correct'ten biraz daha hızlı büyütür, aynı-gün kuralına o da tabidir)
@@ -114,10 +116,60 @@ const decorateTodayWords = async (userId, today, reviewWordsRaw, newWordsRaw) =>
     };
 };
 
+// Havuz için tekrar+yeni kelime seçimi — hem ilk kurulumda hem session bitip
+// yeni tur açılırken (excludeReviewIds/excludeWordIds ile önceki havuz hariç
+// tutularak) kullanılır. jlptLevel çağıran yerde zaten doğrulanmış/zorunlu.
+const selectPoolWords = async (userId, jlptLevel, goal, { excludeReviewIds = [], excludeWordIds = [] } = {}) => {
+    const reviewLimit = Math.ceil(goal * 0.7);
+    const levelWordIds = await Word.find({ jlptLevel }).distinct('_id');
+
+    // Seviye filtresi populate-match ile YAPILMAZ: eşleşmeyen kayıtlar
+    // word:null olarak dönüp limit kontenjanını yer, havuza boş kelime girerdi.
+    const reviewWordsRaw = await UserWord.find({
+        user: userId,
+        _id: { $nin: excludeReviewIds },
+        word: { $in: levelWordIds, $nin: excludeWordIds },
+        nextReviewDate: { $lte: new Date() },
+        status: { $in: ['learning', 'learned'] }
+    })
+        .populate('word')
+        // En eski vade önce; eşitlikte en kırılgan (düşük seviyeli) kelime kazanır
+        .sort({ nextReviewDate: 1, masteryLevel: 1 })
+        .limit(reviewLimit);
+
+    const learnedWordIds = await UserWord.find({ user: userId }).distinct('word');
+
+    // Yeni kelimeler müfredat sırasında (frequencyRank artan, rastgele DEĞİL):
+    // ön koşul kelime (örn. "doktor") sonraki kelimeden (örn. "cerrah") önce gelir.
+    const newLimit = Math.max(0, goal - reviewWordsRaw.length);
+    const newWordsRaw = newLimit > 0
+        ? await Word.find({
+            _id: { $nin: [...learnedWordIds, ...excludeWordIds] },
+            isCore: true,
+            jlptLevel
+        }).sort({ frequencyRank: 1 }).limit(newLimit)
+        : [];
+
+    return { reviewWordsRaw, newWordsRaw };
+};
+
 const UserWordService = {
     async getTodayWords(userId, jlptLevel) {
+        // jlptLevel ZORUNLU: DailyWordPool'un unique anahtarı {user,date,jlptLevel}
+        // (bkz. models/DailyWordPool.js). İstemci aynı ekran akışında bazen
+        // jlptLevel'sız bazen'li çağırırsa, backend bunları FARKLI havuz sayıp
+        // ikinci bir doküman açar — "tekrar başlarken üstüne 20lik daha soruyor"
+        // ve home'daki goal'ün havuzları toplarken şişmesi bug'larının kökü buydu.
+        // Sabit/varsayılan bir seviyeye düşmek yerine hata fırlatmak tercih edildi:
+        // sunucuda güvenilir bir "kullanıcının o anki seviyesi" kaydı yok, sessiz
+        // bir varsayım aynı sınıf bug'ı başka bir kılıkta geri getirir.
+        if (!JLPT_LEVELS.includes(jlptLevel)) {
+            throw new AppError('jlptLevel zorunlu ve N5-N1 arasında olmalı', 400);
+        }
+
         const user = await User.findById(userId).select('dailyGoal timezone');
         const today = startOfDayInTz(user?.timezone);
+        const goal = user?.dailyGoal || (NEW_WORD_DAILY_LIMIT + REVIEW_DAILY_LIMIT);
 
         // Bugün için havuz var mı kontrol et
         let pool = await DailyWordPool.findOne({
@@ -127,10 +179,47 @@ const UserWordService = {
         });
 
         if (pool) {
+            // YENİ TUR: havuz `roundClosedAt` ile işaretli (session tamamlanınca
+            // studysession.service.js set eder) — aynı kelimeler tekrar gelmesin
+            // diye önceki havuzdaki (review'lerin ARKASINDAKİ Word'ler + newWords)
+            // hariç tutularak aynı doküman (user,date,jlptLevel) üzerine taze bir
+            // set yazılır, oturum yeni tur için yeniden açılır.
+            //
+            // NOT: StudySession.isCompleted KULLANILMAZ — /sessions/start her
+            // çağrıldığında onu hemen false'a sıfırlıyor (bul-veya-yeniden-aç).
+            // İstemci doğal olarak "başlat, sonra kelimeleri getir" sırasıyla
+            // çağırırsa (ki en olası akış budur), isCompleted bu satıra hiç
+            // ulaşmadan silinmiş olurdu — roundClosedAt bu çağrı sırasından
+            // tamamen bağımsız, sadece bu fonksiyon temizler.
+            if (pool.roundClosedAt) {
+                const excludeWordIds = [
+                    ...(await UserWord.find({ _id: { $in: pool.reviewWordIds } }).distinct('word')),
+                    ...pool.newWordIds
+                ];
+                const { reviewWordsRaw, newWordsRaw } = await selectPoolWords(userId, jlptLevel, goal, {
+                    excludeReviewIds: pool.reviewWordIds,
+                    excludeWordIds
+                });
+
+                pool.reviewWordIds = reviewWordsRaw.map(uw => uw._id);
+                pool.newWordIds = newWordsRaw.map(w => w._id);
+                pool.roundClosedAt = null;
+                await pool.save();
+                await StudySessionService.startSession(userId, jlptLevel);
+
+                logEvent(userId, 'daily_pool_created', {
+                    jlptLevel, reviewCount: reviewWordsRaw.length, newCount: newWordsRaw.length, goal, newRound: true
+                });
+
+                const reviewWords = await UserWord.find({ _id: { $in: pool.reviewWordIds } }).populate('word');
+                const newWords = await Word.find({ _id: { $in: pool.newWordIds } }).sort({ frequencyRank: 1 });
+                return decorateTodayWords(userId, today, reviewWords, newWords);
+            }
+
             // Hedef gün içinde ARTTIYSA havuz fark kadar yeni kelimeyle genişler
             // ("30 yaptım ama 20'de kaldı" bug'ı). Azalma bugünü etkilemez:
             // cevaplanmış kelimeler havuzdan atılamaz, yeni hedef yarın uygulanır.
-            const currentGoal = user?.dailyGoal || (NEW_WORD_DAILY_LIMIT + REVIEW_DAILY_LIMIT);
+            const currentGoal = goal;
             const poolSize = pool.reviewWordIds.length + pool.newWordIds.length;
             if (currentGoal > poolSize) {
                 let need = currentGoal - poolSize;
@@ -156,19 +245,15 @@ const UserWordService = {
                     need -= extraReviews.length;
                 }
 
-                // Kalan kontenjan rastgele yeni kelimeyle dolar
+                // Kalan kontenjan müfredat sırasındaki (frequencyRank artan) bir
+                // sonraki yeni kelimelerle dolar — bkz. aşağıdaki asıl seçim notu
                 if (need > 0) {
                     const knownWordIds = await UserWord.find({ user: userId }).distinct('word');
-                    const extraNew = await Word.aggregate([
-                        {
-                            $match: {
-                                _id: { $nin: [...knownWordIds, ...pool.newWordIds] },
-                                isCore: true,
-                                ...(jlptLevel && { jlptLevel })
-                            }
-                        },
-                        { $sample: { size: need } }
-                    ]);
+                    const extraNew = await Word.find({
+                        _id: { $nin: [...knownWordIds, ...pool.newWordIds] },
+                        isCore: true,
+                        jlptLevel
+                    }).sort({ frequencyRank: 1 }).limit(need);
                     if (extraNew.length > 0) pool.newWordIds.push(...extraNew.map(w => w._id));
                 }
 
@@ -181,14 +266,16 @@ const UserWordService = {
                 }
             }
 
-            // Havuz sabit listeyi döndürür (gün içinde aynı kelimeler)
+            // Havuz sabit listeyi döndürür (gün içinde aynı kelimeler).
+            // newWords müfredat sırasında (frequencyRank) gösterilir — $in sorgusu
+            // sırayı garanti etmediği için her çağrıda yeniden sıralanır.
             const reviewWords = await UserWord.find({
                 _id: { $in: pool.reviewWordIds }
             }).populate('word');
 
             const newWords = await Word.find({
                 _id: { $in: pool.newWordIds }
-            });
+            }).sort({ frequencyRank: 1 });
 
             return decorateTodayWords(userId, today, reviewWords, newWords);
         }
@@ -197,46 +284,7 @@ const UserWordService = {
         // Havuz boyutunu kullanıcının günlük hedefi belirler (env limitleri fallback).
         // dailyGoal gün içinde ARTARSA havuz yukarıdaki blokta genişletilir;
         // azalırsa bugünü etkilemez, yarınki havuz yeni hedefle kurulur.
-        const goal = user?.dailyGoal || (NEW_WORD_DAILY_LIMIT + REVIEW_DAILY_LIMIT);
-
-        // Tekrarlar öncelikli: hedefin en fazla %70'i tekrar
-        const reviewLimit = Math.ceil(goal * 0.7);
-
-        // Seviye filtresi populate-match ile YAPILMAZ: eşleşmeyen kayıtlar
-        // word:null olarak dönüp limit kontenjanını yer, havuza boş kelime girerdi.
-        // Filtre sorgunun kendisine taşınır.
-        const reviewFilter = {
-            user: userId,
-            nextReviewDate: { $lte: new Date() },
-            status: { $in: ['learning', 'learned'] }
-        };
-        if (jlptLevel) {
-            reviewFilter.word = { $in: await Word.find({ jlptLevel }).distinct('_id') };
-        }
-
-        const reviewWordsRaw = await UserWord.find(reviewFilter)
-        .populate('word')
-        // En eski vade önce; eşitlikte en kırılgan (düşük seviyeli) kelime kazanır —
-        // uzun aradan dönüşte kontenjan yetmezse sağlam hafızalı kelimeler bekleyebilir
-        .sort({ nextReviewDate: 1, masteryLevel: 1 })
-        .limit(reviewLimit);
-
-        const learnedWordIds = await UserWord.find({ user: userId }).distinct('word');
-
-        // Kalan hedefi rastgele yeni kelimelerle doldur
-        const newLimit = Math.max(0, goal - reviewWordsRaw.length);
-        const newWordsRaw = newLimit > 0
-            ? await Word.aggregate([
-                {
-                    $match: {
-                        _id: { $nin: learnedWordIds },
-                        isCore: true,
-                        ...(jlptLevel && { jlptLevel })
-                    }
-                },
-                { $sample: { size: newLimit } }
-            ])
-            : [];
+        const { reviewWordsRaw, newWordsRaw } = await selectPoolWords(userId, jlptLevel, goal);
 
         // Havuzu kaydet
         await DailyWordPool.create({
@@ -292,6 +340,14 @@ const UserWordService = {
         const quality = qualityMap[result];
         if (!quality) throw new AppError('Invalid result, use: correct, easy, empty, wrong', 400);
 
+        // Oturum başlamadan cevap kabul edilmez: istemciyi (UI akışını) atlayıp
+        // API'ye doğrudan istek atarak sınırsız/rastgele kelime cevaplama
+        // girişimini kapatır. `/sessions/start` her zaman önce çağrılmalı.
+        const activeSession = await StudySessionService.getTodaySession(userId);
+        if (!activeSession) {
+            throw new AppError('Önce oturum başlatılmalı: POST /sessions/start', 400);
+        }
+
         let userWord = await UserWord.findOne({ user: userId, word: wordId });
 
         if (!userWord) {
@@ -340,11 +396,7 @@ const UserWordService = {
             userWord.lastResult = 'empty';
             await userWord.save();
 
-            try {
-                await StudySessionService.updateSession(userId, 'empty');
-            } catch (err) {
-                // Session yoksa sessizce geç
-            }
+            await StudySessionService.updateSession(userId, 'empty', { jlptLevel: wordExists.jlptLevel });
 
             logEvent(userId, 'answer_submitted', {
                 wordId, jlptLevel: wordExists.jlptLevel, result: 'empty'
@@ -404,12 +456,8 @@ const UserWordService = {
         await StreakService.updateStreak(userId);
         await ProgressService.checkAndUnlockNextLevel(userId, wordExists.jlptLevel);
 
-        try {
-            // Ertelenmiş kelimenin yükseltmesinde sayaç düzeltilir: empty--, sonuç++
-            await StudySessionService.updateSession(userId, result, { fromEmpty: emptyToday });
-        } catch (err) {
-            // Session yoksa sessizce geç, hata fırlatma
-        }
+        // Ertelenmiş kelimenin yükseltmesinde sayaç düzeltilir: empty--, sonuç++
+        await StudySessionService.updateSession(userId, result, { fromEmpty: emptyToday, jlptLevel: wordExists.jlptLevel });
 
         logEvent(userId, 'answer_submitted', {
             wordId,

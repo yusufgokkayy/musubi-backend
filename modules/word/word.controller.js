@@ -24,20 +24,20 @@ const WordController = {
         res.status(200).json({ success: true, data: words });
     }),
 
-    createWord: catchAsync(async (req, res) => {
-        const word = await WordService.createWord(req.body);
-        res.status(201).json({ success: true, data: word });
-    }),
+    // createWord: catchAsync(async (req, res) => {
+    //     const word = await WordService.createWord(req.body);
+    //     res.status(201).json({ success: true, data: word });
+    // }),
 
-    updateWord: catchAsync(async (req, res) => {
-        const word = await WordService.updateWord(req.params.id, req.body);
-        res.status(200).json({ success: true, data: word });
-    }),
+    // updateWord: catchAsync(async (req, res) => {
+    //     const word = await WordService.updateWord(req.params.id, req.body);
+    //     res.status(200).json({ success: true, data: word });
+    // }),
 
-    deleteWord: catchAsync(async (req, res) => {
-        await WordService.deleteWord(req.params.id);
-        res.status(200).json({ success: true, message: 'Word deleted' });
-    })
+    // deleteWord: catchAsync(async (req, res) => {
+    //     await WordService.deleteWord(req.params.id);
+    //     res.status(200).json({ success: true, message: 'Word deleted' });
+    // })
 };
 
 module.exports = WordController;

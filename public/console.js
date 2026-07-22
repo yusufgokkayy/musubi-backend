@@ -413,6 +413,7 @@ async function loadToday() {
     return `
     <div class="study-card" id="sc-${word._id}">
       ${w.isReview ? '<span class="badge gray">tekrar</span>' : '<span class="badge">yeni</span>'}
+      ${word.frequencyRank != null ? `<span class="badge gray" title="müfredat sırası (frequencyRank)">#${esc(word.frequencyRank)}</span>` : ''}
       <div class="kj">${esc(word.kanji)}</div>
       <div class="rm">${esc(word.romaji)}</div>
       <div class="mean hidden-m" title="Görmek için tıkla">${esc(word.meaning)}</div>

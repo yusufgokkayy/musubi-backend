@@ -21,7 +21,16 @@ const DailyWordPoolSchema = new mongoose.Schema({
     newWordIds: [{
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Word'
-    }]
+    }],
+    // Session tamamlandığında set edilir (studysession.service.js), tur
+    // yenilendiğinde (userword.service.js) null'a döner. StudySession.isCompleted
+    // KULLANILMAZ: /sessions/start her çağrıldığında onu hemen false'a
+    // sıfırlıyor (bul-veya-yeniden-aç) — istemci "başlat, sonra kelimeleri
+    // getir" sırasıyla çağırırsa (en doğal akış) tetikleyici hiç görülmeden
+    // silinirdi. Bu alan o çağrı sırasından tamamen bağımsız.
+    roundClosedAt: {
+        type: Date
+    }
 });
 
 // Kullanıcı aynı gün farklı JLPT seviyeleri için ayrı havuz oluşturabilir

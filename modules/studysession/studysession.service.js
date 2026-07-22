@@ -1,4 +1,5 @@
 const StudySession = require('../../models/StudySession');
+const DailyWordPool = require('../../models/DailyWordPool');
 const AppError = require('../../utils/AppError');
 const StreakService = require('../streak/streak.service');
 const { startOfTodayForUser } = require('../../utils/date.util');
@@ -35,17 +36,16 @@ const StudySessionService = {
     // fromEmpty: ertelenmiş ("Şimdilik Geç") kelimenin günün ilk gerçek cevabı —
     // kelime totalWords'e empty olarak zaten sayılmıştı; sayaç devredilir
     // (emptyCount--, sonuç sayacı++), toplam değişmez
-    async updateSession(userId, result, { fromEmpty = false } = {}) {
-        const today = await startOfTodayForUser(userId);
-
-        // isCompleted filtresi YOK: kullanıcı oturumu bitirdikten sonra ertelenmiş
-        // kelimeyi cevaplarsa düzeltme yine günün kaydına işlenir
-        const session = await StudySession.findOne({
-            user: userId,
-            date: { $gte: today }
-        });
-
-        if (!session) throw new AppError('No active session found', 404);
+    //
+    // Session YOKSA artık 404 atmak yerine startSession ile açılır (bul-veya-
+    // yeniden-aç aynı mantık). Eskiden burada "session yoksa sessizce geç" diye
+    // yutuluyordu (submitAnswer'da try/catch) — istemci /sessions/start'ı geç
+    // çağırırsa ya da hiç çağırmazsa o cevaplar UserWord'e yazılıp günün
+    // sayaçlarına HİÇ yansımıyordu, geri telafisi de yoktu ("sayılar bazen
+    // tutmuyor" bug'ının olası kaynaklarından biri). Artık submitAnswer'ın
+    // session sırasına bağımlılığı yok.
+    async updateSession(userId, result, { fromEmpty = false, jlptLevel } = {}) {
+        const session = await this.startSession(userId, jlptLevel);
 
         if (fromEmpty) {
             session.emptyCount = Math.max(0, session.emptyCount - 1);
@@ -70,20 +70,35 @@ const StudySessionService = {
 
         if (!session) throw new AppError('No active session found', 404);
 
-        session.isCompleted = true;
-        session.completedAt = new Date();
-        session.duration = Math.round(
-            (session.completedAt - session.date) / 60000
-        );
+        // İdempotent: zaten tamamlanmışsa completedAt/duration'ı yeniden
+        // hesaplamadan (her tıklamada büyümesin) ve tekrar session_completed
+        // event'i loglamadan (analytics'te sahte tekrar kayıt olmasın) aynı
+        // özeti döner — istemci "Oturumu Bitir"e birden çok kez basabiliyor.
+        if (!session.isCompleted) {
+            session.isCompleted = true;
+            session.completedAt = new Date();
+            session.duration = Math.round(
+                (session.completedAt - session.date) / 60000
+            );
 
-        await session.save();
+            await session.save();
 
-        logEvent(userId, 'session_completed', {
-            totalWords: session.totalWords,
-            correctCount: session.correctCount,
-            wrongCount: session.wrongCount,
-            duration: session.duration
-        });
+            logEvent(userId, 'session_completed', {
+                totalWords: session.totalWords,
+                correctCount: session.correctCount,
+                wrongCount: session.wrongCount,
+                duration: session.duration
+            });
+
+            // Günün havuz(lar)ını "tur bitti" olarak işaretle — bir sonraki
+            // /userwords/today çağrısı taze bir set üretir (bkz. DailyWordPool.
+            // roundClosedAt yorumu: StudySession.isCompleted KULLANILMAZ, çünkü
+            // /sessions/start onu hemen sıfırlıyor).
+            await DailyWordPool.updateMany(
+                { user: userId, date: { $gte: today } },
+                { $set: { roundClosedAt: new Date() } }
+            );
+        }
 
         // Bitiş ekranındaki "Accuracy %" hazır gelsin — istemci hesaplamasın
         const accuracy = session.totalWords > 0

@@ -49,24 +49,24 @@ const WordService = {
         return words;
     },
 
-    async createWord(data) {
-        const word = await Word.create(data);
-        return word;
-    },
+    // async createWord(data) {
+    //     const word = await Word.create(data);
+    //     return word;
+    // },
 
-    async updateWord(id, data) {
-        const word = await Word.findByIdAndUpdate(id, data, {
-            new: true,
-            runValidators: true
-        });
-        if (!word) throw new AppError('Word not found', 404);
-        return word;
-    },
+    // async updateWord(id, data) {
+    //     const word = await Word.findByIdAndUpdate(id, data, {
+    //         new: true,
+    //         runValidators: true
+    //     });
+    //     if (!word) throw new AppError('Word not found', 404);
+    //     return word;
+    // },
 
-    async deleteWord(id) {
-        const word = await Word.findByIdAndDelete(id);
-        if (!word) throw new AppError('Word not found', 404);
-    }
+    // async deleteWord(id) {
+    //     const word = await Word.findByIdAndDelete(id);
+    //     if (!word) throw new AppError('Word not found', 404);
+    // }
 };
 
 module.exports = WordService;
