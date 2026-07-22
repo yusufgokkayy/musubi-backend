@@ -1,0 +1,7557 @@
+[
+  {
+    "order": 1,
+    "word": "私",
+    "kana": "わたし",
+    "type": "zamir",
+    "meaningTr": "ben",
+    "meaningEn": "I, me",
+    "exampleJp": "**私**は毎朝七時に起きます。",
+    "exampleTr": "Ben her sabah yedide kalkarım.",
+    "meaningTrAccepted": [
+      "ben"
+    ],
+    "meaningEnAccepted": [
+      "I",
+      "me"
+    ]
+  },
+  {
+    "order": 2,
+    "word": "あなた",
+    "kana": "あなた",
+    "type": "zamir",
+    "meaningTr": "sen, siz",
+    "meaningEn": "you",
+    "exampleJp": "**あなた**の好きな食べ物は何ですか。",
+    "exampleTr": "Senin sevdiğin yemek ne?",
+    "meaningTrAccepted": [
+      "sen",
+      "siz"
+    ],
+    "meaningEnAccepted": [
+      "you"
+    ]
+  },
+  {
+    "order": 3,
+    "word": "これ",
+    "kana": "これ",
+    "type": "zamir",
+    "meaningTr": "bu",
+    "meaningEn": "this (thing)",
+    "exampleJp": "**これ**は母からもらった時計です。",
+    "exampleTr": "Bu, annemden aldığım saat.",
+    "meaningTrAccepted": [
+      "bu"
+    ],
+    "meaningEnAccepted": [
+      "this"
+    ]
+  },
+  {
+    "order": 4,
+    "word": "それ",
+    "kana": "それ",
+    "type": "zamir",
+    "meaningTr": "şu",
+    "meaningEn": "that (thing)",
+    "exampleJp": "**それ**はどこで買いましたか。",
+    "exampleTr": "Onu nereden aldın?",
+    "meaningTrAccepted": [
+      "şu"
+    ],
+    "meaningEnAccepted": [
+      "that"
+    ]
+  },
+  {
+    "order": 5,
+    "word": "あれ",
+    "kana": "あれ",
+    "type": "zamir",
+    "meaningTr": "o (uzaktaki)",
+    "meaningEn": "that (over there)",
+    "exampleJp": "**あれ**は新しい図書館ですよ。",
+    "exampleTr": "Şu, yeni kütüphane.",
+    "meaningTrAccepted": [
+      "o",
+      "şu",
+      "o şey"
+    ],
+    "meaningEnAccepted": [
+      "that"
+    ]
+  },
+  {
+    "order": 6,
+    "word": "ここ",
+    "kana": "ここ",
+    "type": "zamir",
+    "meaningTr": "burası",
+    "meaningEn": "here",
+    "exampleJp": "**ここ**に名前を書いてください。",
+    "exampleTr": "Buraya adınızı yazın lütfen.",
+    "meaningTrAccepted": [
+      "burası"
+    ],
+    "meaningEnAccepted": [
+      "here"
+    ]
+  },
+  {
+    "order": 7,
+    "word": "そこ",
+    "kana": "そこ",
+    "type": "zamir",
+    "meaningTr": "orası",
+    "meaningEn": "there",
+    "exampleJp": "**そこ**にかばんを置かないでください。",
+    "exampleTr": "Oraya çantanızı koymayın lütfen.",
+    "meaningTrAccepted": [
+      "orası"
+    ],
+    "meaningEnAccepted": [
+      "there"
+    ]
+  },
+  {
+    "order": 8,
+    "word": "この",
+    "kana": "この",
+    "type": "bağlaşık sıfat",
+    "meaningTr": "bu (isimle)",
+    "meaningEn": "this ~",
+    "exampleJp": "**この**店のパンはとてもおいしいです。",
+    "exampleTr": "Bu dükkânın ekmeği çok lezzetli.",
+    "meaningTrAccepted": [
+      "bu"
+    ],
+    "meaningEnAccepted": [
+      "this ~"
+    ]
+  },
+  {
+    "order": 9,
+    "word": "その",
+    "kana": "その",
+    "type": "bağlaşık sıfat",
+    "meaningTr": "şu (isimle)",
+    "meaningEn": "that ~",
+    "exampleJp": "**その**話はもう聞きました。",
+    "exampleTr": "O hikâyeyi zaten dinledim.",
+    "meaningTrAccepted": [
+      "şu"
+    ],
+    "meaningEnAccepted": [
+      "that ~"
+    ]
+  },
+  {
+    "order": 10,
+    "word": "あの",
+    "kana": "あの",
+    "type": "bağlaşık sıfat",
+    "meaningTr": "o (isimle)",
+    "meaningEn": "that ~ (over there)",
+    "exampleJp": "**あの**建物は何ですか。",
+    "exampleTr": "Şu bina nedir?",
+    "meaningTrAccepted": [
+      "o",
+      "şu"
+    ],
+    "meaningEnAccepted": [
+      "that ~"
+    ]
+  },
+  {
+    "order": 11,
+    "word": "何",
+    "kana": "なに",
+    "type": "zamir",
+    "meaningTr": "ne",
+    "meaningEn": "what",
+    "exampleJp": "週末は**何**をしますか。",
+    "exampleTr": "Hafta sonu ne yapacaksın?",
+    "meaningTrAccepted": [
+      "ne"
+    ],
+    "meaningEnAccepted": [
+      "what"
+    ]
+  },
+  {
+    "order": 12,
+    "word": "誰",
+    "kana": "だれ",
+    "type": "zamir",
+    "meaningTr": "kim",
+    "meaningEn": "who",
+    "exampleJp": "この傘は**誰**のですか。",
+    "exampleTr": "Bu şemsiye kimin?",
+    "meaningTrAccepted": [
+      "kim"
+    ],
+    "meaningEnAccepted": [
+      "who"
+    ]
+  },
+  {
+    "order": 13,
+    "word": "どこ",
+    "kana": "どこ",
+    "type": "zamir",
+    "meaningTr": "nerede, neresi",
+    "meaningEn": "where",
+    "exampleJp": "トイレは**どこ**にありますか。",
+    "exampleTr": "Tuvalet nerede?",
+    "meaningTrAccepted": [
+      "nerede",
+      "neresi"
+    ],
+    "meaningEnAccepted": [
+      "where"
+    ]
+  },
+  {
+    "order": 14,
+    "word": "いつ",
+    "kana": "いつ",
+    "type": "zarf",
+    "meaningTr": "ne zaman",
+    "meaningEn": "when",
+    "exampleJp": "日本には**いつ**来ましたか。",
+    "exampleTr": "Japonya'ya ne zaman geldin?",
+    "meaningTrAccepted": [
+      "ne zaman"
+    ],
+    "meaningEnAccepted": [
+      "when"
+    ]
+  },
+  {
+    "order": 15,
+    "word": "人",
+    "kana": "ひと",
+    "type": "isim",
+    "meaningTr": "insan, kişi",
+    "meaningEn": "person",
+    "exampleJp": "駅の前に**人**がたくさんいます。",
+    "exampleTr": "İstasyonun önünde bir sürü insan var.",
+    "meaningTrAccepted": [
+      "insan",
+      "kişi"
+    ],
+    "meaningEnAccepted": [
+      "person"
+    ]
+  },
+  {
+    "order": 16,
+    "word": "日本",
+    "kana": "にほん",
+    "type": "isim",
+    "meaningTr": "Japonya",
+    "meaningEn": "Japan",
+    "exampleJp": "**日本**の夏はとても暑いです。",
+    "exampleTr": "Japonya'nın yazı çok sıcak.",
+    "meaningTrAccepted": [
+      "Japonya"
+    ],
+    "meaningEnAccepted": [
+      "Japan"
+    ]
+  },
+  {
+    "order": 17,
+    "word": "土",
+    "kana": "つち",
+    "type": "isim",
+    "meaningTr": "toprak",
+    "meaningEn": "soil, earth",
+    "exampleJp": "鉢に**土**を入れました。",
+    "exampleTr": "Saksıya toprak koydum.",
+    "meaningTrAccepted": [
+      "toprak"
+    ],
+    "meaningEnAccepted": [
+      "soil",
+      "earth"
+    ]
+  },
+  {
+    "order": 18,
+    "word": "水",
+    "kana": "みず",
+    "type": "isim",
+    "meaningTr": "su",
+    "meaningEn": "water",
+    "exampleJp": "暑いから、**水**をたくさん飲んでください。",
+    "exampleTr": "Hava sıcak, bol su için.",
+    "meaningTrAccepted": [
+      "su"
+    ],
+    "meaningEnAccepted": [
+      "water"
+    ]
+  },
+  {
+    "order": 19,
+    "word": "火",
+    "kana": "ひ",
+    "type": "isim",
+    "meaningTr": "ateş",
+    "meaningEn": "fire",
+    "exampleJp": "料理の後、**火**を消してください。",
+    "exampleTr": "Yemekten sonra ocağı kapatın lütfen.",
+    "meaningTrAccepted": [
+      "ateş"
+    ],
+    "meaningEnAccepted": [
+      "fire"
+    ]
+  },
+  {
+    "order": 20,
+    "word": "家",
+    "kana": "いえ",
+    "type": "isim",
+    "meaningTr": "ev",
+    "meaningEn": "house, home",
+    "exampleJp": "私の**家**は駅から歩いて十分です。",
+    "exampleTr": "Evim istasyondan yürüyerek on dakika.",
+    "meaningTrAccepted": [
+      "ev"
+    ],
+    "meaningEnAccepted": [
+      "house",
+      "home"
+    ]
+  },
+  {
+    "order": 21,
+    "word": "車",
+    "kana": "くるま",
+    "type": "isim",
+    "meaningTr": "araba",
+    "meaningEn": "car",
+    "exampleJp": "父は毎日**車**で会社へ行きます。",
+    "exampleTr": "Babam her gün işe arabayla gider.",
+    "meaningTrAccepted": [
+      "araba"
+    ],
+    "meaningEnAccepted": [
+      "car"
+    ]
+  },
+  {
+    "order": 22,
+    "word": "学校",
+    "kana": "がっこう",
+    "type": "isim",
+    "meaningTr": "okul",
+    "meaningEn": "school",
+    "exampleJp": "**学校**は八時半に始まります。",
+    "exampleTr": "Okul sekiz buçukta başlıyor.",
+    "meaningTrAccepted": [
+      "okul"
+    ],
+    "meaningEnAccepted": [
+      "school"
+    ]
+  },
+  {
+    "order": 23,
+    "word": "先生",
+    "kana": "せんせい",
+    "type": "isim",
+    "meaningTr": "öğretmen, hoca",
+    "meaningEn": "teacher",
+    "exampleJp": "分からない時は**先生**に聞きます。",
+    "exampleTr": "Anlamadığım zaman öğretmene sorarım.",
+    "meaningTrAccepted": [
+      "öğretmen",
+      "hoca"
+    ],
+    "meaningEnAccepted": [
+      "teacher"
+    ]
+  },
+  {
+    "order": 24,
+    "word": "友達",
+    "kana": "ともだち",
+    "type": "isim",
+    "meaningTr": "arkadaş",
+    "meaningEn": "friend",
+    "exampleJp": "週末、**友達**と映画を見に行きます。",
+    "exampleTr": "Hafta sonu arkadaşımla film izlemeye gideceğim.",
+    "meaningTrAccepted": [
+      "arkadaş"
+    ],
+    "meaningEnAccepted": [
+      "friend"
+    ]
+  },
+  {
+    "order": 25,
+    "word": "母",
+    "kana": "はは",
+    "type": "isim",
+    "meaningTr": "anne",
+    "meaningEn": "(my) mother",
+    "exampleJp": "**母**は料理がとても上手です。",
+    "exampleTr": "Annem yemek yapmakta çok iyidir.",
+    "meaningTrAccepted": [
+      "anne"
+    ],
+    "meaningEnAccepted": [
+      "mother"
+    ]
+  },
+  {
+    "order": 26,
+    "word": "父",
+    "kana": "ちち",
+    "type": "isim",
+    "meaningTr": "baba",
+    "meaningEn": "(my) father",
+    "exampleJp": "**父**は毎晩ニュースを見ます。",
+    "exampleTr": "Babam her akşam haber izler.",
+    "meaningTrAccepted": [
+      "baba"
+    ],
+    "meaningEnAccepted": [
+      "father"
+    ]
+  },
+  {
+    "order": 27,
+    "word": "子供",
+    "kana": "こども",
+    "type": "isim",
+    "meaningTr": "çocuk",
+    "meaningEn": "child",
+    "exampleJp": "公園で**子供**たちが遊んでいます。",
+    "exampleTr": "Parkta çocuklar oynuyor.",
+    "meaningTrAccepted": [
+      "çocuk"
+    ],
+    "meaningEnAccepted": [
+      "child"
+    ]
+  },
+  {
+    "order": 28,
+    "word": "目",
+    "kana": "め",
+    "type": "isim",
+    "meaningTr": "göz",
+    "meaningEn": "eye",
+    "exampleJp": "彼女は**目**がとてもきれいです。",
+    "exampleTr": "Onun gözleri çok güzel.",
+    "meaningTrAccepted": [
+      "göz"
+    ],
+    "meaningEnAccepted": [
+      "eye"
+    ]
+  },
+  {
+    "order": 29,
+    "word": "手",
+    "kana": "て",
+    "type": "isim",
+    "meaningTr": "el",
+    "meaningEn": "hand",
+    "exampleJp": "食べる前に**手**を洗いましょう。",
+    "exampleTr": "Yemekten önce ellerimizi yıkayalım.",
+    "meaningTrAccepted": [
+      "el"
+    ],
+    "meaningEnAccepted": [
+      "hand"
+    ]
+  },
+  {
+    "order": 30,
+    "word": "口",
+    "kana": "くち",
+    "type": "isim",
+    "meaningTr": "ağız",
+    "meaningEn": "mouth",
+    "exampleJp": "**口**を大きく開けてください。",
+    "exampleTr": "Ağzınızı kocaman açın lütfen.",
+    "meaningTrAccepted": [
+      "ağız"
+    ],
+    "meaningEnAccepted": [
+      "mouth"
+    ]
+  },
+  {
+    "order": 31,
+    "word": "今日",
+    "kana": "きょう",
+    "type": "isim",
+    "meaningTr": "bugün",
+    "meaningEn": "today",
+    "exampleJp": "**今日**はいい天気ですね。",
+    "exampleTr": "Bugün hava çok güzel, değil mi?",
+    "meaningTrAccepted": [
+      "bugün"
+    ],
+    "meaningEnAccepted": [
+      "today"
+    ]
+  },
+  {
+    "order": 32,
+    "word": "明日",
+    "kana": "あした",
+    "type": "isim",
+    "meaningTr": "yarın",
+    "meaningEn": "tomorrow",
+    "exampleJp": "**明日**は朝から雨が降るそうです。",
+    "exampleTr": "Yarın sabahtan itibaren yağmur yağacakmış.",
+    "meaningTrAccepted": [
+      "yarın"
+    ],
+    "meaningEnAccepted": [
+      "tomorrow"
+    ]
+  },
+  {
+    "order": 33,
+    "word": "昨日",
+    "kana": "きのう",
+    "type": "isim",
+    "meaningTr": "dün",
+    "meaningEn": "yesterday",
+    "exampleJp": "**昨日**は友達とテニスをしました。",
+    "exampleTr": "Dün arkadaşımla tenis oynadım.",
+    "meaningTrAccepted": [
+      "dün"
+    ],
+    "meaningEnAccepted": [
+      "yesterday"
+    ]
+  },
+  {
+    "order": 34,
+    "word": "今",
+    "kana": "いま",
+    "type": "isim",
+    "meaningTr": "şimdi",
+    "meaningEn": "now",
+    "exampleJp": "**今**、ちょっと忙しいです。",
+    "exampleTr": "Şu an biraz meşgulüm.",
+    "meaningTrAccepted": [
+      "şimdi"
+    ],
+    "meaningEnAccepted": [
+      "now"
+    ]
+  },
+  {
+    "order": 35,
+    "word": "朝",
+    "kana": "あさ",
+    "type": "isim",
+    "meaningTr": "sabah",
+    "meaningEn": "morning",
+    "exampleJp": "**朝**はいつもパンを食べます。",
+    "exampleTr": "Sabahları hep ekmek yerim.",
+    "meaningTrAccepted": [
+      "sabah"
+    ],
+    "meaningEnAccepted": [
+      "morning"
+    ]
+  },
+  {
+    "order": 36,
+    "word": "夜",
+    "kana": "よる",
+    "type": "isim",
+    "meaningTr": "gece",
+    "meaningEn": "night",
+    "exampleJp": "**夜**は静かな音楽を聞きます。",
+    "exampleTr": "Geceleri sakin müzik dinlerim.",
+    "meaningTrAccepted": [
+      "gece"
+    ],
+    "meaningEnAccepted": [
+      "night"
+    ]
+  },
+  {
+    "order": 37,
+    "word": "年",
+    "kana": "とし",
+    "type": "isim",
+    "meaningTr": "yıl, yaş",
+    "meaningEn": "year, age",
+    "exampleJp": "新しい**年**が始まりましたね。",
+    "exampleTr": "Yeni yıl başladı, değil mi?",
+    "meaningTrAccepted": [
+      "yıl",
+      "yaş"
+    ],
+    "meaningEnAccepted": [
+      "year",
+      "age"
+    ]
+  },
+  {
+    "order": 38,
+    "word": "時間",
+    "kana": "じかん",
+    "type": "isim",
+    "meaningTr": "zaman, saat",
+    "meaningEn": "time, hour",
+    "exampleJp": "すみません、今**時間**がありません。",
+    "exampleTr": "Kusura bakma, şu an vaktim yok.",
+    "meaningTrAccepted": [
+      "zaman",
+      "saat"
+    ],
+    "meaningEnAccepted": [
+      "time",
+      "hour"
+    ]
+  },
+  {
+    "order": 39,
+    "word": "する",
+    "kana": "する",
+    "type": "fiil",
+    "meaningTr": "yapmak, etmek",
+    "meaningEn": "to do",
+    "exampleJp": "日曜日は何も**しません**でした。",
+    "exampleTr": "Pazar günü hiçbir şey yapmadım.",
+    "meaningTrAccepted": [
+      "yapmak",
+      "etmek"
+    ],
+    "meaningEnAccepted": [
+      "to do",
+      "do"
+    ]
+  },
+  {
+    "order": 40,
+    "word": "いる",
+    "kana": "いる",
+    "type": "fiil",
+    "meaningTr": "olmak, bulunmak (canlılar)",
+    "meaningEn": "to be, to exist (living things)",
+    "exampleJp": "教室に学生が三人**い**ます。",
+    "exampleTr": "Sınıfta üç öğrenci var.",
+    "meaningTrAccepted": [
+      "olmak",
+      "bulunmak"
+    ],
+    "meaningEnAccepted": [
+      "to be",
+      "to exist",
+      "be",
+      "exist"
+    ]
+  },
+  {
+    "order": 41,
+    "word": "ある",
+    "kana": "ある",
+    "type": "fiil",
+    "meaningTr": "olmak, bulunmak (cansızlar)",
+    "meaningEn": "to be, to exist (things)",
+    "exampleJp": "駅の近くに銀行が**あ**ります。",
+    "exampleTr": "İstasyonun yakınında banka var.",
+    "meaningTrAccepted": [
+      "olmak",
+      "bulunmak"
+    ],
+    "meaningEnAccepted": [
+      "to be",
+      "to exist",
+      "be",
+      "exist"
+    ]
+  },
+  {
+    "order": 42,
+    "word": "行く",
+    "kana": "いく",
+    "type": "fiil",
+    "meaningTr": "gitmek",
+    "meaningEn": "to go",
+    "exampleJp": "夏休みに沖縄へ**行**きたいです。",
+    "exampleTr": "Yaz tatilinde Okinawa'ya gitmek istiyorum.",
+    "meaningTrAccepted": [
+      "gitmek"
+    ],
+    "meaningEnAccepted": [
+      "to go",
+      "go"
+    ]
+  },
+  {
+    "order": 43,
+    "word": "来る",
+    "kana": "くる",
+    "type": "fiil",
+    "meaningTr": "gelmek",
+    "meaningEn": "to come",
+    "exampleJp": "友達がうちに遊びに**来**ます。",
+    "exampleTr": "Arkadaşım bize oynamaya geliyor.",
+    "meaningTrAccepted": [
+      "gelmek"
+    ],
+    "meaningEnAccepted": [
+      "to come",
+      "come"
+    ]
+  },
+  {
+    "order": 44,
+    "word": "帰る",
+    "kana": "かえる",
+    "type": "fiil",
+    "meaningTr": "dönmek (eve)",
+    "meaningEn": "to return, to go home",
+    "exampleJp": "今日は早く家に**帰**りたいです。",
+    "exampleTr": "Bugün eve erken dönmek istiyorum.",
+    "meaningTrAccepted": [
+      "dönmek"
+    ],
+    "meaningEnAccepted": [
+      "to return",
+      "to go home",
+      "return",
+      "go home"
+    ]
+  },
+  {
+    "order": 45,
+    "word": "食べる",
+    "kana": "たべる",
+    "type": "fiil",
+    "meaningTr": "yemek yemek",
+    "meaningEn": "to eat",
+    "exampleJp": "朝ご飯をゆっくり**食べ**ました。",
+    "exampleTr": "Kahvaltıyı ağır ağır yedim.",
+    "meaningTrAccepted": [
+      "yemek yemek"
+    ],
+    "meaningEnAccepted": [
+      "to eat",
+      "eat"
+    ]
+  },
+  {
+    "order": 46,
+    "word": "飲む",
+    "kana": "のむ",
+    "type": "fiil",
+    "meaningTr": "içmek",
+    "meaningEn": "to drink",
+    "exampleJp": "毎朝コーヒーを一杯**飲**みます。",
+    "exampleTr": "Her sabah bir fincan kahve içerim.",
+    "meaningTrAccepted": [
+      "içmek"
+    ],
+    "meaningEnAccepted": [
+      "to drink",
+      "drink"
+    ]
+  },
+  {
+    "order": 47,
+    "word": "見る",
+    "kana": "みる",
+    "type": "fiil",
+    "meaningTr": "görmek, bakmak",
+    "meaningEn": "to see, to watch",
+    "exampleJp": "昨日、面白い映画を**見**ました。",
+    "exampleTr": "Dün ilginç bir film izledim.",
+    "meaningTrAccepted": [
+      "görmek",
+      "bakmak"
+    ],
+    "meaningEnAccepted": [
+      "to see",
+      "to watch",
+      "see",
+      "watch"
+    ]
+  },
+  {
+    "order": 48,
+    "word": "聞く",
+    "kana": "きく",
+    "type": "fiil",
+    "meaningTr": "duymak, dinlemek; sormak",
+    "meaningEn": "to listen, to ask",
+    "exampleJp": "電車の中で音楽を**聞**きます。",
+    "exampleTr": "Trende müzik dinlerim.",
+    "meaningTrAccepted": [
+      "duymak",
+      "dinlemek",
+      "sormak"
+    ],
+    "meaningEnAccepted": [
+      "to listen",
+      "to ask",
+      "listen",
+      "ask"
+    ]
+  },
+  {
+    "order": 49,
+    "word": "話す",
+    "kana": "はなす",
+    "type": "fiil",
+    "meaningTr": "konuşmak",
+    "meaningEn": "to speak, to talk",
+    "exampleJp": "先生とゆっくり**話**しました。",
+    "exampleTr": "Öğretmenle uzun uzun konuştum.",
+    "meaningTrAccepted": [
+      "konuşmak"
+    ],
+    "meaningEnAccepted": [
+      "to speak",
+      "to talk",
+      "speak",
+      "talk"
+    ]
+  },
+  {
+    "order": 50,
+    "word": "読む",
+    "kana": "よむ",
+    "type": "fiil",
+    "meaningTr": "okumak",
+    "meaningEn": "to read",
+    "exampleJp": "毎晩、寝る前に新聞を**読**みます。",
+    "exampleTr": "Her akşam yatmadan önce gazete okurum.",
+    "meaningTrAccepted": [
+      "okumak"
+    ],
+    "meaningEnAccepted": [
+      "to read",
+      "read"
+    ]
+  },
+  {
+    "order": 51,
+    "word": "書く",
+    "kana": "かく",
+    "type": "fiil",
+    "meaningTr": "yazmak",
+    "meaningEn": "to write",
+    "exampleJp": "友達に長い手紙を**書**きました。",
+    "exampleTr": "Arkadaşıma uzun bir mektup yazdım.",
+    "meaningTrAccepted": [
+      "yazmak"
+    ],
+    "meaningEnAccepted": [
+      "to write",
+      "write"
+    ]
+  },
+  {
+    "order": 52,
+    "word": "買う",
+    "kana": "かう",
+    "type": "fiil",
+    "meaningTr": "satın almak",
+    "meaningEn": "to buy",
+    "exampleJp": "スーパーで野菜と肉を**買**いました。",
+    "exampleTr": "Marketten sebze ve et aldım.",
+    "meaningTrAccepted": [
+      "satın almak"
+    ],
+    "meaningEnAccepted": [
+      "to buy",
+      "buy"
+    ]
+  },
+  {
+    "order": 53,
+    "word": "待つ",
+    "kana": "まつ",
+    "type": "fiil",
+    "meaningTr": "beklemek",
+    "meaningEn": "to wait",
+    "exampleJp": "駅の前で三十分**待**ちました。",
+    "exampleTr": "İstasyonun önünde yarım saat bekledim.",
+    "meaningTrAccepted": [
+      "beklemek"
+    ],
+    "meaningEnAccepted": [
+      "to wait",
+      "wait"
+    ]
+  },
+  {
+    "order": 54,
+    "word": "会う",
+    "kana": "あう",
+    "type": "fiil",
+    "meaningTr": "buluşmak, karşılaşmak",
+    "meaningEn": "to meet",
+    "exampleJp": "明日、大学の友達に**会**います。",
+    "exampleTr": "Yarın üniversiteden arkadaşımla buluşacağım.",
+    "meaningTrAccepted": [
+      "buluşmak",
+      "karşılaşmak"
+    ],
+    "meaningEnAccepted": [
+      "to meet",
+      "meet"
+    ]
+  },
+  {
+    "order": 55,
+    "word": "使う",
+    "kana": "つかう",
+    "type": "fiil",
+    "meaningTr": "kullanmak",
+    "meaningEn": "to use",
+    "exampleJp": "この漢字はよく**使**いますか。",
+    "exampleTr": "Bu kanji sık kullanılıyor mu?",
+    "meaningTrAccepted": [
+      "kullanmak"
+    ],
+    "meaningEnAccepted": [
+      "to use",
+      "use"
+    ]
+  },
+  {
+    "order": 56,
+    "word": "作る",
+    "kana": "つくる",
+    "type": "fiil",
+    "meaningTr": "yapmak, üretmek",
+    "meaningEn": "to make",
+    "exampleJp": "週末、家族にカレーを**作**りました。",
+    "exampleTr": "Hafta sonu aileme köri yaptım.",
+    "meaningTrAccepted": [
+      "yapmak",
+      "üretmek"
+    ],
+    "meaningEnAccepted": [
+      "to make",
+      "make"
+    ]
+  },
+  {
+    "order": 57,
+    "word": "知る",
+    "kana": "しる",
+    "type": "fiil",
+    "meaningTr": "bilmek, tanımak",
+    "meaningEn": "to know",
+    "exampleJp": "あの人の名前を**知**っていますか。",
+    "exampleTr": "O kişinin adını biliyor musun?",
+    "meaningTrAccepted": [
+      "bilmek",
+      "tanımak"
+    ],
+    "meaningEnAccepted": [
+      "to know",
+      "know"
+    ]
+  },
+  {
+    "order": 58,
+    "word": "思う",
+    "kana": "おもう",
+    "type": "fiil",
+    "meaningTr": "düşünmek, sanmak",
+    "meaningEn": "to think",
+    "exampleJp": "この映画は面白いと**思**います。",
+    "exampleTr": "Bence bu film ilginç.",
+    "meaningTrAccepted": [
+      "düşünmek",
+      "sanmak"
+    ],
+    "meaningEnAccepted": [
+      "to think",
+      "think"
+    ]
+  },
+  {
+    "order": 59,
+    "word": "言う",
+    "kana": "いう",
+    "type": "fiil",
+    "meaningTr": "demek, söylemek",
+    "meaningEn": "to say",
+    "exampleJp": "先生はもう一度**言**ってくれました。",
+    "exampleTr": "Öğretmen bir kez daha söyledi.",
+    "meaningTrAccepted": [
+      "demek",
+      "söylemek"
+    ],
+    "meaningEnAccepted": [
+      "to say",
+      "say"
+    ]
+  },
+  {
+    "order": 60,
+    "word": "分かる",
+    "kana": "わかる",
+    "type": "fiil",
+    "meaningTr": "anlamak",
+    "meaningEn": "to understand",
+    "exampleJp": "この問題の意味が**分か**りません。",
+    "exampleTr": "Bu sorunun anlamını anlamıyorum.",
+    "meaningTrAccepted": [
+      "anlamak"
+    ],
+    "meaningEnAccepted": [
+      "to understand",
+      "understand"
+    ]
+  },
+  {
+    "order": 61,
+    "word": "起きる",
+    "kana": "おきる",
+    "type": "fiil",
+    "meaningTr": "kalkmak, uyanmak",
+    "meaningEn": "to get up, to wake up",
+    "exampleJp": "今朝は六時に**起き**ました。",
+    "exampleTr": "Bu sabah altıda kalktım.",
+    "meaningTrAccepted": [
+      "kalkmak",
+      "uyanmak"
+    ],
+    "meaningEnAccepted": [
+      "to get up",
+      "to wake up",
+      "get up",
+      "wake up"
+    ]
+  },
+  {
+    "order": 62,
+    "word": "寝る",
+    "kana": "ねる",
+    "type": "fiil",
+    "meaningTr": "uyumak, yatmak",
+    "meaningEn": "to sleep, to go to bed",
+    "exampleJp": "昨日は十二時ごろ**寝**ました。",
+    "exampleTr": "Dün gece on iki gibi yattım.",
+    "meaningTrAccepted": [
+      "uyumak",
+      "yatmak"
+    ],
+    "meaningEnAccepted": [
+      "to sleep",
+      "to go to bed",
+      "sleep",
+      "go to bed"
+    ]
+  },
+  {
+    "order": 63,
+    "word": "働く",
+    "kana": "はたらく",
+    "type": "fiil",
+    "meaningTr": "çalışmak",
+    "meaningEn": "to work",
+    "exampleJp": "姉は病院で**働**いています。",
+    "exampleTr": "Ablam hastanede çalışıyor.",
+    "meaningTrAccepted": [
+      "çalışmak"
+    ],
+    "meaningEnAccepted": [
+      "to work",
+      "work"
+    ]
+  },
+  {
+    "order": 64,
+    "word": "休む",
+    "kana": "やすむ",
+    "type": "fiil",
+    "meaningTr": "dinlenmek, izin yapmak",
+    "meaningEn": "to rest, to take a day off",
+    "exampleJp": "今日は風邪で学校を**休**みました。",
+    "exampleTr": "Bugün soğuk algınlığından okula gitmedim.",
+    "meaningTrAccepted": [
+      "dinlenmek",
+      "izin yapmak"
+    ],
+    "meaningEnAccepted": [
+      "to rest",
+      "to take a day off",
+      "rest",
+      "take a day off"
+    ]
+  },
+  {
+    "order": 65,
+    "word": "勉強",
+    "kana": "べんきょう",
+    "type": "isim",
+    "meaningTr": "ders çalışma",
+    "meaningEn": "study",
+    "exampleJp": "毎日二時間日本語を**勉強**します。",
+    "exampleTr": "Her gün iki saat Japonca çalışırım.",
+    "meaningTrAccepted": [
+      "ders çalışma"
+    ],
+    "meaningEnAccepted": [
+      "study"
+    ]
+  },
+  {
+    "order": 66,
+    "word": "大きい",
+    "kana": "おおきい",
+    "type": "i-sıfat",
+    "meaningTr": "büyük",
+    "meaningEn": "big, large",
+    "exampleJp": "もっと**大きい**声で言ってください。",
+    "exampleTr": "Daha yüksek sesle söyler misiniz?",
+    "meaningTrAccepted": [
+      "büyük"
+    ],
+    "meaningEnAccepted": [
+      "big",
+      "large"
+    ]
+  },
+  {
+    "order": 67,
+    "word": "小さい",
+    "kana": "ちいさい",
+    "type": "i-sıfat",
+    "meaningTr": "küçük",
+    "meaningEn": "small, little",
+    "exampleJp": "この靴はちょっと**小さい**です。",
+    "exampleTr": "Bu ayakkabı biraz küçük.",
+    "meaningTrAccepted": [
+      "küçük"
+    ],
+    "meaningEnAccepted": [
+      "small",
+      "little"
+    ]
+  },
+  {
+    "order": 68,
+    "word": "新しい",
+    "kana": "あたらしい",
+    "type": "i-sıfat",
+    "meaningTr": "yeni",
+    "meaningEn": "new",
+    "exampleJp": "駅の前に**新しい**カフェができました。",
+    "exampleTr": "İstasyonun önünde yeni bir kafe açıldı.",
+    "meaningTrAccepted": [
+      "yeni"
+    ],
+    "meaningEnAccepted": [
+      "new"
+    ]
+  },
+  {
+    "order": 69,
+    "word": "古い",
+    "kana": "ふるい",
+    "type": "i-sıfat",
+    "meaningTr": "eski",
+    "meaningEn": "old (things)",
+    "exampleJp": "この町には**古い**お寺があります。",
+    "exampleTr": "Bu şehirde eski bir tapınak var.",
+    "meaningTrAccepted": [
+      "eski"
+    ],
+    "meaningEnAccepted": [
+      "old"
+    ]
+  },
+  {
+    "order": 70,
+    "word": "高い",
+    "kana": "たかい",
+    "type": "i-sıfat",
+    "meaningTr": "yüksek; pahalı",
+    "meaningEn": "high, tall; expensive",
+    "exampleJp": "東京は家賃がとても**高い**です。",
+    "exampleTr": "Tokyo'da kiralar çok pahalı.",
+    "meaningTrAccepted": [
+      "yüksek",
+      "pahalı"
+    ],
+    "meaningEnAccepted": [
+      "high",
+      "tall",
+      "expensive"
+    ]
+  },
+  {
+    "order": 71,
+    "word": "安い",
+    "kana": "やすい",
+    "type": "i-sıfat",
+    "meaningTr": "ucuz",
+    "meaningEn": "cheap, inexpensive",
+    "exampleJp": "この店は**安**くておいしいです。",
+    "exampleTr": "Bu dükkân ucuz ve lezzetli.",
+    "meaningTrAccepted": [
+      "ucuz"
+    ],
+    "meaningEnAccepted": [
+      "cheap",
+      "inexpensive"
+    ]
+  },
+  {
+    "order": 72,
+    "word": "良い",
+    "kana": "いい",
+    "type": "i-sıfat",
+    "meaningTr": "iyi",
+    "meaningEn": "good",
+    "exampleJp": "散歩には**良い**天気ですね。",
+    "exampleTr": "Yürüyüş için güzel bir hava, değil mi?",
+    "meaningTrAccepted": [
+      "iyi"
+    ],
+    "meaningEnAccepted": [
+      "good"
+    ]
+  },
+  {
+    "order": 73,
+    "word": "悪い",
+    "kana": "わるい",
+    "type": "i-sıfat",
+    "meaningTr": "kötü",
+    "meaningEn": "bad",
+    "exampleJp": "今日は体の調子が**悪い**です。",
+    "exampleTr": "Bugün pek iyi hissetmiyorum.",
+    "meaningTrAccepted": [
+      "kötü"
+    ],
+    "meaningEnAccepted": [
+      "bad"
+    ]
+  },
+  {
+    "order": 74,
+    "word": "暑い",
+    "kana": "あつい",
+    "type": "i-sıfat",
+    "meaningTr": "sıcak (hava)",
+    "meaningEn": "hot (weather)",
+    "exampleJp": "今年の夏は本当に**暑い**ですね。",
+    "exampleTr": "Bu yaz gerçekten çok sıcak.",
+    "meaningTrAccepted": [
+      "sıcak"
+    ],
+    "meaningEnAccepted": [
+      "hot"
+    ]
+  },
+  {
+    "order": 75,
+    "word": "寒い",
+    "kana": "さむい",
+    "type": "i-sıfat",
+    "meaningTr": "soğuk (hava)",
+    "meaningEn": "cold (weather)",
+    "exampleJp": "朝は**寒い**から、コートを着てください。",
+    "exampleTr": "Sabahları soğuk, mont giyin.",
+    "meaningTrAccepted": [
+      "soğuk"
+    ],
+    "meaningEnAccepted": [
+      "cold"
+    ]
+  },
+  {
+    "order": 76,
+    "word": "多い",
+    "kana": "おおい",
+    "type": "i-sıfat",
+    "meaningTr": "çok, fazla",
+    "meaningEn": "many, a lot",
+    "exampleJp": "この大学は留学生が**多い**です。",
+    "exampleTr": "Bu üniversitede yabancı öğrenci çok.",
+    "meaningTrAccepted": [
+      "çok",
+      "fazla"
+    ],
+    "meaningEnAccepted": [
+      "many",
+      "a lot"
+    ]
+  },
+  {
+    "order": 77,
+    "word": "少ない",
+    "kana": "すくない",
+    "type": "i-sıfat",
+    "meaningTr": "az",
+    "meaningEn": "few, little",
+    "exampleJp": "日曜日は電車の人が**少ない**です。",
+    "exampleTr": "Pazar günleri trende insan az olur.",
+    "meaningTrAccepted": [
+      "az"
+    ],
+    "meaningEnAccepted": [
+      "few",
+      "little"
+    ]
+  },
+  {
+    "order": 78,
+    "word": "おいしい",
+    "kana": "おいしい",
+    "type": "i-sıfat",
+    "meaningTr": "lezzetli",
+    "meaningEn": "delicious",
+    "exampleJp": "母のカレーは世界一**おいしい**です。",
+    "exampleTr": "Annemin körisi dünyanın en lezzetlisi.",
+    "meaningTrAccepted": [
+      "lezzetli"
+    ],
+    "meaningEnAccepted": [
+      "delicious"
+    ]
+  },
+  {
+    "order": 79,
+    "word": "楽しい",
+    "kana": "たのしい",
+    "type": "i-sıfat",
+    "meaningTr": "eğlenceli, keyifli",
+    "meaningEn": "fun, enjoyable",
+    "exampleJp": "昨日のパーティーはとても**楽し**かったです。",
+    "exampleTr": "Dünkü parti çok eğlenceliydi.",
+    "meaningTrAccepted": [
+      "eğlenceli",
+      "keyifli"
+    ],
+    "meaningEnAccepted": [
+      "fun",
+      "enjoyable"
+    ]
+  },
+  {
+    "order": 80,
+    "word": "面白い",
+    "kana": "おもしろい",
+    "type": "i-sıfat",
+    "meaningTr": "ilginç, komik",
+    "meaningEn": "interesting, funny",
+    "exampleJp": "この本はとても**面白**かったです。",
+    "exampleTr": "Bu kitap çok ilginçti.",
+    "meaningTrAccepted": [
+      "ilginç",
+      "komik"
+    ],
+    "meaningEnAccepted": [
+      "interesting",
+      "funny"
+    ]
+  },
+  {
+    "order": 81,
+    "word": "一",
+    "kana": "いち",
+    "type": "isim",
+    "meaningTr": "bir",
+    "meaningEn": "one",
+    "exampleJp": "りんごを**一**つください。",
+    "exampleTr": "Bir elma verir misiniz?",
+    "meaningTrAccepted": [
+      "bir"
+    ],
+    "meaningEnAccepted": [
+      "one"
+    ]
+  },
+  {
+    "order": 82,
+    "word": "二",
+    "kana": "に",
+    "type": "isim",
+    "meaningTr": "iki",
+    "meaningEn": "two",
+    "exampleJp": "切符を**二**枚買いました。",
+    "exampleTr": "İki bilet aldım.",
+    "meaningTrAccepted": [
+      "iki"
+    ],
+    "meaningEnAccepted": [
+      "two"
+    ]
+  },
+  {
+    "order": 83,
+    "word": "三",
+    "kana": "さん",
+    "type": "isim",
+    "meaningTr": "üç",
+    "meaningEn": "three",
+    "exampleJp": "兄弟が**三**人います。",
+    "exampleTr": "Üç kardeşim var.",
+    "meaningTrAccepted": [
+      "üç"
+    ],
+    "meaningEnAccepted": [
+      "three"
+    ]
+  },
+  {
+    "order": 84,
+    "word": "四",
+    "kana": "よん",
+    "type": "isim",
+    "meaningTr": "dört",
+    "meaningEn": "four",
+    "exampleJp": "**四**時に駅で会いましょう。",
+    "exampleTr": "Dörtte istasyonda buluşalım.",
+    "meaningTrAccepted": [
+      "dört"
+    ],
+    "meaningEnAccepted": [
+      "four"
+    ]
+  },
+  {
+    "order": 85,
+    "word": "五",
+    "kana": "ご",
+    "type": "isim",
+    "meaningTr": "beş",
+    "meaningEn": "five",
+    "exampleJp": "授業は**五**分後に始まります。",
+    "exampleTr": "Ders beş dakika sonra başlıyor.",
+    "meaningTrAccepted": [
+      "beş"
+    ],
+    "meaningEnAccepted": [
+      "five"
+    ]
+  },
+  {
+    "order": 86,
+    "word": "六",
+    "kana": "ろく",
+    "type": "isim",
+    "meaningTr": "altı",
+    "meaningEn": "six",
+    "exampleJp": "毎朝**六**時に起きています。",
+    "exampleTr": "Her sabah altıda kalkıyorum.",
+    "meaningTrAccepted": [
+      "altı"
+    ],
+    "meaningEnAccepted": [
+      "six"
+    ]
+  },
+  {
+    "order": 87,
+    "word": "七",
+    "kana": "なな",
+    "type": "isim",
+    "meaningTr": "yedi",
+    "meaningEn": "seven",
+    "exampleJp": "店は**七**時に開きます。",
+    "exampleTr": "Dükkân yedide açılıyor.",
+    "meaningTrAccepted": [
+      "yedi"
+    ],
+    "meaningEnAccepted": [
+      "seven"
+    ]
+  },
+  {
+    "order": 88,
+    "word": "八",
+    "kana": "はち",
+    "type": "isim",
+    "meaningTr": "sekiz",
+    "meaningEn": "eight",
+    "exampleJp": "会議は**八**時からです。",
+    "exampleTr": "Toplantı sekizde başlıyor.",
+    "meaningTrAccepted": [
+      "sekiz"
+    ],
+    "meaningEnAccepted": [
+      "eight"
+    ]
+  },
+  {
+    "order": 89,
+    "word": "九",
+    "kana": "きゅう",
+    "type": "isim",
+    "meaningTr": "dokuz",
+    "meaningEn": "nine",
+    "exampleJp": "**九**月に日本へ行きます。",
+    "exampleTr": "Eylülde Japonya'ya gidiyorum.",
+    "meaningTrAccepted": [
+      "dokuz"
+    ],
+    "meaningEnAccepted": [
+      "nine"
+    ]
+  },
+  {
+    "order": 90,
+    "word": "十",
+    "kana": "じゅう",
+    "type": "isim",
+    "meaningTr": "on",
+    "meaningEn": "ten",
+    "exampleJp": "**十**分ぐらい待ってください。",
+    "exampleTr": "On dakika kadar bekleyin lütfen.",
+    "meaningTrAccepted": [
+      "on"
+    ],
+    "meaningEnAccepted": [
+      "ten"
+    ]
+  },
+  {
+    "order": 91,
+    "word": "円",
+    "kana": "えん",
+    "type": "isim",
+    "meaningTr": "yen (para birimi)",
+    "meaningEn": "yen",
+    "exampleJp": "このりんごは百**円**です。",
+    "exampleTr": "Bu elma yüz yen.",
+    "meaningTrAccepted": [
+      "yen"
+    ],
+    "meaningEnAccepted": [
+      "yen"
+    ]
+  },
+  {
+    "order": 92,
+    "word": "食べ物",
+    "kana": "たべもの",
+    "type": "isim",
+    "meaningTr": "yiyecek",
+    "meaningEn": "food",
+    "exampleJp": "日本の**食べ物**で何が一番好きですか。",
+    "exampleTr": "Japon yemeklerinden en çok hangisini seviyorsun?",
+    "meaningTrAccepted": [
+      "yiyecek"
+    ],
+    "meaningEnAccepted": [
+      "food"
+    ]
+  },
+  {
+    "order": 93,
+    "word": "お茶",
+    "kana": "おちゃ",
+    "type": "isim",
+    "meaningTr": "çay",
+    "meaningEn": "tea",
+    "exampleJp": "食事の後に**お茶**を飲みましょう。",
+    "exampleTr": "Yemekten sonra çay içelim.",
+    "meaningTrAccepted": [
+      "çay"
+    ],
+    "meaningEnAccepted": [
+      "tea"
+    ]
+  },
+  {
+    "order": 94,
+    "word": "ご飯",
+    "kana": "ごはん",
+    "type": "isim",
+    "meaningTr": "pilav, yemek",
+    "meaningEn": "cooked rice, meal",
+    "exampleJp": "もう**ご飯**を食べましたか。",
+    "exampleTr": "Yemek yedin mi?",
+    "meaningTrAccepted": [
+      "pilav",
+      "yemek"
+    ],
+    "meaningEnAccepted": [
+      "cooked rice",
+      "meal"
+    ]
+  },
+  {
+    "order": 95,
+    "word": "肉",
+    "kana": "にく",
+    "type": "isim",
+    "meaningTr": "et",
+    "meaningEn": "meat",
+    "exampleJp": "私は魚より**肉**のほうが好きです。",
+    "exampleTr": "Ben balıktan çok eti severim.",
+    "meaningTrAccepted": [
+      "et"
+    ],
+    "meaningEnAccepted": [
+      "meat"
+    ]
+  },
+  {
+    "order": 96,
+    "word": "魚",
+    "kana": "さかな",
+    "type": "isim",
+    "meaningTr": "balık",
+    "meaningEn": "fish",
+    "exampleJp": "晩ご飯に**魚**を食べました。",
+    "exampleTr": "Akşam yemeğinde balık yedim.",
+    "meaningTrAccepted": [
+      "balık"
+    ],
+    "meaningEnAccepted": [
+      "fish"
+    ]
+  },
+  {
+    "order": 97,
+    "word": "駅",
+    "kana": "えき",
+    "type": "isim",
+    "meaningTr": "istasyon",
+    "meaningEn": "station",
+    "exampleJp": "**駅**まで自転車で行きます。",
+    "exampleTr": "İstasyona bisikletle giderim.",
+    "meaningTrAccepted": [
+      "istasyon"
+    ],
+    "meaningEnAccepted": [
+      "station"
+    ]
+  },
+  {
+    "order": 98,
+    "word": "店",
+    "kana": "みせ",
+    "type": "isim",
+    "meaningTr": "dükkân, mağaza",
+    "meaningEn": "shop, store",
+    "exampleJp": "あの**店**は夜十時まで開いています。",
+    "exampleTr": "O dükkân akşam ona kadar açık.",
+    "meaningTrAccepted": [
+      "dükkân",
+      "mağaza"
+    ],
+    "meaningEnAccepted": [
+      "shop",
+      "store"
+    ]
+  },
+  {
+    "order": 99,
+    "word": "町",
+    "kana": "まち",
+    "type": "isim",
+    "meaningTr": "kasaba, şehir",
+    "meaningEn": "town, city",
+    "exampleJp": "この**町**は静かで住みやすいです。",
+    "exampleTr": "Bu kasaba sakin, yaşaması kolay.",
+    "meaningTrAccepted": [
+      "kasaba",
+      "şehir"
+    ],
+    "meaningEnAccepted": [
+      "town",
+      "city"
+    ]
+  },
+  {
+    "order": 100,
+    "word": "国",
+    "kana": "くに",
+    "type": "isim",
+    "meaningTr": "ülke, memleket",
+    "meaningEn": "country",
+    "exampleJp": "あなたの**国**について教えてください。",
+    "exampleTr": "Bana ülkenden bahseder misin?",
+    "meaningTrAccepted": [
+      "ülke",
+      "memleket"
+    ],
+    "meaningEnAccepted": [
+      "country"
+    ]
+  },
+  {
+    "order": 101,
+    "word": "家族",
+    "kana": "かぞく",
+    "type": "isim",
+    "meaningTr": "aile",
+    "meaningEn": "family",
+    "exampleJp": "週末は**家族**と過ごします。",
+    "exampleTr": "Hafta sonunu ailemle geçiririm.",
+    "meaningTrAccepted": [
+      "aile"
+    ],
+    "meaningEnAccepted": [
+      "family"
+    ]
+  },
+  {
+    "order": 102,
+    "word": "兄",
+    "kana": "あに",
+    "type": "isim",
+    "meaningTr": "abi, ağabey",
+    "meaningEn": "(my) older brother",
+    "exampleJp": "**兄**は東京の会社で働いています。",
+    "exampleTr": "Ağabeyim Tokyo'da bir şirkette çalışıyor.",
+    "meaningTrAccepted": [
+      "abi",
+      "ağabey"
+    ],
+    "meaningEnAccepted": [
+      "older brother"
+    ]
+  },
+  {
+    "order": 103,
+    "word": "姉",
+    "kana": "あね",
+    "type": "isim",
+    "meaningTr": "abla",
+    "meaningEn": "(my) older sister",
+    "exampleJp": "**姉**は私より三歳上です。",
+    "exampleTr": "Ablam benden üç yaş büyük.",
+    "meaningTrAccepted": [
+      "abla"
+    ],
+    "meaningEnAccepted": [
+      "older sister"
+    ]
+  },
+  {
+    "order": 104,
+    "word": "弟",
+    "kana": "おとうと",
+    "type": "isim",
+    "meaningTr": "erkek kardeş",
+    "meaningEn": "(my) younger brother",
+    "exampleJp": "**弟**はサッカーが大好きです。",
+    "exampleTr": "Erkek kardeşim futbolu çok sever.",
+    "meaningTrAccepted": [
+      "erkek kardeş"
+    ],
+    "meaningEnAccepted": [
+      "younger brother"
+    ]
+  },
+  {
+    "order": 105,
+    "word": "妹",
+    "kana": "いもうと",
+    "type": "isim",
+    "meaningTr": "kız kardeş",
+    "meaningEn": "(my) younger sister",
+    "exampleJp": "**妹**はまだ高校生です。",
+    "exampleTr": "Kız kardeşim daha lise öğrencisi.",
+    "meaningTrAccepted": [
+      "kız kardeş"
+    ],
+    "meaningEnAccepted": [
+      "younger sister"
+    ]
+  },
+  {
+    "order": 106,
+    "word": "男",
+    "kana": "おとこ",
+    "type": "isim",
+    "meaningTr": "erkek, adam",
+    "meaningEn": "man, male",
+    "exampleJp": "あの背の高い**男**の人は誰ですか。",
+    "exampleTr": "Şu uzun boylu adam kim?",
+    "meaningTrAccepted": [
+      "erkek",
+      "adam"
+    ],
+    "meaningEnAccepted": [
+      "man",
+      "male"
+    ]
+  },
+  {
+    "order": 107,
+    "word": "女",
+    "kana": "おんな",
+    "type": "isim",
+    "meaningTr": "kadın",
+    "meaningEn": "woman, female",
+    "exampleJp": "赤い服の**女**の人が私の母です。",
+    "exampleTr": "Kırmızı elbiseli kadın benim annem.",
+    "meaningTrAccepted": [
+      "kadın"
+    ],
+    "meaningEnAccepted": [
+      "woman",
+      "female"
+    ]
+  },
+  {
+    "order": 108,
+    "word": "名前",
+    "kana": "なまえ",
+    "type": "isim",
+    "meaningTr": "ad, isim",
+    "meaningEn": "name",
+    "exampleJp": "お**名前**は何ですか。",
+    "exampleTr": "Adınız nedir?",
+    "meaningTrAccepted": [
+      "ad",
+      "isim"
+    ],
+    "meaningEnAccepted": [
+      "name"
+    ]
+  },
+  {
+    "order": 109,
+    "word": "犬",
+    "kana": "いぬ",
+    "type": "isim",
+    "meaningTr": "köpek",
+    "meaningEn": "dog",
+    "exampleJp": "うちの**犬**は散歩が大好きです。",
+    "exampleTr": "Bizim köpek yürüyüşe bayılır.",
+    "meaningTrAccepted": [
+      "köpek"
+    ],
+    "meaningEnAccepted": [
+      "dog"
+    ]
+  },
+  {
+    "order": 110,
+    "word": "猫",
+    "kana": "ねこ",
+    "type": "isim",
+    "meaningTr": "kedi",
+    "meaningEn": "cat",
+    "exampleJp": "**猫**が窓の近くで寝ています。",
+    "exampleTr": "Kedi pencerenin yanında uyuyor.",
+    "meaningTrAccepted": [
+      "kedi"
+    ],
+    "meaningEnAccepted": [
+      "cat"
+    ]
+  },
+  {
+    "word": "動物",
+    "kana": "どうぶつ",
+    "type": "isim",
+    "meaningTr": "hayvan",
+    "meaningEn": "animal",
+    "exampleJp": "**動物**が大好きです。",
+    "exampleTr": "Hayvanları çok severim.",
+    "meaningTrAccepted": [
+      "hayvan"
+    ],
+    "meaningEnAccepted": [
+      "animal"
+    ],
+    "order": 111
+  },
+  {
+    "order": 112,
+    "word": "上",
+    "kana": "うえ",
+    "type": "isim",
+    "meaningTr": "üst, yukarı",
+    "meaningEn": "up, above, on top",
+    "exampleJp": "かぎはテーブルの**上**にありますよ。",
+    "exampleTr": "Anahtar masanın üstünde.",
+    "meaningTrAccepted": [
+      "üst",
+      "yukarı"
+    ],
+    "meaningEnAccepted": [
+      "up",
+      "above",
+      "on top"
+    ]
+  },
+  {
+    "order": 113,
+    "word": "下",
+    "kana": "した",
+    "type": "isim",
+    "meaningTr": "alt, aşağı",
+    "meaningEn": "down, below, under",
+    "exampleJp": "猫がベッドの**下**に隠れています。",
+    "exampleTr": "Kedi yatağın altına saklanmış.",
+    "meaningTrAccepted": [
+      "alt",
+      "aşağı"
+    ],
+    "meaningEnAccepted": [
+      "down",
+      "below",
+      "under"
+    ]
+  },
+  {
+    "order": 114,
+    "word": "中",
+    "kana": "なか",
+    "type": "isim",
+    "meaningTr": "iç, orta",
+    "meaningEn": "inside, middle",
+    "exampleJp": "かばんの**中**に何が入っていますか。",
+    "exampleTr": "Çantanın içinde ne var?",
+    "meaningTrAccepted": [
+      "iç",
+      "orta"
+    ],
+    "meaningEnAccepted": [
+      "inside",
+      "middle"
+    ]
+  },
+  {
+    "order": 115,
+    "word": "前",
+    "kana": "まえ",
+    "type": "isim",
+    "meaningTr": "ön; önce",
+    "meaningEn": "front; before",
+    "exampleJp": "駅の**前**で待っています。",
+    "exampleTr": "İstasyonun önünde bekliyorum.",
+    "meaningTrAccepted": [
+      "ön",
+      "önce"
+    ],
+    "meaningEnAccepted": [
+      "front",
+      "before"
+    ]
+  },
+  {
+    "order": 116,
+    "word": "後ろ",
+    "kana": "うしろ",
+    "type": "isim",
+    "meaningTr": "arka",
+    "meaningEn": "back, behind",
+    "exampleJp": "教室の**後ろ**の席に座りました。",
+    "exampleTr": "Sınıfın arka sırasına oturdum.",
+    "meaningTrAccepted": [
+      "arka"
+    ],
+    "meaningEnAccepted": [
+      "back",
+      "behind"
+    ]
+  },
+  {
+    "order": 117,
+    "word": "右",
+    "kana": "みぎ",
+    "type": "isim",
+    "meaningTr": "sağ",
+    "meaningEn": "right",
+    "exampleJp": "次の角を**右**に曲がってください。",
+    "exampleTr": "Bir sonraki köşeden sağa dönün.",
+    "meaningTrAccepted": [
+      "sağ"
+    ],
+    "meaningEnAccepted": [
+      "right"
+    ]
+  },
+  {
+    "order": 118,
+    "word": "左",
+    "kana": "ひだり",
+    "type": "isim",
+    "meaningTr": "sol",
+    "meaningEn": "left",
+    "exampleJp": "銀行は郵便局の**左**にあります。",
+    "exampleTr": "Banka postanenin solunda.",
+    "meaningTrAccepted": [
+      "sol"
+    ],
+    "meaningEnAccepted": [
+      "left"
+    ]
+  },
+  {
+    "order": 119,
+    "word": "外",
+    "kana": "そと",
+    "type": "isim",
+    "meaningTr": "dışarı, dış",
+    "meaningEn": "outside",
+    "exampleJp": "**外**は雨が降っていますよ。",
+    "exampleTr": "Dışarıda yağmur yağıyor.",
+    "meaningTrAccepted": [
+      "dışarı",
+      "dış"
+    ],
+    "meaningEnAccepted": [
+      "outside"
+    ]
+  },
+  {
+    "order": 120,
+    "word": "隣",
+    "kana": "となり",
+    "type": "isim",
+    "meaningTr": "bitişik, komşu, yan",
+    "meaningEn": "next to, neighbor",
+    "exampleJp": "**隣**の部屋から音楽が聞こえます。",
+    "exampleTr": "Yan odadan müzik sesi geliyor.",
+    "meaningTrAccepted": [
+      "bitişik",
+      "komşu",
+      "yan"
+    ],
+    "meaningEnAccepted": [
+      "next to",
+      "neighbor"
+    ]
+  },
+  {
+    "order": 121,
+    "word": "近く",
+    "kana": "ちかく",
+    "type": "isim",
+    "meaningTr": "yakın, civar",
+    "meaningEn": "near, nearby",
+    "exampleJp": "家の**近く**にきれいな公園があります。",
+    "exampleTr": "Evimin yakınında güzel bir park var.",
+    "meaningTrAccepted": [
+      "yakın",
+      "civar"
+    ],
+    "meaningEnAccepted": [
+      "near",
+      "nearby"
+    ]
+  },
+  {
+    "order": 122,
+    "word": "月曜日",
+    "kana": "げつようび",
+    "type": "isim",
+    "meaningTr": "pazartesi",
+    "meaningEn": "Monday",
+    "exampleJp": "**月曜日**はいつも忙しいです。",
+    "exampleTr": "Pazartesileri hep yoğun olurum.",
+    "meaningTrAccepted": [
+      "pazartesi"
+    ],
+    "meaningEnAccepted": [
+      "Monday"
+    ]
+  },
+  {
+    "order": 123,
+    "word": "火曜日",
+    "kana": "かようび",
+    "type": "isim",
+    "meaningTr": "salı",
+    "meaningEn": "Tuesday",
+    "exampleJp": "**火曜日**にテストがあります。",
+    "exampleTr": "Salı günü sınavım var.",
+    "meaningTrAccepted": [
+      "salı"
+    ],
+    "meaningEnAccepted": [
+      "Tuesday"
+    ]
+  },
+  {
+    "order": 124,
+    "word": "水曜日",
+    "kana": "すいようび",
+    "type": "isim",
+    "meaningTr": "çarşamba",
+    "meaningEn": "Wednesday",
+    "exampleJp": "**水曜日**の午後は暇です。",
+    "exampleTr": "Çarşamba öğleden sonra boşum.",
+    "meaningTrAccepted": [
+      "çarşamba"
+    ],
+    "meaningEnAccepted": [
+      "Wednesday"
+    ]
+  },
+  {
+    "order": 125,
+    "word": "木曜日",
+    "kana": "もくようび",
+    "type": "isim",
+    "meaningTr": "perşembe",
+    "meaningEn": "Thursday",
+    "exampleJp": "**木曜日**に友達とご飯を食べます。",
+    "exampleTr": "Perşembe arkadaşımla yemek yiyeceğim.",
+    "meaningTrAccepted": [
+      "perşembe"
+    ],
+    "meaningEnAccepted": [
+      "Thursday"
+    ]
+  },
+  {
+    "order": 126,
+    "word": "金曜日",
+    "kana": "きんようび",
+    "type": "isim",
+    "meaningTr": "cuma",
+    "meaningEn": "Friday",
+    "exampleJp": "**金曜日**の夜は映画を見ます。",
+    "exampleTr": "Cuma akşamları film izlerim.",
+    "meaningTrAccepted": [
+      "cuma"
+    ],
+    "meaningEnAccepted": [
+      "Friday"
+    ]
+  },
+  {
+    "order": 127,
+    "word": "土曜日",
+    "kana": "どようび",
+    "type": "isim",
+    "meaningTr": "cumartesi",
+    "meaningEn": "Saturday",
+    "exampleJp": "**土曜日**に部屋を掃除します。",
+    "exampleTr": "Cumartesi odamı temizlerim.",
+    "meaningTrAccepted": [
+      "cumartesi"
+    ],
+    "meaningEnAccepted": [
+      "Saturday"
+    ]
+  },
+  {
+    "order": 128,
+    "word": "日曜日",
+    "kana": "にちようび",
+    "type": "isim",
+    "meaningTr": "pazar",
+    "meaningEn": "Sunday",
+    "exampleJp": "**日曜日**はゆっくり休みたいです。",
+    "exampleTr": "Pazar günü iyice dinlenmek istiyorum.",
+    "meaningTrAccepted": [
+      "pazar"
+    ],
+    "meaningEnAccepted": [
+      "Sunday"
+    ]
+  },
+  {
+    "order": 129,
+    "word": "毎日",
+    "kana": "まいにち",
+    "type": "isim",
+    "meaningTr": "her gün",
+    "meaningEn": "every day",
+    "exampleJp": "**毎日**三十分ぐらい歩いています。",
+    "exampleTr": "Her gün yarım saat kadar yürüyorum.",
+    "meaningTrAccepted": [
+      "her gün"
+    ],
+    "meaningEnAccepted": [
+      "every day"
+    ]
+  },
+  {
+    "order": 130,
+    "word": "週末",
+    "kana": "しゅうまつ",
+    "type": "isim",
+    "meaningTr": "hafta sonu",
+    "meaningEn": "weekend",
+    "exampleJp": "**週末**はどこかへ行きますか。",
+    "exampleTr": "Hafta sonu bir yere gidecek misin?",
+    "meaningTrAccepted": [
+      "hafta sonu"
+    ],
+    "meaningEnAccepted": [
+      "weekend"
+    ]
+  },
+  {
+    "order": 131,
+    "word": "午前",
+    "kana": "ごぜん",
+    "type": "isim",
+    "meaningTr": "öğleden önce, sabah",
+    "meaningEn": "morning, a.m.",
+    "exampleJp": "**午前**の授業は九時からです。",
+    "exampleTr": "Sabah dersi dokuzda başlıyor.",
+    "meaningTrAccepted": [
+      "öğleden önce",
+      "sabah"
+    ],
+    "meaningEnAccepted": [
+      "morning",
+      "a.m."
+    ]
+  },
+  {
+    "order": 132,
+    "word": "午後",
+    "kana": "ごご",
+    "type": "isim",
+    "meaningTr": "öğleden sonra",
+    "meaningEn": "afternoon, p.m.",
+    "exampleJp": "**午後**から雨になるそうです。",
+    "exampleTr": "Öğleden sonra yağmur başlayacakmış.",
+    "meaningTrAccepted": [
+      "öğleden sonra"
+    ],
+    "meaningEnAccepted": [
+      "afternoon",
+      "p.m."
+    ]
+  },
+  {
+    "order": 133,
+    "word": "白",
+    "kana": "しろ",
+    "type": "isim",
+    "meaningTr": "beyaz",
+    "meaningEn": "white",
+    "exampleJp": "**白**いシャツを二枚買いました。",
+    "exampleTr": "İki beyaz gömlek aldım.",
+    "meaningTrAccepted": [
+      "beyaz"
+    ],
+    "meaningEnAccepted": [
+      "white"
+    ]
+  },
+  {
+    "order": 134,
+    "word": "黒",
+    "kana": "くろ",
+    "type": "isim",
+    "meaningTr": "siyah",
+    "meaningEn": "black",
+    "exampleJp": "**黒**い猫が道を渡りました。",
+    "exampleTr": "Siyah bir kedi yoldan geçti.",
+    "meaningTrAccepted": [
+      "siyah"
+    ],
+    "meaningEnAccepted": [
+      "black"
+    ]
+  },
+  {
+    "order": 135,
+    "word": "赤",
+    "kana": "あか",
+    "type": "isim",
+    "meaningTr": "kırmızı",
+    "meaningEn": "red",
+    "exampleJp": "信号が**赤**の時は止まってください。",
+    "exampleTr": "Işık kırmızıyken durun.",
+    "meaningTrAccepted": [
+      "kırmızı"
+    ],
+    "meaningEnAccepted": [
+      "red"
+    ]
+  },
+  {
+    "order": 136,
+    "word": "青",
+    "kana": "あお",
+    "type": "isim",
+    "meaningTr": "mavi",
+    "meaningEn": "blue",
+    "exampleJp": "今日の空は本当に**青**いですね。",
+    "exampleTr": "Bugün gökyüzü gerçekten masmavi.",
+    "meaningTrAccepted": [
+      "mavi"
+    ],
+    "meaningEnAccepted": [
+      "blue"
+    ]
+  },
+  {
+    "order": 137,
+    "word": "天気",
+    "kana": "てんき",
+    "type": "isim",
+    "meaningTr": "hava durumu",
+    "meaningEn": "weather",
+    "exampleJp": "明日の**天気**はどうですか。",
+    "exampleTr": "Yarın hava nasıl olacak?",
+    "meaningTrAccepted": [
+      "hava durumu"
+    ],
+    "meaningEnAccepted": [
+      "weather"
+    ]
+  },
+  {
+    "order": 138,
+    "word": "雨",
+    "kana": "あめ",
+    "type": "isim",
+    "meaningTr": "yağmur",
+    "meaningEn": "rain",
+    "exampleJp": "朝から**雨**が降っています。",
+    "exampleTr": "Sabahtan beri yağmur yağıyor.",
+    "meaningTrAccepted": [
+      "yağmur"
+    ],
+    "meaningEnAccepted": [
+      "rain"
+    ]
+  },
+  {
+    "order": 139,
+    "word": "雪",
+    "kana": "ゆき",
+    "type": "isim",
+    "meaningTr": "kar",
+    "meaningEn": "snow",
+    "exampleJp": "今年の冬は**雪**が多かったです。",
+    "exampleTr": "Bu kış çok kar yağdı.",
+    "meaningTrAccepted": [
+      "kar"
+    ],
+    "meaningEnAccepted": [
+      "snow"
+    ]
+  },
+  {
+    "order": 140,
+    "word": "山",
+    "kana": "やま",
+    "type": "isim",
+    "meaningTr": "dağ",
+    "meaningEn": "mountain",
+    "exampleJp": "週末に家族と**山**に登りました。",
+    "exampleTr": "Hafta sonu ailemle dağa tırmandık.",
+    "meaningTrAccepted": [
+      "dağ"
+    ],
+    "meaningEnAccepted": [
+      "mountain"
+    ]
+  },
+  {
+    "order": 141,
+    "word": "川",
+    "kana": "かわ",
+    "type": "isim",
+    "meaningTr": "nehir, ırmak",
+    "meaningEn": "river",
+    "exampleJp": "この**川**の水はとてもきれいです。",
+    "exampleTr": "Bu nehrin suyu çok temiz.",
+    "meaningTrAccepted": [
+      "nehir",
+      "ırmak"
+    ],
+    "meaningEnAccepted": [
+      "river"
+    ]
+  },
+  {
+    "order": 142,
+    "word": "海",
+    "kana": "うみ",
+    "type": "isim",
+    "meaningTr": "deniz",
+    "meaningEn": "sea, ocean",
+    "exampleJp": "夏休みに**海**へ泳ぎに行きます。",
+    "exampleTr": "Yaz tatilinde denize yüzmeye gideceğim.",
+    "meaningTrAccepted": [
+      "deniz"
+    ],
+    "meaningEnAccepted": [
+      "sea",
+      "ocean"
+    ]
+  },
+  {
+    "order": 143,
+    "word": "空",
+    "kana": "そら",
+    "type": "isim",
+    "meaningTr": "gökyüzü",
+    "meaningEn": "sky",
+    "exampleJp": "**空**にきれいな星が出ています。",
+    "exampleTr": "Gökyüzünde güzel yıldızlar var.",
+    "meaningTrAccepted": [
+      "gökyüzü"
+    ],
+    "meaningEnAccepted": [
+      "sky"
+    ]
+  },
+  {
+    "order": 144,
+    "word": "花",
+    "kana": "はな",
+    "type": "isim",
+    "meaningTr": "çiçek",
+    "meaningEn": "flower",
+    "exampleJp": "母の誕生日に**花**をあげました。",
+    "exampleTr": "Annemin doğum gününde çiçek verdim.",
+    "meaningTrAccepted": [
+      "çiçek"
+    ],
+    "meaningEnAccepted": [
+      "flower"
+    ]
+  },
+  {
+    "order": 145,
+    "word": "木",
+    "kana": "き",
+    "type": "isim",
+    "meaningTr": "ağaç",
+    "meaningEn": "tree, wood",
+    "exampleJp": "庭に大きい**木**が一本あります。",
+    "exampleTr": "Bahçede büyük bir ağaç var.",
+    "meaningTrAccepted": [
+      "ağaç"
+    ],
+    "meaningEnAccepted": [
+      "tree",
+      "wood"
+    ]
+  },
+  {
+    "order": 146,
+    "word": "立つ",
+    "kana": "たつ",
+    "type": "fiil",
+    "meaningTr": "ayağa kalkmak, durmak",
+    "meaningEn": "to stand",
+    "exampleJp": "電車で年上の人に席を譲って**立**ちました。",
+    "exampleTr": "Trende büyüğüme yer verip ayağa kalktım.",
+    "meaningTrAccepted": [
+      "ayağa kalkmak",
+      "durmak"
+    ],
+    "meaningEnAccepted": [
+      "to stand",
+      "stand"
+    ]
+  },
+  {
+    "order": 147,
+    "word": "座る",
+    "kana": "すわる",
+    "type": "fiil",
+    "meaningTr": "oturmak",
+    "meaningEn": "to sit",
+    "exampleJp": "どうぞ、こちらに**座**ってください。",
+    "exampleTr": "Buyurun, şuraya oturun.",
+    "meaningTrAccepted": [
+      "oturmak"
+    ],
+    "meaningEnAccepted": [
+      "to sit",
+      "sit"
+    ]
+  },
+  {
+    "order": 148,
+    "word": "歩く",
+    "kana": "あるく",
+    "type": "fiil",
+    "meaningTr": "yürümek",
+    "meaningEn": "to walk",
+    "exampleJp": "天気がいいから、駅まで**歩**きましょう。",
+    "exampleTr": "Hava güzel, istasyona kadar yürüyelim.",
+    "meaningTrAccepted": [
+      "yürümek"
+    ],
+    "meaningEnAccepted": [
+      "to walk",
+      "walk"
+    ]
+  },
+  {
+    "order": 149,
+    "word": "走る",
+    "kana": "はしる",
+    "type": "fiil",
+    "meaningTr": "koşmak",
+    "meaningEn": "to run",
+    "exampleJp": "毎朝公園を三十分**走**っています。",
+    "exampleTr": "Her sabah parkta yarım saat koşuyorum.",
+    "meaningTrAccepted": [
+      "koşmak"
+    ],
+    "meaningEnAccepted": [
+      "to run",
+      "run"
+    ]
+  },
+  {
+    "order": 150,
+    "word": "泳ぐ",
+    "kana": "およぐ",
+    "type": "fiil",
+    "meaningTr": "yüzmek",
+    "meaningEn": "to swim",
+    "exampleJp": "弟は速く**泳ぐ**ことができます。",
+    "exampleTr": "Kardeşim hızlı yüzebiliyor.",
+    "meaningTrAccepted": [
+      "yüzmek"
+    ],
+    "meaningEnAccepted": [
+      "to swim",
+      "swim"
+    ]
+  },
+  {
+    "order": 151,
+    "word": "遊ぶ",
+    "kana": "あそぶ",
+    "type": "fiil",
+    "meaningTr": "oynamak, eğlenmek",
+    "meaningEn": "to play, to have fun",
+    "exampleJp": "子供たちは外で元気に**遊**んでいます。",
+    "exampleTr": "Çocuklar dışarıda neşeyle oynuyor.",
+    "meaningTrAccepted": [
+      "oynamak",
+      "eğlenmek"
+    ],
+    "meaningEnAccepted": [
+      "to play",
+      "to have fun",
+      "play",
+      "have fun"
+    ]
+  },
+  {
+    "order": 152,
+    "word": "とても",
+    "kana": "とても",
+    "type": "zarf",
+    "meaningTr": "çok, pek",
+    "meaningEn": "very",
+    "exampleJp": "この問題は**とても**難しいですね。",
+    "exampleTr": "Bu soru çok zor, değil mi?",
+    "meaningTrAccepted": [
+      "çok",
+      "pek"
+    ],
+    "meaningEnAccepted": [
+      "very"
+    ]
+  },
+  {
+    "order": 153,
+    "word": "よく",
+    "kana": "よく",
+    "type": "zarf",
+    "meaningTr": "sık sık; iyice",
+    "meaningEn": "often; well",
+    "exampleJp": "私はこのカフェに**よく**来ます。",
+    "exampleTr": "Bu kafeye sık sık gelirim.",
+    "meaningTrAccepted": [
+      "sık sık",
+      "iyice"
+    ],
+    "meaningEnAccepted": [
+      "often",
+      "well"
+    ]
+  },
+  {
+    "order": 154,
+    "word": "少し",
+    "kana": "すこし",
+    "type": "zarf",
+    "meaningTr": "biraz, az",
+    "meaningEn": "a little",
+    "exampleJp": "日本語が**少し**話せます。",
+    "exampleTr": "Biraz Japonca konuşabiliyorum.",
+    "meaningTrAccepted": [
+      "biraz",
+      "az"
+    ],
+    "meaningEnAccepted": [
+      "a little"
+    ]
+  },
+  {
+    "order": 155,
+    "word": "ちょっと",
+    "kana": "ちょっと",
+    "type": "zarf",
+    "meaningTr": "biraz, azıcık",
+    "meaningEn": "a little, a bit",
+    "exampleJp": "**ちょっと**待ってください。",
+    "exampleTr": "Bir dakika bekler misiniz?",
+    "meaningTrAccepted": [
+      "biraz",
+      "azıcık"
+    ],
+    "meaningEnAccepted": [
+      "a little",
+      "a bit"
+    ]
+  },
+  {
+    "order": 156,
+    "word": "たくさん",
+    "kana": "たくさん",
+    "type": "zarf",
+    "meaningTr": "çok, bol",
+    "meaningEn": "a lot, many",
+    "exampleJp": "誕生日にプレゼントを**たくさん**もらいました。",
+    "exampleTr": "Doğum günümde bir sürü hediye aldım.",
+    "meaningTrAccepted": [
+      "çok",
+      "bol"
+    ],
+    "meaningEnAccepted": [
+      "a lot",
+      "many"
+    ]
+  },
+  {
+    "order": 157,
+    "word": "いつも",
+    "kana": "いつも",
+    "type": "zarf",
+    "meaningTr": "her zaman, hep",
+    "meaningEn": "always",
+    "exampleJp": "彼は**いつも**笑っています。",
+    "exampleTr": "O her zaman güler yüzlüdür.",
+    "meaningTrAccepted": [
+      "her zaman",
+      "hep"
+    ],
+    "meaningEnAccepted": [
+      "always"
+    ]
+  },
+  {
+    "order": 158,
+    "word": "時々",
+    "kana": "ときどき",
+    "type": "zarf",
+    "meaningTr": "bazen, ara sıra",
+    "meaningEn": "sometimes",
+    "exampleJp": "**時々**一人で映画を見に行きます。",
+    "exampleTr": "Bazen tek başıma sinemaya giderim.",
+    "meaningTrAccepted": [
+      "bazen",
+      "ara sıra"
+    ],
+    "meaningEnAccepted": [
+      "sometimes"
+    ]
+  },
+  {
+    "order": 159,
+    "word": "もう",
+    "kana": "もう",
+    "type": "zarf",
+    "meaningTr": "artık, çoktan",
+    "meaningEn": "already",
+    "exampleJp": "宿題は**もう**終わりました。",
+    "exampleTr": "Ödevim çoktan bitti.",
+    "meaningTrAccepted": [
+      "artık",
+      "çoktan"
+    ],
+    "meaningEnAccepted": [
+      "already"
+    ]
+  },
+  {
+    "order": 160,
+    "word": "まだ",
+    "kana": "まだ",
+    "type": "zarf",
+    "meaningTr": "henüz, hâlâ",
+    "meaningEn": "still, not yet",
+    "exampleJp": "昼ご飯は**まだ**食べていません。",
+    "exampleTr": "Öğle yemeğini henüz yemedim.",
+    "meaningTrAccepted": [
+      "henüz",
+      "hâlâ"
+    ],
+    "meaningEnAccepted": [
+      "still",
+      "not yet"
+    ]
+  },
+  {
+    "order": 161,
+    "word": "すぐ",
+    "kana": "すぐ",
+    "type": "zarf",
+    "meaningTr": "hemen, derhal",
+    "meaningEn": "immediately, soon",
+    "exampleJp": "駅を出ると、**すぐ**海が見えます。",
+    "exampleTr": "İstasyondan çıkınca hemen deniz görünüyor.",
+    "meaningTrAccepted": [
+      "hemen",
+      "derhal"
+    ],
+    "meaningEnAccepted": [
+      "immediately",
+      "soon"
+    ]
+  },
+  {
+    "order": 162,
+    "word": "電車",
+    "kana": "でんしゃ",
+    "type": "isim",
+    "meaningTr": "tren",
+    "meaningEn": "train",
+    "exampleJp": "**電車**が少し遅れています。",
+    "exampleTr": "Tren biraz gecikiyor.",
+    "meaningTrAccepted": [
+      "tren"
+    ],
+    "meaningEnAccepted": [
+      "train"
+    ]
+  },
+  {
+    "order": 163,
+    "word": "バス",
+    "kana": "バス",
+    "type": "isim",
+    "meaningTr": "otobüs",
+    "meaningEn": "bus",
+    "exampleJp": "**バス**で学校に通っています。",
+    "exampleTr": "Okula otobüsle gidip geliyorum.",
+    "meaningTrAccepted": [
+      "otobüs"
+    ],
+    "meaningEnAccepted": [
+      "bus"
+    ]
+  },
+  {
+    "order": 164,
+    "word": "飛行機",
+    "kana": "ひこうき",
+    "type": "isim",
+    "meaningTr": "uçak",
+    "meaningEn": "airplane",
+    "exampleJp": "初めて**飛行機**に乗りました。",
+    "exampleTr": "İlk kez uçağa bindim.",
+    "meaningTrAccepted": [
+      "uçak"
+    ],
+    "meaningEnAccepted": [
+      "airplane"
+    ]
+  },
+  {
+    "order": 165,
+    "word": "自転車",
+    "kana": "じてんしゃ",
+    "type": "isim",
+    "meaningTr": "bisiklet",
+    "meaningEn": "bicycle",
+    "exampleJp": "新しい**自転車**がほしいです。",
+    "exampleTr": "Yeni bir bisiklet istiyorum.",
+    "meaningTrAccepted": [
+      "bisiklet"
+    ],
+    "meaningEnAccepted": [
+      "bicycle"
+    ]
+  },
+  {
+    "order": 166,
+    "word": "部屋",
+    "kana": "へや",
+    "type": "isim",
+    "meaningTr": "oda",
+    "meaningEn": "room",
+    "exampleJp": "私の**部屋**は小さいですが、明るいです。",
+    "exampleTr": "Odam küçük ama aydınlık.",
+    "meaningTrAccepted": [
+      "oda"
+    ],
+    "meaningEnAccepted": [
+      "room"
+    ]
+  },
+  {
+    "order": 167,
+    "word": "机",
+    "kana": "つくえ",
+    "type": "isim",
+    "meaningTr": "masa (çalışma)",
+    "meaningEn": "desk",
+    "exampleJp": "**机**の上をきれいにしました。",
+    "exampleTr": "Masamın üstünü topladım.",
+    "meaningTrAccepted": [
+      "masa"
+    ],
+    "meaningEnAccepted": [
+      "desk"
+    ]
+  },
+  {
+    "order": 168,
+    "word": "椅子",
+    "kana": "いす",
+    "type": "isim",
+    "meaningTr": "sandalye",
+    "meaningEn": "chair",
+    "exampleJp": "この**椅子**、ちょっと借りてもいいですか。",
+    "exampleTr": "Bu sandalyeyi biraz alabilir miyim?",
+    "meaningTrAccepted": [
+      "sandalye"
+    ],
+    "meaningEnAccepted": [
+      "chair"
+    ]
+  },
+  {
+    "order": 169,
+    "word": "窓",
+    "kana": "まど",
+    "type": "isim",
+    "meaningTr": "pencere",
+    "meaningEn": "window",
+    "exampleJp": "暑いから、**窓**を開けましょうか。",
+    "exampleTr": "Sıcak oldu, pencereyi açalım mı?",
+    "meaningTrAccepted": [
+      "pencere"
+    ],
+    "meaningEnAccepted": [
+      "window"
+    ]
+  },
+  {
+    "order": 170,
+    "word": "ドア",
+    "kana": "ドア",
+    "type": "isim",
+    "meaningTr": "kapı",
+    "meaningEn": "door",
+    "exampleJp": "**ドア**が開いていますよ。",
+    "exampleTr": "Kapı açık kalmış.",
+    "meaningTrAccepted": [
+      "kapı"
+    ],
+    "meaningEnAccepted": [
+      "door"
+    ]
+  },
+  {
+    "order": 171,
+    "word": "電話",
+    "kana": "でんわ",
+    "type": "isim",
+    "meaningTr": "telefon",
+    "meaningEn": "telephone",
+    "exampleJp": "後で**電話**してもいいですか。",
+    "exampleTr": "Sonra arayabilir miyim?",
+    "meaningTrAccepted": [
+      "telefon"
+    ],
+    "meaningEnAccepted": [
+      "telephone"
+    ]
+  },
+  {
+    "order": 172,
+    "word": "お金",
+    "kana": "おかね",
+    "type": "isim",
+    "meaningTr": "para",
+    "meaningEn": "money",
+    "exampleJp": "旅行のために**お金**をためています。",
+    "exampleTr": "Seyahat için para biriktiriyorum.",
+    "meaningTrAccepted": [
+      "para"
+    ],
+    "meaningEnAccepted": [
+      "money"
+    ]
+  },
+  {
+    "order": 173,
+    "word": "服",
+    "kana": "ふく",
+    "type": "isim",
+    "meaningTr": "kıyafet, giysi",
+    "meaningEn": "clothes",
+    "exampleJp": "冬の**服**を買いに行きたいです。",
+    "exampleTr": "Kışlık kıyafet almaya gitmek istiyorum.",
+    "meaningTrAccepted": [
+      "kıyafet",
+      "giysi"
+    ],
+    "meaningEnAccepted": [
+      "clothes"
+    ]
+  },
+  {
+    "order": 174,
+    "word": "靴",
+    "kana": "くつ",
+    "type": "isim",
+    "meaningTr": "ayakkabı",
+    "meaningEn": "shoes",
+    "exampleJp": "この**靴**は軽くて歩きやすいです。",
+    "exampleTr": "Bu ayakkabı hafif, yürümesi rahat.",
+    "meaningTrAccepted": [
+      "ayakkabı"
+    ],
+    "meaningEnAccepted": [
+      "shoes"
+    ]
+  },
+  {
+    "order": 175,
+    "word": "開ける",
+    "kana": "あける",
+    "type": "fiil",
+    "meaningTr": "açmak",
+    "meaningEn": "to open",
+    "exampleJp": "暑いですね。窓を**開け**てもいいですか。",
+    "exampleTr": "Sıcak oldu. Pencereyi açabilir miyim?",
+    "meaningTrAccepted": [
+      "açmak"
+    ],
+    "meaningEnAccepted": [
+      "to open",
+      "open"
+    ]
+  },
+  {
+    "order": 176,
+    "word": "閉める",
+    "kana": "しめる",
+    "type": "fiil",
+    "meaningTr": "kapatmak",
+    "meaningEn": "to close",
+    "exampleJp": "寒いから、ドアを**閉め**てください。",
+    "exampleTr": "Soğuk, kapıyı kapatır mısınız?",
+    "meaningTrAccepted": [
+      "kapatmak"
+    ],
+    "meaningEnAccepted": [
+      "to close",
+      "close"
+    ]
+  },
+  {
+    "order": 177,
+    "word": "入る",
+    "kana": "はいる",
+    "type": "fiil",
+    "meaningTr": "girmek",
+    "meaningEn": "to enter",
+    "exampleJp": "どうぞ、中に**入**ってください。",
+    "exampleTr": "Buyurun, içeri girin.",
+    "meaningTrAccepted": [
+      "girmek"
+    ],
+    "meaningEnAccepted": [
+      "to enter",
+      "enter"
+    ]
+  },
+  {
+    "order": 178,
+    "word": "出る",
+    "kana": "でる",
+    "type": "fiil",
+    "meaningTr": "çıkmak, ayrılmak",
+    "meaningEn": "to leave, to go out",
+    "exampleJp": "毎朝八時に家を**出**ます。",
+    "exampleTr": "Her sabah sekizde evden çıkarım.",
+    "meaningTrAccepted": [
+      "çıkmak",
+      "ayrılmak"
+    ],
+    "meaningEnAccepted": [
+      "to leave",
+      "to go out",
+      "leave",
+      "go out"
+    ]
+  },
+  {
+    "order": 179,
+    "word": "乗る",
+    "kana": "のる",
+    "type": "fiil",
+    "meaningTr": "binmek",
+    "meaningEn": "to ride, to get on",
+    "exampleJp": "次の駅で電車に**乗**ります。",
+    "exampleTr": "Bir sonraki istasyonda trene bineceğim.",
+    "meaningTrAccepted": [
+      "binmek"
+    ],
+    "meaningEnAccepted": [
+      "to ride",
+      "to get on",
+      "ride",
+      "get on"
+    ]
+  },
+  {
+    "order": 180,
+    "word": "降りる",
+    "kana": "おりる",
+    "type": "fiil",
+    "meaningTr": "inmek",
+    "meaningEn": "to get off",
+    "exampleJp": "すみません、次で**降り**ます。",
+    "exampleTr": "Pardon, bir sonrakinde ineceğim.",
+    "meaningTrAccepted": [
+      "inmek"
+    ],
+    "meaningEnAccepted": [
+      "to get off",
+      "get off"
+    ]
+  },
+  {
+    "order": 181,
+    "word": "買い物",
+    "kana": "かいもの",
+    "type": "isim",
+    "meaningTr": "alışveriş",
+    "meaningEn": "shopping",
+    "exampleJp": "母と**買い物**に行きました。",
+    "exampleTr": "Annemle alışverişe gittik.",
+    "meaningTrAccepted": [
+      "alışveriş"
+    ],
+    "meaningEnAccepted": [
+      "shopping"
+    ]
+  },
+  {
+    "order": 182,
+    "word": "旅行",
+    "kana": "りょこう",
+    "type": "isim",
+    "meaningTr": "seyahat, gezi",
+    "meaningEn": "travel, trip",
+    "exampleJp": "来月、京都へ**旅行**に行きます。",
+    "exampleTr": "Gelecek ay Kyoto'ya seyahate gidiyorum.",
+    "meaningTrAccepted": [
+      "seyahat",
+      "gezi"
+    ],
+    "meaningEnAccepted": [
+      "travel",
+      "trip"
+    ]
+  },
+  {
+    "order": 183,
+    "word": "映画",
+    "kana": "えいが",
+    "type": "isim",
+    "meaningTr": "film",
+    "meaningEn": "movie",
+    "exampleJp": "昨日見た**映画**はとても良かったです。",
+    "exampleTr": "Dün izlediğim film çok güzeldi.",
+    "meaningTrAccepted": [
+      "film"
+    ],
+    "meaningEnAccepted": [
+      "movie"
+    ]
+  },
+  {
+    "order": 184,
+    "word": "音楽",
+    "kana": "おんがく",
+    "type": "isim",
+    "meaningTr": "müzik",
+    "meaningEn": "music",
+    "exampleJp": "勉強の時、静かな**音楽**を聞きます。",
+    "exampleTr": "Ders çalışırken sakin müzik dinlerim.",
+    "meaningTrAccepted": [
+      "müzik"
+    ],
+    "meaningEnAccepted": [
+      "music"
+    ]
+  },
+  {
+    "order": 185,
+    "word": "写真",
+    "kana": "しゃしん",
+    "type": "isim",
+    "meaningTr": "fotoğraf",
+    "meaningEn": "photograph",
+    "exampleJp": "ここで**写真**を撮ってもいいですか。",
+    "exampleTr": "Burada fotoğraf çekebilir miyim?",
+    "meaningTrAccepted": [
+      "fotoğraf"
+    ],
+    "meaningEnAccepted": [
+      "photograph"
+    ]
+  },
+  {
+    "order": 186,
+    "word": "言葉",
+    "kana": "ことば",
+    "type": "isim",
+    "meaningTr": "kelime, söz, dil",
+    "meaningEn": "word, language",
+    "exampleJp": "この**言葉**はどういう意味ですか。",
+    "exampleTr": "Bu kelime ne anlama geliyor?",
+    "meaningTrAccepted": [
+      "kelime",
+      "söz",
+      "dil"
+    ],
+    "meaningEnAccepted": [
+      "word",
+      "language"
+    ]
+  },
+  {
+    "order": 187,
+    "word": "元気",
+    "kana": "げんき",
+    "type": "na-sıfat",
+    "meaningTr": "sağlıklı, enerjik",
+    "meaningEn": "healthy, energetic",
+    "exampleJp": "おばあさんは九十歳ですが、とても**元気**です。",
+    "exampleTr": "Ninem doksan yaşında ama çok dinç.",
+    "meaningTrAccepted": [
+      "sağlıklı",
+      "enerjik"
+    ],
+    "meaningEnAccepted": [
+      "healthy",
+      "energetic"
+    ]
+  },
+  {
+    "order": 188,
+    "word": "好き",
+    "kana": "すき",
+    "type": "na-sıfat",
+    "meaningTr": "sevilen, hoşlanılan",
+    "meaningEn": "liked, favorite",
+    "exampleJp": "私は甘いものが大**好き**です。",
+    "exampleTr": "Tatlı şeyleri çok severim.",
+    "meaningTrAccepted": [
+      "sevilen",
+      "hoşlanılan"
+    ],
+    "meaningEnAccepted": [
+      "liked",
+      "favorite"
+    ]
+  },
+  {
+    "order": 189,
+    "word": "嫌い",
+    "kana": "きらい",
+    "type": "na-sıfat",
+    "meaningTr": "sevilmeyen, nefret edilen",
+    "meaningEn": "disliked, hated",
+    "exampleJp": "野菜が**嫌い**な子供が多いです。",
+    "exampleTr": "Sebzeyi sevmeyen çok çocuk var.",
+    "meaningTrAccepted": [
+      "sevilmeyen",
+      "nefret edilen"
+    ],
+    "meaningEnAccepted": [
+      "disliked",
+      "hated"
+    ]
+  },
+  {
+    "order": 190,
+    "word": "きれい",
+    "kana": "きれい",
+    "type": "na-sıfat",
+    "meaningTr": "güzel, temiz",
+    "meaningEn": "beautiful, clean",
+    "exampleJp": "今日の夕日は本当に**きれい**ですね。",
+    "exampleTr": "Bugünkü gün batımı gerçekten çok güzel.",
+    "meaningTrAccepted": [
+      "güzel",
+      "temiz"
+    ],
+    "meaningEnAccepted": [
+      "beautiful",
+      "clean"
+    ]
+  },
+  {
+    "order": 191,
+    "word": "静か",
+    "kana": "しずか",
+    "type": "na-sıfat",
+    "meaningTr": "sessiz, sakin",
+    "meaningEn": "quiet",
+    "exampleJp": "図書館では**静か**にしてください。",
+    "exampleTr": "Kütüphanede sessiz olun lütfen.",
+    "meaningTrAccepted": [
+      "sessiz",
+      "sakin"
+    ],
+    "meaningEnAccepted": [
+      "quiet"
+    ]
+  },
+  {
+    "order": 192,
+    "word": "有名",
+    "kana": "ゆうめい",
+    "type": "na-sıfat",
+    "meaningTr": "ünlü",
+    "meaningEn": "famous",
+    "exampleJp": "このお寺は桜で**有名**です。",
+    "exampleTr": "Bu tapınak kiraz çiçekleriyle ünlü.",
+    "meaningTrAccepted": [
+      "ünlü"
+    ],
+    "meaningEnAccepted": [
+      "famous"
+    ]
+  },
+  {
+    "order": 193,
+    "word": "忙しい",
+    "kana": "いそがしい",
+    "type": "i-sıfat",
+    "meaningTr": "meşgul, yoğun",
+    "meaningEn": "busy",
+    "exampleJp": "今週は仕事でとても**忙しい**です。",
+    "exampleTr": "Bu hafta işten dolayı çok yoğunum.",
+    "meaningTrAccepted": [
+      "meşgul",
+      "yoğun"
+    ],
+    "meaningEnAccepted": [
+      "busy"
+    ]
+  },
+  {
+    "order": 194,
+    "word": "難しい",
+    "kana": "むずかしい",
+    "type": "i-sıfat",
+    "meaningTr": "zor, güç",
+    "meaningEn": "difficult",
+    "exampleJp": "漢字を覚えるのは**難しい**ですが、面白いです。",
+    "exampleTr": "Kanji ezberlemek zor ama ilginç.",
+    "meaningTrAccepted": [
+      "zor",
+      "güç"
+    ],
+    "meaningEnAccepted": [
+      "difficult"
+    ]
+  },
+  {
+    "order": 195,
+    "word": "易しい",
+    "kana": "やさしい",
+    "type": "i-sıfat",
+    "meaningTr": "kolay",
+    "meaningEn": "easy",
+    "exampleJp": "このテストは思ったより**易し**かったです。",
+    "exampleTr": "Bu sınav sandığımdan kolaydı.",
+    "meaningTrAccepted": [
+      "kolay"
+    ],
+    "meaningEnAccepted": [
+      "easy"
+    ]
+  },
+  {
+    "order": 196,
+    "word": "教える",
+    "kana": "おしえる",
+    "type": "fiil",
+    "meaningTr": "öğretmek, anlatmak",
+    "meaningEn": "to teach, to tell",
+    "exampleJp": "田中さんは子供に英語を**教え**ています。",
+    "exampleTr": "Tanaka çocuklara İngilizce öğretiyor.",
+    "meaningTrAccepted": [
+      "öğretmek",
+      "anlatmak"
+    ],
+    "meaningEnAccepted": [
+      "to teach",
+      "to tell",
+      "teach",
+      "tell"
+    ]
+  },
+  {
+    "order": 197,
+    "word": "習う",
+    "kana": "ならう",
+    "type": "fiil",
+    "meaningTr": "öğrenmek (ders almak)",
+    "meaningEn": "to learn",
+    "exampleJp": "先月からピアノを**習**っています。",
+    "exampleTr": "Geçen aydan beri piyano dersi alıyorum.",
+    "meaningTrAccepted": [
+      "öğrenmek"
+    ],
+    "meaningEnAccepted": [
+      "to learn",
+      "learn"
+    ]
+  },
+  {
+    "order": 198,
+    "word": "覚える",
+    "kana": "おぼえる",
+    "type": "fiil",
+    "meaningTr": "ezberlemek, hatırlamak",
+    "meaningEn": "to memorize, to remember",
+    "exampleJp": "毎日新しい言葉を五つ**覚え**ます。",
+    "exampleTr": "Her gün beş yeni kelime ezberlerim.",
+    "meaningTrAccepted": [
+      "ezberlemek",
+      "hatırlamak"
+    ],
+    "meaningEnAccepted": [
+      "to memorize",
+      "to remember",
+      "memorize",
+      "remember"
+    ]
+  },
+  {
+    "order": 199,
+    "word": "忘れる",
+    "kana": "わすれる",
+    "type": "fiil",
+    "meaningTr": "unutmak",
+    "meaningEn": "to forget",
+    "exampleJp": "傘を電車の中に**忘れ**ました。",
+    "exampleTr": "Şemsiyemi trende unuttum.",
+    "meaningTrAccepted": [
+      "unutmak"
+    ],
+    "meaningEnAccepted": [
+      "to forget",
+      "forget"
+    ]
+  },
+  {
+    "order": 200,
+    "word": "疲れる",
+    "kana": "つかれる",
+    "type": "fiil",
+    "meaningTr": "yorulmak",
+    "meaningEn": "to get tired",
+    "exampleJp": "今日はたくさん歩いて**疲れ**ました。",
+    "exampleTr": "Bugün çok yürüdüm, yoruldum.",
+    "meaningTrAccepted": [
+      "yorulmak"
+    ],
+    "meaningEnAccepted": [
+      "to get tired",
+      "get tired"
+    ]
+  },
+  {
+    "order": 201,
+    "word": "答える",
+    "kana": "こたえる",
+    "type": "fiil",
+    "meaningTr": "cevap vermek",
+    "meaningEn": "to answer",
+    "exampleJp": "先生の質問に**答え**られませんでした。",
+    "exampleTr": "Öğretmenin sorusuna cevap veremedim.",
+    "meaningTrAccepted": [
+      "cevap vermek"
+    ],
+    "meaningEnAccepted": [
+      "to answer",
+      "answer"
+    ]
+  },
+  {
+    "order": 202,
+    "word": "持つ",
+    "kana": "もつ",
+    "type": "fiil",
+    "meaningTr": "tutmak; sahip olmak",
+    "meaningEn": "to hold, to have",
+    "exampleJp": "重いですね。荷物を**持**ちましょうか。",
+    "exampleTr": "Ağırmış. Eşyalarınızı taşıyayım mı?",
+    "meaningTrAccepted": [
+      "tutmak",
+      "sahip olmak"
+    ],
+    "meaningEnAccepted": [
+      "to hold",
+      "to have",
+      "hold",
+      "have"
+    ]
+  },
+  {
+    "order": 203,
+    "word": "送る",
+    "kana": "おくる",
+    "type": "fiil",
+    "meaningTr": "göndermek; uğurlamak",
+    "meaningEn": "to send",
+    "exampleJp": "国の家族に写真を**送**りました。",
+    "exampleTr": "Memleketteki aileme fotoğraf gönderdim.",
+    "meaningTrAccepted": [
+      "göndermek",
+      "uğurlamak"
+    ],
+    "meaningEnAccepted": [
+      "to send",
+      "send"
+    ]
+  },
+  {
+    "order": 204,
+    "word": "洗う",
+    "kana": "あらう",
+    "type": "fiil",
+    "meaningTr": "yıkamak",
+    "meaningEn": "to wash",
+    "exampleJp": "寝る前に顔を**洗**います。",
+    "exampleTr": "Yatmadan önce yüzümü yıkarım.",
+    "meaningTrAccepted": [
+      "yıkamak"
+    ],
+    "meaningEnAccepted": [
+      "to wash",
+      "wash"
+    ]
+  },
+  {
+    "order": 205,
+    "word": "貸す",
+    "kana": "かす",
+    "type": "fiil",
+    "meaningTr": "ödünç vermek",
+    "meaningEn": "to lend",
+    "exampleJp": "ペンをちょっと**貸**してください。",
+    "exampleTr": "Kaleminizi biraz verir misiniz?",
+    "meaningTrAccepted": [
+      "ödünç vermek"
+    ],
+    "meaningEnAccepted": [
+      "to lend",
+      "lend"
+    ]
+  },
+  {
+    "order": 206,
+    "word": "借りる",
+    "kana": "かりる",
+    "type": "fiil",
+    "meaningTr": "ödünç almak",
+    "meaningEn": "to borrow",
+    "exampleJp": "図書館で本を三冊**借り**ました。",
+    "exampleTr": "Kütüphaneden üç kitap ödünç aldım.",
+    "meaningTrAccepted": [
+      "ödünç almak"
+    ],
+    "meaningEnAccepted": [
+      "to borrow",
+      "borrow"
+    ]
+  },
+  {
+    "order": 207,
+    "word": "返す",
+    "kana": "かえす",
+    "type": "fiil",
+    "meaningTr": "geri vermek, iade etmek",
+    "meaningEn": "to return (something)",
+    "exampleJp": "明日、この本を図書館に**返**します。",
+    "exampleTr": "Yarın bu kitabı kütüphaneye iade edeceğim.",
+    "meaningTrAccepted": [
+      "geri vermek",
+      "iade etmek"
+    ],
+    "meaningEnAccepted": [
+      "to return",
+      "return"
+    ]
+  },
+  {
+    "order": 208,
+    "word": "着る",
+    "kana": "きる",
+    "type": "fiil",
+    "meaningTr": "giymek (üst)",
+    "meaningEn": "to wear (upper body)",
+    "exampleJp": "今日は新しいセーターを**着**ています。",
+    "exampleTr": "Bugün yeni kazağımı giydim.",
+    "meaningTrAccepted": [
+      "giymek"
+    ],
+    "meaningEnAccepted": [
+      "to wear",
+      "wear"
+    ]
+  },
+  {
+    "order": 209,
+    "word": "履く",
+    "kana": "はく",
+    "type": "fiil",
+    "meaningTr": "giymek (alt/ayakkabı)",
+    "meaningEn": "to wear (lower body, shoes)",
+    "exampleJp": "雨だから、長い靴を**履**きました。",
+    "exampleTr": "Yağmur yağıyor diye çizme giydim.",
+    "meaningTrAccepted": [
+      "giymek"
+    ],
+    "meaningEnAccepted": [
+      "to wear",
+      "wear"
+    ]
+  },
+  {
+    "order": 210,
+    "word": "住む",
+    "kana": "すむ",
+    "type": "fiil",
+    "meaningTr": "yaşamak, ikamet etmek",
+    "meaningEn": "to live, to reside",
+    "exampleJp": "兄は大阪に**住**んでいます。",
+    "exampleTr": "Ağabeyim Osaka'da yaşıyor.",
+    "meaningTrAccepted": [
+      "yaşamak",
+      "ikamet etmek"
+    ],
+    "meaningEnAccepted": [
+      "to live",
+      "to reside",
+      "live",
+      "reside"
+    ]
+  },
+  {
+    "order": 211,
+    "word": "会話",
+    "kana": "かいわ",
+    "type": "isim",
+    "meaningTr": "sohbet, konuşma",
+    "meaningEn": "conversation",
+    "exampleJp": "日本人と**会話**の練習をしたいです。",
+    "exampleTr": "Japonlarla konuşma pratiği yapmak istiyorum.",
+    "meaningTrAccepted": [
+      "sohbet",
+      "konuşma"
+    ],
+    "meaningEnAccepted": [
+      "conversation"
+    ]
+  },
+  {
+    "order": 212,
+    "word": "切る",
+    "kana": "きる",
+    "type": "fiil",
+    "meaningTr": "kesmek",
+    "meaningEn": "to cut",
+    "exampleJp": "野菜を小さく**切**ってください。",
+    "exampleTr": "Sebzeleri küçük küçük doğrayın.",
+    "meaningTrAccepted": [
+      "kesmek"
+    ],
+    "meaningEnAccepted": [
+      "to cut",
+      "cut"
+    ]
+  },
+  {
+    "order": 213,
+    "word": "長い",
+    "kana": "ながい",
+    "type": "i-sıfat",
+    "meaningTr": "uzun",
+    "meaningEn": "long",
+    "exampleJp": "彼女は髪が**長**くてきれいです。",
+    "exampleTr": "Onun saçları uzun ve güzel.",
+    "meaningTrAccepted": [
+      "uzun"
+    ],
+    "meaningEnAccepted": [
+      "long"
+    ]
+  },
+  {
+    "order": 214,
+    "word": "短い",
+    "kana": "みじかい",
+    "type": "i-sıfat",
+    "meaningTr": "kısa",
+    "meaningEn": "short",
+    "exampleJp": "夏休みは**短**かったですね。",
+    "exampleTr": "Yaz tatili kısaydı, değil mi?",
+    "meaningTrAccepted": [
+      "kısa"
+    ],
+    "meaningEnAccepted": [
+      "short"
+    ]
+  },
+  {
+    "order": 215,
+    "word": "重い",
+    "kana": "おもい",
+    "type": "i-sıfat",
+    "meaningTr": "ağır",
+    "meaningEn": "heavy",
+    "exampleJp": "このかばんは本が多くて**重い**です。",
+    "exampleTr": "Bu çanta kitap dolu, çok ağır.",
+    "meaningTrAccepted": [
+      "ağır"
+    ],
+    "meaningEnAccepted": [
+      "heavy"
+    ]
+  },
+  {
+    "order": 216,
+    "word": "軽い",
+    "kana": "かるい",
+    "type": "i-sıfat",
+    "meaningTr": "hafif",
+    "meaningEn": "light (weight)",
+    "exampleJp": "新しいパソコンは薄くて**軽い**です。",
+    "exampleTr": "Yeni bilgisayar ince ve hafif.",
+    "meaningTrAccepted": [
+      "hafif"
+    ],
+    "meaningEnAccepted": [
+      "light"
+    ]
+  },
+  {
+    "order": 217,
+    "word": "明るい",
+    "kana": "あかるい",
+    "type": "i-sıfat",
+    "meaningTr": "aydınlık, parlak",
+    "meaningEn": "bright",
+    "exampleJp": "この部屋は窓が大きくて**明るい**です。",
+    "exampleTr": "Bu odanın penceresi büyük, çok aydınlık.",
+    "meaningTrAccepted": [
+      "aydınlık",
+      "parlak"
+    ],
+    "meaningEnAccepted": [
+      "bright"
+    ]
+  },
+  {
+    "order": 218,
+    "word": "暗い",
+    "kana": "くらい",
+    "type": "i-sıfat",
+    "meaningTr": "karanlık",
+    "meaningEn": "dark",
+    "exampleJp": "**暗**くなる前に帰りましょう。",
+    "exampleTr": "Hava kararmadan dönelim.",
+    "meaningTrAccepted": [
+      "karanlık"
+    ],
+    "meaningEnAccepted": [
+      "dark"
+    ]
+  },
+  {
+    "order": 219,
+    "word": "広い",
+    "kana": "ひろい",
+    "type": "i-sıfat",
+    "meaningTr": "geniş",
+    "meaningEn": "wide, spacious",
+    "exampleJp": "いつか**広い**庭のある家に住みたいです。",
+    "exampleTr": "Bir gün geniş bahçeli bir evde yaşamak istiyorum.",
+    "meaningTrAccepted": [
+      "geniş"
+    ],
+    "meaningEnAccepted": [
+      "wide",
+      "spacious"
+    ]
+  },
+  {
+    "order": 220,
+    "word": "狭い",
+    "kana": "せまい",
+    "type": "i-sıfat",
+    "meaningTr": "dar",
+    "meaningEn": "narrow, cramped",
+    "exampleJp": "東京の部屋は**狭**くて高いです。",
+    "exampleTr": "Tokyo'daki odalar dar ve pahalı.",
+    "meaningTrAccepted": [
+      "dar"
+    ],
+    "meaningEnAccepted": [
+      "narrow",
+      "cramped"
+    ]
+  },
+  {
+    "order": 221,
+    "word": "近い",
+    "kana": "ちかい",
+    "type": "i-sıfat",
+    "meaningTr": "yakın",
+    "meaningEn": "near, close",
+    "exampleJp": "家から駅まで**近い**ので便利です。",
+    "exampleTr": "Evim istasyona yakın, çok pratik.",
+    "meaningTrAccepted": [
+      "yakın"
+    ],
+    "meaningEnAccepted": [
+      "near",
+      "close"
+    ]
+  },
+  {
+    "order": 222,
+    "word": "遠い",
+    "kana": "とおい",
+    "type": "i-sıfat",
+    "meaningTr": "uzak",
+    "meaningEn": "far",
+    "exampleJp": "学校が**遠い**ので、朝早く出ます。",
+    "exampleTr": "Okul uzak olduğu için sabah erken çıkarım.",
+    "meaningTrAccepted": [
+      "uzak"
+    ],
+    "meaningEnAccepted": [
+      "far"
+    ]
+  },
+  {
+    "order": 223,
+    "word": "早い",
+    "kana": "はやい",
+    "type": "i-sıfat",
+    "meaningTr": "erken; hızlı",
+    "meaningEn": "early; fast",
+    "exampleJp": "明日は**早い**電車に乗ります。",
+    "exampleTr": "Yarın erken trene bineceğim.",
+    "meaningTrAccepted": [
+      "erken",
+      "hızlı"
+    ],
+    "meaningEnAccepted": [
+      "early",
+      "fast"
+    ]
+  },
+  {
+    "order": 224,
+    "word": "遅い",
+    "kana": "おそい",
+    "type": "i-sıfat",
+    "meaningTr": "geç; yavaş",
+    "meaningEn": "late; slow",
+    "exampleJp": "昨日は帰りが**遅**くなりました。",
+    "exampleTr": "Dün eve geç döndüm.",
+    "meaningTrAccepted": [
+      "geç",
+      "yavaş"
+    ],
+    "meaningEnAccepted": [
+      "late",
+      "slow"
+    ]
+  },
+  {
+    "order": 225,
+    "word": "強い",
+    "kana": "つよい",
+    "type": "i-sıfat",
+    "meaningTr": "güçlü",
+    "meaningEn": "strong",
+    "exampleJp": "今日は風がとても**強い**ですね。",
+    "exampleTr": "Bugün rüzgâr çok kuvvetli.",
+    "meaningTrAccepted": [
+      "güçlü"
+    ],
+    "meaningEnAccepted": [
+      "strong"
+    ]
+  },
+  {
+    "order": 226,
+    "word": "弱い",
+    "kana": "よわい",
+    "type": "i-sıfat",
+    "meaningTr": "zayıf",
+    "meaningEn": "weak",
+    "exampleJp": "私はお酒に**弱い**です。",
+    "exampleTr": "Alkole karşı dayanıksızım.",
+    "meaningTrAccepted": [
+      "zayıf"
+    ],
+    "meaningEnAccepted": [
+      "weak"
+    ]
+  },
+  {
+    "order": 227,
+    "word": "かわいい",
+    "kana": "かわいい",
+    "type": "i-sıfat",
+    "meaningTr": "sevimli, şirin",
+    "meaningEn": "cute",
+    "exampleJp": "この子犬、本当に**かわいい**ですね。",
+    "exampleTr": "Bu yavru köpek gerçekten çok tatlı.",
+    "meaningTrAccepted": [
+      "sevimli",
+      "şirin"
+    ],
+    "meaningEnAccepted": [
+      "cute"
+    ]
+  },
+  {
+    "order": 228,
+    "word": "便利",
+    "kana": "べんり",
+    "type": "na-sıfat",
+    "meaningTr": "kullanışlı, pratik",
+    "meaningEn": "convenient",
+    "exampleJp": "駅の近くは買い物に**便利**です。",
+    "exampleTr": "İstasyon civarı alışveriş için pratik.",
+    "meaningTrAccepted": [
+      "kullanışlı",
+      "pratik"
+    ],
+    "meaningEnAccepted": [
+      "convenient"
+    ]
+  },
+  {
+    "order": 229,
+    "word": "大切",
+    "kana": "たいせつ",
+    "type": "na-sıfat",
+    "meaningTr": "önemli, değerli",
+    "meaningEn": "important, precious",
+    "exampleJp": "家族との時間を**大切**にしています。",
+    "exampleTr": "Ailemle geçirdiğim zamana önem veririm.",
+    "meaningTrAccepted": [
+      "önemli",
+      "değerli"
+    ],
+    "meaningEnAccepted": [
+      "important",
+      "precious"
+    ]
+  },
+  {
+    "order": 230,
+    "word": "大丈夫",
+    "kana": "だいじょうぶ",
+    "type": "na-sıfat",
+    "meaningTr": "sorun yok, iyi",
+    "meaningEn": "all right, okay",
+    "exampleJp": "熱はもう下がったので**大丈夫**です。",
+    "exampleTr": "Ateşim düştü, artık iyiyim.",
+    "meaningTrAccepted": [
+      "sorun yok",
+      "iyi"
+    ],
+    "meaningEnAccepted": [
+      "all right",
+      "okay"
+    ]
+  },
+  {
+    "order": 231,
+    "word": "同じ",
+    "kana": "おなじ",
+    "type": "bağlaşık sıfat",
+    "meaningTr": "aynı",
+    "meaningEn": "same",
+    "exampleJp": "私たちは**同じ**クラスです。",
+    "exampleTr": "Aynı sınıftayız.",
+    "meaningTrAccepted": [
+      "aynı"
+    ],
+    "meaningEnAccepted": [
+      "same"
+    ]
+  },
+  {
+    "order": 232,
+    "word": "コーヒー",
+    "kana": "コーヒー",
+    "type": "isim",
+    "meaningTr": "kahve",
+    "meaningEn": "coffee",
+    "exampleJp": "朝の**コーヒー**は欠かせません。",
+    "exampleTr": "Sabah kahvem olmazsa olmaz.",
+    "meaningTrAccepted": [
+      "kahve"
+    ],
+    "meaningEnAccepted": [
+      "coffee"
+    ]
+  },
+  {
+    "order": 233,
+    "word": "牛乳",
+    "kana": "ぎゅうにゅう",
+    "type": "isim",
+    "meaningTr": "süt",
+    "meaningEn": "milk",
+    "exampleJp": "毎朝、**牛乳**を一杯飲んでいます。",
+    "exampleTr": "Her sabah bir bardak süt içiyorum.",
+    "meaningTrAccepted": [
+      "süt"
+    ],
+    "meaningEnAccepted": [
+      "milk"
+    ]
+  },
+  {
+    "order": 234,
+    "word": "卵",
+    "kana": "たまご",
+    "type": "isim",
+    "meaningTr": "yumurta",
+    "meaningEn": "egg",
+    "exampleJp": "朝ご飯に**卵**を二つ使いました。",
+    "exampleTr": "Kahvaltıda iki yumurta kullandım.",
+    "meaningTrAccepted": [
+      "yumurta"
+    ],
+    "meaningEnAccepted": [
+      "egg"
+    ]
+  },
+  {
+    "order": 235,
+    "word": "野菜",
+    "kana": "やさい",
+    "type": "isim",
+    "meaningTr": "sebze",
+    "meaningEn": "vegetable",
+    "exampleJp": "健康のために**野菜**をたくさん食べています。",
+    "exampleTr": "Sağlık için bol sebze yiyorum.",
+    "meaningTrAccepted": [
+      "sebze"
+    ],
+    "meaningEnAccepted": [
+      "vegetable"
+    ]
+  },
+  {
+    "order": 236,
+    "word": "果物",
+    "kana": "くだもの",
+    "type": "isim",
+    "meaningTr": "meyve",
+    "meaningEn": "fruit",
+    "exampleJp": "デザートに**果物**はいかがですか。",
+    "exampleTr": "Tatlı olarak meyve ister misiniz?",
+    "meaningTrAccepted": [
+      "meyve"
+    ],
+    "meaningEnAccepted": [
+      "fruit"
+    ]
+  },
+  {
+    "order": 237,
+    "word": "パン",
+    "kana": "パン",
+    "type": "isim",
+    "meaningTr": "ekmek",
+    "meaningEn": "bread",
+    "exampleJp": "この店の**パン**は朝早く売り切れます。",
+    "exampleTr": "Bu fırının ekmeği sabah erkenden tükenir.",
+    "meaningTrAccepted": [
+      "ekmek"
+    ],
+    "meaningEnAccepted": [
+      "bread"
+    ]
+  },
+  {
+    "order": 238,
+    "word": "テレビ",
+    "kana": "テレビ",
+    "type": "isim",
+    "meaningTr": "televizyon",
+    "meaningEn": "television",
+    "exampleJp": "最近あまり**テレビ**を見ません。",
+    "exampleTr": "Son zamanlarda pek televizyon izlemiyorum.",
+    "meaningTrAccepted": [
+      "televizyon"
+    ],
+    "meaningEnAccepted": [
+      "television"
+    ]
+  },
+  {
+    "order": 239,
+    "word": "新聞",
+    "kana": "しんぶん",
+    "type": "isim",
+    "meaningTr": "gazete",
+    "meaningEn": "newspaper",
+    "exampleJp": "父は朝ご飯の時に**新聞**を読みます。",
+    "exampleTr": "Babam kahvaltıda gazete okur.",
+    "meaningTrAccepted": [
+      "gazete"
+    ],
+    "meaningEnAccepted": [
+      "newspaper"
+    ]
+  },
+  {
+    "order": 240,
+    "word": "手紙",
+    "kana": "てがみ",
+    "type": "isim",
+    "meaningTr": "mektup",
+    "meaningEn": "letter",
+    "exampleJp": "おばあさんから**手紙**が届きました。",
+    "exampleTr": "Ninemden mektup geldi.",
+    "meaningTrAccepted": [
+      "mektup"
+    ],
+    "meaningEnAccepted": [
+      "letter"
+    ]
+  },
+  {
+    "order": 241,
+    "word": "仕事",
+    "kana": "しごと",
+    "type": "isim",
+    "meaningTr": "iş, meslek",
+    "meaningEn": "work, job",
+    "exampleJp": "新しい**仕事**にはもう慣れましたか。",
+    "exampleTr": "Yeni işine alıştın mı?",
+    "meaningTrAccepted": [
+      "iş",
+      "meslek"
+    ],
+    "meaningEnAccepted": [
+      "work",
+      "job"
+    ]
+  },
+  {
+    "order": 242,
+    "word": "会社",
+    "kana": "かいしゃ",
+    "type": "isim",
+    "meaningTr": "şirket",
+    "meaningEn": "company",
+    "exampleJp": "**会社**まで電車で一時間かかります。",
+    "exampleTr": "Şirkete trenle bir saat sürüyor.",
+    "meaningTrAccepted": [
+      "şirket"
+    ],
+    "meaningEnAccepted": [
+      "company"
+    ]
+  },
+  {
+    "order": 243,
+    "word": "病院",
+    "kana": "びょういん",
+    "type": "isim",
+    "meaningTr": "hastane",
+    "meaningEn": "hospital",
+    "exampleJp": "頭が痛いので、**病院**へ行ってきます。",
+    "exampleTr": "Başım ağrıyor, hastaneye gidip geleceğim.",
+    "meaningTrAccepted": [
+      "hastane"
+    ],
+    "meaningEnAccepted": [
+      "hospital"
+    ]
+  },
+  {
+    "order": 244,
+    "word": "銀行",
+    "kana": "ぎんこう",
+    "type": "isim",
+    "meaningTr": "banka",
+    "meaningEn": "bank",
+    "exampleJp": "**銀行**は三時に閉まりますよ。",
+    "exampleTr": "Banka üçte kapanıyor.",
+    "meaningTrAccepted": [
+      "banka"
+    ],
+    "meaningEnAccepted": [
+      "bank"
+    ]
+  },
+  {
+    "order": 245,
+    "word": "図書館",
+    "kana": "としょかん",
+    "type": "isim",
+    "meaningTr": "kütüphane",
+    "meaningEn": "library",
+    "exampleJp": "試験の前は**図書館**で勉強します。",
+    "exampleTr": "Sınavdan önce kütüphanede çalışırım.",
+    "meaningTrAccepted": [
+      "kütüphane"
+    ],
+    "meaningEnAccepted": [
+      "library"
+    ]
+  },
+  {
+    "order": 246,
+    "word": "公園",
+    "kana": "こうえん",
+    "type": "isim",
+    "meaningTr": "park",
+    "meaningEn": "park",
+    "exampleJp": "天気がいい日は**公園**でお弁当を食べます。",
+    "exampleTr": "Havanın güzel olduğu günler parkta bento yerim.",
+    "meaningTrAccepted": [
+      "park"
+    ],
+    "meaningEnAccepted": [
+      "park"
+    ]
+  },
+  {
+    "order": 247,
+    "word": "喫茶店",
+    "kana": "きっさてん",
+    "type": "isim",
+    "meaningTr": "kafe, çayhane",
+    "meaningEn": "café, coffee shop",
+    "exampleJp": "駅前の**喫茶店**で友達を待っています。",
+    "exampleTr": "İstasyondaki kafede arkadaşımı bekliyorum.",
+    "meaningTrAccepted": [
+      "kafe",
+      "çayhane"
+    ],
+    "meaningEnAccepted": [
+      "café",
+      "coffee shop"
+    ]
+  },
+  {
+    "order": 248,
+    "word": "郵便局",
+    "kana": "ゆうびんきょく",
+    "type": "isim",
+    "meaningTr": "postane",
+    "meaningEn": "post office",
+    "exampleJp": "**郵便局**で荷物を送ってきました。",
+    "exampleTr": "Postaneden paket gönderdim.",
+    "meaningTrAccepted": [
+      "postane"
+    ],
+    "meaningEnAccepted": [
+      "post office"
+    ]
+  },
+  {
+    "order": 249,
+    "word": "大学",
+    "kana": "だいがく",
+    "type": "isim",
+    "meaningTr": "üniversite",
+    "meaningEn": "university",
+    "exampleJp": "**大学**で経済を勉強しています。",
+    "exampleTr": "Üniversitede ekonomi okuyorum.",
+    "meaningTrAccepted": [
+      "üniversite"
+    ],
+    "meaningEnAccepted": [
+      "university"
+    ]
+  },
+  {
+    "order": 250,
+    "word": "学生",
+    "kana": "がくせい",
+    "type": "isim",
+    "meaningTr": "öğrenci",
+    "meaningEn": "student",
+    "exampleJp": "この町は**学生**が多くてにぎやかです。",
+    "exampleTr": "Bu şehirde öğrenci çok, cıvıl cıvıl.",
+    "meaningTrAccepted": [
+      "öğrenci"
+    ],
+    "meaningEnAccepted": [
+      "student"
+    ]
+  },
+  {
+    "order": 251,
+    "word": "医者",
+    "kana": "いしゃ",
+    "type": "isim",
+    "meaningTr": "doktor",
+    "meaningEn": "doctor",
+    "exampleJp": "**医者**に毎日運動するように言われました。",
+    "exampleTr": "Doktor her gün spor yapmamı söyledi.",
+    "meaningTrAccepted": [
+      "doktor"
+    ],
+    "meaningEnAccepted": [
+      "doctor"
+    ]
+  },
+  {
+    "order": 252,
+    "word": "耳",
+    "kana": "みみ",
+    "type": "isim",
+    "meaningTr": "kulak",
+    "meaningEn": "ear",
+    "exampleJp": "うさぎは**耳**が長いです。",
+    "exampleTr": "Tavşanın kulakları uzundur.",
+    "meaningTrAccepted": [
+      "kulak"
+    ],
+    "meaningEnAccepted": [
+      "ear"
+    ]
+  },
+  {
+    "order": 253,
+    "word": "鼻",
+    "kana": "はな",
+    "type": "isim",
+    "meaningTr": "burun",
+    "meaningEn": "nose",
+    "exampleJp": "風邪で**鼻**の調子が悪いです。",
+    "exampleTr": "Soğuk algınlığından burnum tıkalı.",
+    "meaningTrAccepted": [
+      "burun"
+    ],
+    "meaningEnAccepted": [
+      "nose"
+    ]
+  },
+  {
+    "order": 254,
+    "word": "足",
+    "kana": "あし",
+    "type": "isim",
+    "meaningTr": "ayak, bacak",
+    "meaningEn": "foot, leg",
+    "exampleJp": "たくさん歩いて**足**が痛くなりました。",
+    "exampleTr": "Çok yürümekten ayaklarım ağrıdı.",
+    "meaningTrAccepted": [
+      "ayak",
+      "bacak"
+    ],
+    "meaningEnAccepted": [
+      "foot",
+      "leg"
+    ]
+  },
+  {
+    "order": 255,
+    "word": "頭",
+    "kana": "あたま",
+    "type": "isim",
+    "meaningTr": "baş, kafa",
+    "meaningEn": "head",
+    "exampleJp": "朝から**頭**が痛いです。",
+    "exampleTr": "Sabahtan beri başım ağrıyor.",
+    "meaningTrAccepted": [
+      "baş",
+      "kafa"
+    ],
+    "meaningEnAccepted": [
+      "head"
+    ]
+  },
+  {
+    "order": 256,
+    "word": "顔",
+    "kana": "かお",
+    "type": "isim",
+    "meaningTr": "yüz, surat",
+    "meaningEn": "face",
+    "exampleJp": "冷たい水で**顔**を洗いました。",
+    "exampleTr": "Yüzümü soğuk suyla yıkadım.",
+    "meaningTrAccepted": [
+      "yüz",
+      "surat"
+    ],
+    "meaningEnAccepted": [
+      "face"
+    ]
+  },
+  {
+    "order": 257,
+    "word": "体",
+    "kana": "からだ",
+    "type": "isim",
+    "meaningTr": "vücut, beden",
+    "meaningEn": "body",
+    "exampleJp": "**体**に気をつけてくださいね。",
+    "exampleTr": "Sağlığına dikkat et, olur mu?",
+    "meaningTrAccepted": [
+      "vücut",
+      "beden"
+    ],
+    "meaningEnAccepted": [
+      "body"
+    ]
+  },
+  {
+    "order": 258,
+    "word": "声",
+    "kana": "こえ",
+    "type": "isim",
+    "meaningTr": "ses (insan)",
+    "meaningEn": "voice",
+    "exampleJp": "彼女は**声**がとてもきれいです。",
+    "exampleTr": "Onun sesi çok güzel.",
+    "meaningTrAccepted": [
+      "ses"
+    ],
+    "meaningEnAccepted": [
+      "voice"
+    ]
+  },
+  {
+    "order": 259,
+    "word": "紙",
+    "kana": "かみ",
+    "type": "isim",
+    "meaningTr": "kâğıt",
+    "meaningEn": "paper",
+    "exampleJp": "この**紙**に名前と住所を書いてください。",
+    "exampleTr": "Bu kâğıda adınızı ve adresinizi yazın.",
+    "meaningTrAccepted": [
+      "kâğıt"
+    ],
+    "meaningEnAccepted": [
+      "paper"
+    ]
+  },
+  {
+    "order": 260,
+    "word": "鉛筆",
+    "kana": "えんぴつ",
+    "type": "isim",
+    "meaningTr": "kurşun kalem",
+    "meaningEn": "pencil",
+    "exampleJp": "テストは**鉛筆**で書いてください。",
+    "exampleTr": "Sınavı kurşun kalemle yazın lütfen.",
+    "meaningTrAccepted": [
+      "kurşun kalem"
+    ],
+    "meaningEnAccepted": [
+      "pencil"
+    ]
+  },
+  {
+    "order": 261,
+    "word": "ペン",
+    "kana": "ペン",
+    "type": "isim",
+    "meaningTr": "kalem (tükenmez)",
+    "meaningEn": "pen",
+    "exampleJp": "すみません、**ペン**を忘れました。",
+    "exampleTr": "Pardon, kalemimi unutmuşum.",
+    "meaningTrAccepted": [
+      "kalem"
+    ],
+    "meaningEnAccepted": [
+      "pen"
+    ]
+  },
+  {
+    "order": 262,
+    "word": "傘",
+    "kana": "かさ",
+    "type": "isim",
+    "meaningTr": "şemsiye",
+    "meaningEn": "umbrella",
+    "exampleJp": "雨が降りそうだから、**傘**を持って行きましょう。",
+    "exampleTr": "Yağmur yağacak gibi, şemsiye alalım.",
+    "meaningTrAccepted": [
+      "şemsiye"
+    ],
+    "meaningEnAccepted": [
+      "umbrella"
+    ]
+  },
+  {
+    "order": 263,
+    "word": "時計",
+    "kana": "とけい",
+    "type": "isim",
+    "meaningTr": "saat (cihaz)",
+    "meaningEn": "clock, watch",
+    "exampleJp": "誕生日に**時計**をもらいました。",
+    "exampleTr": "Doğum günümde saat hediye aldım.",
+    "meaningTrAccepted": [
+      "saat"
+    ],
+    "meaningEnAccepted": [
+      "clock",
+      "watch"
+    ]
+  },
+  {
+    "order": 264,
+    "word": "かばん",
+    "kana": "かばん",
+    "type": "isim",
+    "meaningTr": "çanta",
+    "meaningEn": "bag",
+    "exampleJp": "この**かばん**は軽くて使いやすいです。",
+    "exampleTr": "Bu çanta hafif, kullanışlı.",
+    "meaningTrAccepted": [
+      "çanta"
+    ],
+    "meaningEnAccepted": [
+      "bag"
+    ]
+  },
+  {
+    "order": 265,
+    "word": "財布",
+    "kana": "さいふ",
+    "type": "isim",
+    "meaningTr": "cüzdan",
+    "meaningEn": "wallet",
+    "exampleJp": "**財布**を家に忘れてしまいました。",
+    "exampleTr": "Cüzdanımı evde unutmuşum.",
+    "meaningTrAccepted": [
+      "cüzdan"
+    ],
+    "meaningEnAccepted": [
+      "wallet"
+    ]
+  },
+  {
+    "order": 266,
+    "word": "テーブル",
+    "kana": "テーブル",
+    "type": "isim",
+    "meaningTr": "masa (yemek)",
+    "meaningEn": "table",
+    "exampleJp": "**テーブル**の上に晩ご飯があります。",
+    "exampleTr": "Masada akşam yemeği var.",
+    "meaningTrAccepted": [
+      "masa"
+    ],
+    "meaningEnAccepted": [
+      "table"
+    ]
+  },
+  {
+    "order": 267,
+    "word": "ベッド",
+    "kana": "ベッド",
+    "type": "isim",
+    "meaningTr": "yatak",
+    "meaningEn": "bed",
+    "exampleJp": "疲れたので、すぐ**ベッド**に入りました。",
+    "exampleTr": "Yorgundum, hemen yatağa girdim.",
+    "meaningTrAccepted": [
+      "yatak"
+    ],
+    "meaningEnAccepted": [
+      "bed"
+    ]
+  },
+  {
+    "order": 268,
+    "word": "台所",
+    "kana": "だいどころ",
+    "type": "isim",
+    "meaningTr": "mutfak",
+    "meaningEn": "kitchen",
+    "exampleJp": "母は**台所**で晩ご飯を作っています。",
+    "exampleTr": "Annem mutfakta akşam yemeği yapıyor.",
+    "meaningTrAccepted": [
+      "mutfak"
+    ],
+    "meaningEnAccepted": [
+      "kitchen"
+    ]
+  },
+  {
+    "order": 269,
+    "word": "トイレ",
+    "kana": "トイレ",
+    "type": "isim",
+    "meaningTr": "tuvalet",
+    "meaningEn": "toilet",
+    "exampleJp": "すみません、**トイレ**はどこですか。",
+    "exampleTr": "Affedersiniz, tuvalet nerede?",
+    "meaningTrAccepted": [
+      "tuvalet"
+    ],
+    "meaningEnAccepted": [
+      "toilet"
+    ]
+  },
+  {
+    "order": 270,
+    "word": "お風呂",
+    "kana": "おふろ",
+    "type": "isim",
+    "meaningTr": "banyo, küvet",
+    "meaningEn": "bath",
+    "exampleJp": "寝る前に**お風呂**に入ります。",
+    "exampleTr": "Yatmadan önce banyo yaparım.",
+    "meaningTrAccepted": [
+      "banyo",
+      "küvet"
+    ],
+    "meaningEnAccepted": [
+      "bath"
+    ]
+  },
+  {
+    "order": 271,
+    "word": "料理",
+    "kana": "りょうり",
+    "type": "isim",
+    "meaningTr": "yemek (pişirme)",
+    "meaningEn": "cooking, dish",
+    "exampleJp": "週末は自分で**料理**をします。",
+    "exampleTr": "Hafta sonları kendim yemek yaparım.",
+    "meaningTrAccepted": [
+      "yemek"
+    ],
+    "meaningEnAccepted": [
+      "cooking",
+      "dish"
+    ]
+  },
+  {
+    "order": 272,
+    "word": "問題",
+    "kana": "もんだい",
+    "type": "isim",
+    "meaningTr": "problem, soru",
+    "meaningEn": "problem, question",
+    "exampleJp": "この**問題**は私には難しすぎます。",
+    "exampleTr": "Bu soru benim için fazla zor.",
+    "meaningTrAccepted": [
+      "problem",
+      "soru"
+    ],
+    "meaningEnAccepted": [
+      "problem",
+      "question"
+    ]
+  },
+  {
+    "order": 273,
+    "word": "宿題",
+    "kana": "しゅくだい",
+    "type": "isim",
+    "meaningTr": "ödev",
+    "meaningEn": "homework",
+    "exampleJp": "**宿題**が終わってから、遊びに行きます。",
+    "exampleTr": "Ödevim bitince oynamaya gideceğim.",
+    "meaningTrAccepted": [
+      "ödev"
+    ],
+    "meaningEnAccepted": [
+      "homework"
+    ]
+  },
+  {
+    "order": 274,
+    "word": "試験",
+    "kana": "しけん",
+    "type": "isim",
+    "meaningTr": "sınav",
+    "meaningEn": "exam, test",
+    "exampleJp": "来週の**試験**のために勉強しています。",
+    "exampleTr": "Gelecek haftaki sınav için çalışıyorum.",
+    "meaningTrAccepted": [
+      "sınav"
+    ],
+    "meaningEnAccepted": [
+      "exam",
+      "test"
+    ]
+  },
+  {
+    "order": 275,
+    "word": "意味",
+    "kana": "いみ",
+    "type": "isim",
+    "meaningTr": "anlam",
+    "meaningEn": "meaning",
+    "exampleJp": "この言葉の**意味**を辞書で調べました。",
+    "exampleTr": "Bu kelimenin anlamına sözlükten baktım.",
+    "meaningTrAccepted": [
+      "anlam"
+    ],
+    "meaningEnAccepted": [
+      "meaning"
+    ]
+  },
+  {
+    "order": 276,
+    "word": "質問",
+    "kana": "しつもん",
+    "type": "isim",
+    "meaningTr": "soru",
+    "meaningEn": "question",
+    "exampleJp": "**質問**がある人は手を上げてください。",
+    "exampleTr": "Sorusu olan elini kaldırsın.",
+    "meaningTrAccepted": [
+      "soru"
+    ],
+    "meaningEnAccepted": [
+      "question"
+    ]
+  },
+  {
+    "order": 277,
+    "word": "番号",
+    "kana": "ばんごう",
+    "type": "isim",
+    "meaningTr": "numara",
+    "meaningEn": "number",
+    "exampleJp": "電話**番号**をもう一度言ってください。",
+    "exampleTr": "Telefon numaranızı bir daha söyler misiniz?",
+    "meaningTrAccepted": [
+      "numara"
+    ],
+    "meaningEnAccepted": [
+      "number"
+    ]
+  },
+  {
+    "order": 278,
+    "word": "地図",
+    "kana": "ちず",
+    "type": "isim",
+    "meaningTr": "harita",
+    "meaningEn": "map",
+    "exampleJp": "**地図**を見ながら、お寺を探しました。",
+    "exampleTr": "Haritaya baka baka tapınağı aradık.",
+    "meaningTrAccepted": [
+      "harita"
+    ],
+    "meaningEnAccepted": [
+      "map"
+    ]
+  },
+  {
+    "order": 279,
+    "word": "切符",
+    "kana": "きっぷ",
+    "type": "isim",
+    "meaningTr": "bilet",
+    "meaningEn": "ticket",
+    "exampleJp": "新幹線の**切符**をもう買いましたか。",
+    "exampleTr": "Shinkansen biletini aldın mı?",
+    "meaningTrAccepted": [
+      "bilet"
+    ],
+    "meaningEnAccepted": [
+      "ticket"
+    ]
+  },
+  {
+    "order": 280,
+    "word": "開く",
+    "kana": "あく",
+    "type": "fiil",
+    "meaningTr": "açılmak",
+    "meaningEn": "to open (intransitive)",
+    "exampleJp": "この店は何時に**開**きますか。",
+    "exampleTr": "Bu dükkân saat kaçta açılıyor?",
+    "meaningTrAccepted": [
+      "açılmak"
+    ],
+    "meaningEnAccepted": [
+      "to open",
+      "open"
+    ]
+  },
+  {
+    "order": 281,
+    "word": "始まる",
+    "kana": "はじまる",
+    "type": "fiil",
+    "meaningTr": "başlamak",
+    "meaningEn": "to begin (intransitive)",
+    "exampleJp": "映画は七時に**始ま**ります。",
+    "exampleTr": "Film yedide başlıyor.",
+    "meaningTrAccepted": [
+      "başlamak"
+    ],
+    "meaningEnAccepted": [
+      "to begin",
+      "begin"
+    ]
+  },
+  {
+    "order": 282,
+    "word": "終わる",
+    "kana": "おわる",
+    "type": "fiil",
+    "meaningTr": "bitmek",
+    "meaningEn": "to end, to finish",
+    "exampleJp": "授業は四時半に**終わ**ります。",
+    "exampleTr": "Ders dört buçukta bitiyor.",
+    "meaningTrAccepted": [
+      "bitmek"
+    ],
+    "meaningEnAccepted": [
+      "to end",
+      "to finish",
+      "end",
+      "finish"
+    ]
+  },
+  {
+    "order": 283,
+    "word": "止まる",
+    "kana": "とまる",
+    "type": "fiil",
+    "meaningTr": "durmak",
+    "meaningEn": "to stop (intransitive)",
+    "exampleJp": "この電車は次の駅に**止ま**りますか。",
+    "exampleTr": "Bu tren bir sonraki istasyonda duruyor mu?",
+    "meaningTrAccepted": [
+      "durmak"
+    ],
+    "meaningEnAccepted": [
+      "to stop",
+      "stop"
+    ]
+  },
+  {
+    "order": 284,
+    "word": "撮る",
+    "kana": "とる",
+    "type": "fiil",
+    "meaningTr": "çekmek (fotoğraf)",
+    "meaningEn": "to take (a photo)",
+    "exampleJp": "旅行でたくさん写真を**撮**りました。",
+    "exampleTr": "Gezide bir sürü fotoğraf çektim.",
+    "meaningTrAccepted": [
+      "çekmek"
+    ],
+    "meaningEnAccepted": [
+      "to take",
+      "take"
+    ]
+  },
+  {
+    "order": 285,
+    "word": "歌う",
+    "kana": "うたう",
+    "type": "fiil",
+    "meaningTr": "şarkı söylemek",
+    "meaningEn": "to sing",
+    "exampleJp": "妹は歌を**歌う**のが上手です。",
+    "exampleTr": "Kız kardeşim şarkı söylemekte iyidir.",
+    "meaningTrAccepted": [
+      "şarkı söylemek"
+    ],
+    "meaningEnAccepted": [
+      "to sing",
+      "sing"
+    ]
+  },
+  {
+    "order": 286,
+    "word": "踊る",
+    "kana": "おどる",
+    "type": "fiil",
+    "meaningTr": "dans etmek",
+    "meaningEn": "to dance",
+    "exampleJp": "お祭りでみんなで**踊**りました。",
+    "exampleTr": "Festivalde hep birlikte dans ettik.",
+    "meaningTrAccepted": [
+      "dans etmek"
+    ],
+    "meaningEnAccepted": [
+      "to dance",
+      "dance"
+    ]
+  },
+  {
+    "order": 287,
+    "word": "できる",
+    "kana": "できる",
+    "type": "fiil",
+    "meaningTr": "yapabilmek",
+    "meaningEn": "to be able to do",
+    "exampleJp": "彼は料理も掃除も**でき**ます。",
+    "exampleTr": "O hem yemek yapabilir hem temizlik.",
+    "meaningTrAccepted": [
+      "yapabilmek"
+    ],
+    "meaningEnAccepted": [
+      "to be able to do",
+      "be able to do"
+    ]
+  },
+  {
+    "order": 288,
+    "word": "歌",
+    "kana": "うた",
+    "type": "isim",
+    "meaningTr": "şarkı",
+    "meaningEn": "song",
+    "exampleJp": "この**歌**は日本でとても有名です。",
+    "exampleTr": "Bu şarkı Japonya'da çok ünlü.",
+    "meaningTrAccepted": [
+      "şarkı"
+    ],
+    "meaningEnAccepted": [
+      "song"
+    ]
+  },
+  {
+    "order": 289,
+    "word": "絵",
+    "kana": "え",
+    "type": "isim",
+    "meaningTr": "resim, çizim",
+    "meaningEn": "picture, drawing",
+    "exampleJp": "趣味は**絵**を描くことです。",
+    "exampleTr": "Hobim resim çizmek.",
+    "meaningTrAccepted": [
+      "resim",
+      "çizim"
+    ],
+    "meaningEnAccepted": [
+      "picture",
+      "drawing"
+    ]
+  },
+  {
+    "order": 290,
+    "word": "スポーツ",
+    "kana": "スポーツ",
+    "type": "isim",
+    "meaningTr": "spor",
+    "meaningEn": "sport",
+    "exampleJp": "何か**スポーツ**をしていますか。",
+    "exampleTr": "Bir spor yapıyor musun?",
+    "meaningTrAccepted": [
+      "spor"
+    ],
+    "meaningEnAccepted": [
+      "sport"
+    ]
+  },
+  {
+    "order": 291,
+    "word": "今朝",
+    "kana": "けさ",
+    "type": "isim",
+    "meaningTr": "bu sabah",
+    "meaningEn": "this morning",
+    "exampleJp": "**今朝**は寒くて起きられませんでした。",
+    "exampleTr": "Bu sabah soğuktan kalkamadım.",
+    "meaningTrAccepted": [
+      "bu sabah"
+    ],
+    "meaningEnAccepted": [
+      "this morning"
+    ]
+  },
+  {
+    "order": 292,
+    "word": "今晩",
+    "kana": "こんばん",
+    "type": "isim",
+    "meaningTr": "bu akşam",
+    "meaningEn": "tonight, this evening",
+    "exampleJp": "**今晩**、一緒にご飯を食べませんか。",
+    "exampleTr": "Bu akşam birlikte yemek yiyelim mi?",
+    "meaningTrAccepted": [
+      "bu akşam"
+    ],
+    "meaningEnAccepted": [
+      "tonight",
+      "this evening"
+    ]
+  },
+  {
+    "order": 293,
+    "word": "去年",
+    "kana": "きょねん",
+    "type": "isim",
+    "meaningTr": "geçen yıl",
+    "meaningEn": "last year",
+    "exampleJp": "**去年**の夏、初めて日本へ行きました。",
+    "exampleTr": "Geçen yaz ilk kez Japonya'ya gittim.",
+    "meaningTrAccepted": [
+      "geçen yıl"
+    ],
+    "meaningEnAccepted": [
+      "last year"
+    ]
+  },
+  {
+    "order": 294,
+    "word": "来年",
+    "kana": "らいねん",
+    "type": "isim",
+    "meaningTr": "gelecek yıl",
+    "meaningEn": "next year",
+    "exampleJp": "**来年**、大学を卒業します。",
+    "exampleTr": "Gelecek yıl üniversiteden mezun oluyorum.",
+    "meaningTrAccepted": [
+      "gelecek yıl"
+    ],
+    "meaningEnAccepted": [
+      "next year"
+    ]
+  },
+  {
+    "order": 295,
+    "word": "誕生日",
+    "kana": "たんじょうび",
+    "type": "isim",
+    "meaningTr": "doğum günü",
+    "meaningEn": "birthday",
+    "exampleJp": "**誕生日**に何がほしいですか。",
+    "exampleTr": "Doğum gününde ne istersin?",
+    "meaningTrAccepted": [
+      "doğum günü"
+    ],
+    "meaningEnAccepted": [
+      "birthday"
+    ]
+  },
+  {
+    "order": 296,
+    "word": "春",
+    "kana": "はる",
+    "type": "isim",
+    "meaningTr": "ilkbahar",
+    "meaningEn": "spring",
+    "exampleJp": "**春**になると、桜が咲きます。",
+    "exampleTr": "Bahar gelince kiraz çiçekleri açar.",
+    "meaningTrAccepted": [
+      "ilkbahar"
+    ],
+    "meaningEnAccepted": [
+      "spring"
+    ]
+  },
+  {
+    "order": 297,
+    "word": "夏",
+    "kana": "なつ",
+    "type": "isim",
+    "meaningTr": "yaz",
+    "meaningEn": "summer",
+    "exampleJp": "**夏**は毎日プールで泳ぎたいです。",
+    "exampleTr": "Yazın her gün havuzda yüzmek istiyorum.",
+    "meaningTrAccepted": [
+      "yaz"
+    ],
+    "meaningEnAccepted": [
+      "summer"
+    ]
+  },
+  {
+    "order": 298,
+    "word": "秋",
+    "kana": "あき",
+    "type": "isim",
+    "meaningTr": "sonbahar",
+    "meaningEn": "autumn, fall",
+    "exampleJp": "**秋**は涼しくて過ごしやすいです。",
+    "exampleTr": "Sonbahar serin, yaşaması rahat.",
+    "meaningTrAccepted": [
+      "sonbahar"
+    ],
+    "meaningEnAccepted": [
+      "autumn",
+      "fall"
+    ]
+  },
+  {
+    "order": 299,
+    "word": "冬",
+    "kana": "ふゆ",
+    "type": "isim",
+    "meaningTr": "kış",
+    "meaningEn": "winter",
+    "exampleJp": "**冬**は温かい料理が食べたくなります。",
+    "exampleTr": "Kışın canım sıcak yemek ister.",
+    "meaningTrAccepted": [
+      "kış"
+    ],
+    "meaningEnAccepted": [
+      "winter"
+    ]
+  },
+  {
+    "order": 300,
+    "word": "朝ご飯",
+    "kana": "あさごはん",
+    "type": "isim",
+    "meaningTr": "kahvaltı",
+    "meaningEn": "breakfast",
+    "exampleJp": "**朝ご飯**をしっかり食べてから出かけます。",
+    "exampleTr": "Kahvaltımı iyice yapıp çıkarım.",
+    "meaningTrAccepted": [
+      "kahvaltı"
+    ],
+    "meaningEnAccepted": [
+      "breakfast"
+    ]
+  },
+  {
+    "order": 301,
+    "word": "昼ご飯",
+    "kana": "ひるごはん",
+    "type": "isim",
+    "meaningTr": "öğle yemeği",
+    "meaningEn": "lunch",
+    "exampleJp": "**昼ご飯**は会社の近くで食べます。",
+    "exampleTr": "Öğle yemeğini şirketin yakınında yerim.",
+    "meaningTrAccepted": [
+      "öğle yemeği"
+    ],
+    "meaningEnAccepted": [
+      "lunch"
+    ]
+  },
+  {
+    "order": 302,
+    "word": "晩ご飯",
+    "kana": "ばんごはん",
+    "type": "isim",
+    "meaningTr": "akşam yemeği",
+    "meaningEn": "dinner",
+    "exampleJp": "今日の**晩ご飯**はカレーですよ。",
+    "exampleTr": "Bu akşamki yemek köri.",
+    "meaningTrAccepted": [
+      "akşam yemeği"
+    ],
+    "meaningEnAccepted": [
+      "dinner"
+    ]
+  },
+  {
+    "order": 303,
+    "word": "始める",
+    "kana": "はじめる",
+    "type": "fiil",
+    "meaningTr": "başlatmak",
+    "meaningEn": "to begin, to start (something)",
+    "exampleJp": "来月から日本語の勉強を**始め**ます。",
+    "exampleTr": "Gelecek ay Japonca çalışmaya başlıyorum.",
+    "meaningTrAccepted": [
+      "başlatmak"
+    ],
+    "meaningEnAccepted": [
+      "to begin",
+      "to start",
+      "begin",
+      "start"
+    ]
+  },
+  {
+    "order": 304,
+    "word": "呼ぶ",
+    "kana": "よぶ",
+    "type": "fiil",
+    "meaningTr": "çağırmak, seslenmek",
+    "meaningEn": "to call",
+    "exampleJp": "すぐタクシーを**呼**びましょうか。",
+    "exampleTr": "Hemen taksi çağırayım mı?",
+    "meaningTrAccepted": [
+      "çağırmak",
+      "seslenmek"
+    ],
+    "meaningEnAccepted": [
+      "to call",
+      "call"
+    ]
+  },
+  {
+    "order": 305,
+    "word": "手伝う",
+    "kana": "てつだう",
+    "type": "fiil",
+    "meaningTr": "yardım etmek",
+    "meaningEn": "to help",
+    "exampleJp": "引っ越しを友達に**手伝**ってもらいました。",
+    "exampleTr": "Taşınmada arkadaşlarım yardım etti.",
+    "meaningTrAccepted": [
+      "yardım etmek"
+    ],
+    "meaningEnAccepted": [
+      "to help",
+      "help"
+    ]
+  },
+  {
+    "order": 306,
+    "word": "掃除",
+    "kana": "そうじ",
+    "type": "isim",
+    "meaningTr": "temizlik",
+    "meaningEn": "cleaning",
+    "exampleJp": "週末に部屋の**掃除**をします。",
+    "exampleTr": "Hafta sonu odamı temizlerim.",
+    "meaningTrAccepted": [
+      "temizlik"
+    ],
+    "meaningEnAccepted": [
+      "cleaning"
+    ]
+  },
+  {
+    "order": 307,
+    "word": "洗濯",
+    "kana": "せんたく",
+    "type": "isim",
+    "meaningTr": "çamaşır yıkama",
+    "meaningEn": "laundry, washing",
+    "exampleJp": "天気がいいから、**洗濯**をしました。",
+    "exampleTr": "Hava güzeldi, çamaşır yıkadım.",
+    "meaningTrAccepted": [
+      "çamaşır yıkama"
+    ],
+    "meaningEnAccepted": [
+      "laundry",
+      "washing"
+    ]
+  },
+  {
+    "order": 308,
+    "word": "散歩",
+    "kana": "さんぽ",
+    "type": "isim",
+    "meaningTr": "yürüyüş, gezinti",
+    "meaningEn": "a walk, a stroll",
+    "exampleJp": "毎朝、犬と**散歩**をしています。",
+    "exampleTr": "Her sabah köpeğimle yürüyüş yapıyorum.",
+    "meaningTrAccepted": [
+      "yürüyüş",
+      "gezinti"
+    ],
+    "meaningEnAccepted": [
+      "a walk",
+      "a stroll"
+    ]
+  },
+  {
+    "order": 309,
+    "word": "練習",
+    "kana": "れんしゅう",
+    "type": "isim",
+    "meaningTr": "alıştırma, pratik",
+    "meaningEn": "practice",
+    "exampleJp": "毎日ピアノの**練習**をしています。",
+    "exampleTr": "Her gün piyano çalışıyorum.",
+    "meaningTrAccepted": [
+      "alıştırma",
+      "pratik"
+    ],
+    "meaningEnAccepted": [
+      "practice"
+    ]
+  },
+  {
+    "order": 310,
+    "word": "結婚",
+    "kana": "けっこん",
+    "type": "isim",
+    "meaningTr": "evlilik",
+    "meaningEn": "marriage",
+    "exampleJp": "姉は来年**結婚**します。",
+    "exampleTr": "Ablam gelecek yıl evleniyor.",
+    "meaningTrAccepted": [
+      "evlilik"
+    ],
+    "meaningEnAccepted": [
+      "marriage"
+    ]
+  },
+  {
+    "order": 311,
+    "word": "約束",
+    "kana": "やくそく",
+    "type": "isim",
+    "meaningTr": "söz, randevu",
+    "meaningEn": "promise, appointment",
+    "exampleJp": "友達との**約束**を忘れてしまいました。",
+    "exampleTr": "Arkadaşımla randevumu unutmuşum.",
+    "meaningTrAccepted": [
+      "söz",
+      "randevu"
+    ],
+    "meaningEnAccepted": [
+      "promise",
+      "appointment"
+    ]
+  },
+  {
+    "order": 312,
+    "word": "弁当",
+    "kana": "べんとう",
+    "type": "isim",
+    "meaningTr": "bento, yemek kutusu",
+    "meaningEn": "boxed lunch (bento)",
+    "exampleJp": "毎朝、自分でお**弁当**を作っています。",
+    "exampleTr": "Her sabah kendi bentomu hazırlıyorum.",
+    "meaningTrAccepted": [
+      "bento",
+      "yemek kutusu"
+    ],
+    "meaningEnAccepted": [
+      "boxed lunch"
+    ]
+  },
+  {
+    "order": 313,
+    "word": "はい",
+    "kana": "はい",
+    "type": "ünlem",
+    "meaningTr": "evet",
+    "meaningEn": "yes",
+    "exampleJp": "「田中さんですか。」「**はい**、そうです。」",
+    "exampleTr": "\"Tanaka siz misiniz?\" \"Evet, benim.\"",
+    "meaningTrAccepted": [
+      "evet"
+    ],
+    "meaningEnAccepted": [
+      "yes"
+    ]
+  },
+  {
+    "order": 314,
+    "word": "いいえ",
+    "kana": "いいえ",
+    "type": "ünlem",
+    "meaningTr": "hayır",
+    "meaningEn": "no",
+    "exampleJp": "「学生ですか。」「**いいえ**、会社員です。」",
+    "exampleTr": "\"Öğrenci misiniz?\" \"Hayır, şirket çalışanıyım.\"",
+    "meaningTrAccepted": [
+      "hayır"
+    ],
+    "meaningEnAccepted": [
+      "no"
+    ]
+  },
+  {
+    "order": 315,
+    "word": "どうぞ",
+    "kana": "どうぞ",
+    "type": "ünlem",
+    "meaningTr": "buyurun",
+    "meaningEn": "please, go ahead",
+    "exampleJp": "**どうぞ**、こちらの席へ。",
+    "exampleTr": "Buyurun, bu tarafa oturun.",
+    "meaningTrAccepted": [
+      "buyurun"
+    ],
+    "meaningEnAccepted": [
+      "please",
+      "go ahead"
+    ]
+  },
+  {
+    "order": 316,
+    "word": "どうも",
+    "kana": "どうも",
+    "type": "ünlem",
+    "meaningTr": "teşekkürler; sağ olun",
+    "meaningEn": "thanks; somehow",
+    "exampleJp": "手伝ってくれて、**どうも**ありがとう。",
+    "exampleTr": "Yardım ettiğin için çok teşekkürler.",
+    "meaningTrAccepted": [
+      "teşekkürler",
+      "sağ olun"
+    ],
+    "meaningEnAccepted": [
+      "thanks",
+      "somehow"
+    ]
+  },
+  {
+    "order": 317,
+    "word": "ありがとう",
+    "kana": "ありがとう",
+    "type": "ünlem",
+    "meaningTr": "teşekkür ederim",
+    "meaningEn": "thank you",
+    "exampleJp": "プレゼント、本当に**ありがとう**。",
+    "exampleTr": "Hediye için gerçekten teşekkürler.",
+    "meaningTrAccepted": [
+      "teşekkür ederim"
+    ],
+    "meaningEnAccepted": [
+      "thank you"
+    ]
+  },
+  {
+    "order": 318,
+    "word": "すみません",
+    "kana": "すみません",
+    "type": "ünlem",
+    "meaningTr": "affedersiniz, pardon",
+    "meaningEn": "excuse me, sorry",
+    "exampleJp": "**すみません**、駅はどちらですか。",
+    "exampleTr": "Affedersiniz, istasyon ne tarafta?",
+    "meaningTrAccepted": [
+      "affedersiniz",
+      "pardon"
+    ],
+    "meaningEnAccepted": [
+      "excuse me",
+      "sorry"
+    ]
+  },
+  {
+    "order": 319,
+    "word": "こんにちは",
+    "kana": "こんにちは",
+    "type": "ünlem",
+    "meaningTr": "merhaba, iyi günler",
+    "meaningEn": "hello, good afternoon",
+    "exampleJp": "**こんにちは**。いい天気ですね。",
+    "exampleTr": "Merhaba. Hava çok güzel, değil mi?",
+    "meaningTrAccepted": [
+      "merhaba",
+      "iyi günler"
+    ],
+    "meaningEnAccepted": [
+      "hello",
+      "good afternoon"
+    ]
+  },
+  {
+    "order": 320,
+    "word": "さようなら",
+    "kana": "さようなら",
+    "type": "ünlem",
+    "meaningTr": "hoşça kal, güle güle",
+    "meaningEn": "goodbye",
+    "exampleJp": "**さようなら**。また来週会いましょう。",
+    "exampleTr": "Hoşça kalın. Gelecek hafta görüşelim.",
+    "meaningTrAccepted": [
+      "hoşça kal",
+      "güle güle"
+    ],
+    "meaningEnAccepted": [
+      "goodbye"
+    ]
+  },
+  {
+    "order": 321,
+    "word": "そして",
+    "kana": "そして",
+    "type": "bağlaç",
+    "meaningTr": "ve, sonra",
+    "meaningEn": "and, and then",
+    "exampleJp": "朝ご飯を食べて、**そして**学校へ行きます。",
+    "exampleTr": "Kahvaltı ederim, sonra da okula giderim.",
+    "meaningTrAccepted": [
+      "ve",
+      "sonra"
+    ],
+    "meaningEnAccepted": [
+      "and",
+      "and then"
+    ]
+  },
+  {
+    "order": 322,
+    "word": "でも",
+    "kana": "でも",
+    "type": "bağlaç",
+    "meaningTr": "ama, fakat",
+    "meaningEn": "but, however",
+    "exampleJp": "行きたいです。**でも**、時間がありません。",
+    "exampleTr": "Gitmek istiyorum. Ama vaktim yok.",
+    "meaningTrAccepted": [
+      "ama",
+      "fakat"
+    ],
+    "meaningEnAccepted": [
+      "but",
+      "however"
+    ]
+  },
+  {
+    "order": 323,
+    "word": "から",
+    "kana": "から",
+    "type": "edat",
+    "meaningTr": "-den; çünkü",
+    "meaningEn": "from; because",
+    "exampleJp": "疲れた**から**、今日は早く寝ます。",
+    "exampleTr": "Yorgunum, o yüzden bugün erken yatacağım.",
+    "meaningTrAccepted": [
+      "-den",
+      "çünkü"
+    ],
+    "meaningEnAccepted": [
+      "from",
+      "because"
+    ]
+  },
+  {
+    "order": 324,
+    "word": "まで",
+    "kana": "まで",
+    "type": "edat",
+    "meaningTr": "-e kadar",
+    "meaningEn": "until, up to",
+    "exampleJp": "駅から家**まで**十分かかります。",
+    "exampleTr": "İstasyondan eve on dakika sürüyor.",
+    "meaningTrAccepted": [
+      "-e kadar"
+    ],
+    "meaningEnAccepted": [
+      "until",
+      "up to"
+    ]
+  },
+  {
+    "order": 325,
+    "word": "ぐらい",
+    "kana": "ぐらい",
+    "type": "edat",
+    "meaningTr": "kadar, yaklaşık",
+    "meaningEn": "about, approximately",
+    "exampleJp": "駅まで十五分**ぐらい**かかります。",
+    "exampleTr": "İstasyona on beş dakika kadar sürüyor.",
+    "meaningTrAccepted": [
+      "kadar",
+      "yaklaşık"
+    ],
+    "meaningEnAccepted": [
+      "about",
+      "approximately"
+    ]
+  },
+  {
+    "order": 326,
+    "word": "だけ",
+    "kana": "だけ",
+    "type": "edat",
+    "meaningTr": "sadece, yalnızca",
+    "meaningEn": "only, just",
+    "exampleJp": "今日は一時間**だけ**勉強しました。",
+    "exampleTr": "Bugün sadece bir saat çalıştım.",
+    "meaningTrAccepted": [
+      "sadece",
+      "yalnızca"
+    ],
+    "meaningEnAccepted": [
+      "only",
+      "just"
+    ]
+  },
+  {
+    "order": 327,
+    "word": "一緒に",
+    "kana": "いっしょに",
+    "type": "zarf",
+    "meaningTr": "birlikte, beraber",
+    "meaningEn": "together",
+    "exampleJp": "今度**一緒に**旅行しませんか。",
+    "exampleTr": "Bir dahaki sefere birlikte seyahat edelim mi?",
+    "meaningTrAccepted": [
+      "birlikte",
+      "beraber"
+    ],
+    "meaningEnAccepted": [
+      "together"
+    ]
+  },
+  {
+    "order": 328,
+    "word": "本当に",
+    "kana": "ほんとうに",
+    "type": "zarf",
+    "meaningTr": "gerçekten",
+    "meaningEn": "really, truly",
+    "exampleJp": "この景色は**本当に**きれいですね。",
+    "exampleTr": "Bu manzara gerçekten çok güzel.",
+    "meaningTrAccepted": [
+      "gerçekten"
+    ],
+    "meaningEnAccepted": [
+      "really",
+      "truly"
+    ]
+  },
+  {
+    "order": 329,
+    "word": "たぶん",
+    "kana": "たぶん",
+    "type": "zarf",
+    "meaningTr": "belki, muhtemelen",
+    "meaningEn": "probably, maybe",
+    "exampleJp": "彼は**たぶん**来ないと思います。",
+    "exampleTr": "Bence o muhtemelen gelmeyecek.",
+    "meaningTrAccepted": [
+      "belki",
+      "muhtemelen"
+    ],
+    "meaningEnAccepted": [
+      "probably",
+      "maybe"
+    ]
+  },
+  {
+    "order": 330,
+    "word": "一番",
+    "kana": "いちばん",
+    "type": "zarf",
+    "meaningTr": "en, birinci",
+    "meaningEn": "most, number one",
+    "exampleJp": "季節の中で春が**一番**好きです。",
+    "exampleTr": "Mevsimler içinde en çok baharı severim.",
+    "meaningTrAccepted": [
+      "en",
+      "birinci"
+    ],
+    "meaningEnAccepted": [
+      "most",
+      "number one"
+    ]
+  },
+  {
+    "order": 331,
+    "word": "どうして",
+    "kana": "どうして",
+    "type": "zarf",
+    "meaningTr": "neden, niçin",
+    "meaningEn": "why",
+    "exampleJp": "**どうして**昨日来なかったんですか。",
+    "exampleTr": "Neden dün gelmedin?",
+    "meaningTrAccepted": [
+      "neden",
+      "niçin"
+    ],
+    "meaningEnAccepted": [
+      "why"
+    ]
+  },
+  {
+    "order": 332,
+    "word": "どう",
+    "kana": "どう",
+    "type": "zarf",
+    "meaningTr": "nasıl",
+    "meaningEn": "how",
+    "exampleJp": "新しい学校は**どう**ですか。",
+    "exampleTr": "Yeni okul nasıl?",
+    "meaningTrAccepted": [
+      "nasıl"
+    ],
+    "meaningEnAccepted": [
+      "how"
+    ]
+  },
+  {
+    "order": 333,
+    "word": "いくら",
+    "kana": "いくら",
+    "type": "zarf",
+    "meaningTr": "ne kadar (fiyat)",
+    "meaningEn": "how much",
+    "exampleJp": "このかばんは**いくら**ですか。",
+    "exampleTr": "Bu çanta ne kadar?",
+    "meaningTrAccepted": [
+      "ne kadar"
+    ],
+    "meaningEnAccepted": [
+      "how much"
+    ]
+  },
+  {
+    "order": 334,
+    "word": "いくつ",
+    "kana": "いくつ",
+    "type": "zarf",
+    "meaningTr": "kaç tane; kaç yaşında",
+    "meaningEn": "how many; how old",
+    "exampleJp": "卵は**いくつ**買いましょうか。",
+    "exampleTr": "Kaç yumurta alayım?",
+    "meaningTrAccepted": [
+      "kaç tane",
+      "kaç yaşında"
+    ],
+    "meaningEnAccepted": [
+      "how many",
+      "how old"
+    ]
+  },
+  {
+    "order": 335,
+    "word": "どんな",
+    "kana": "どんな",
+    "type": "bağlaşık sıfat",
+    "meaningTr": "nasıl bir, ne tür",
+    "meaningEn": "what kind of",
+    "exampleJp": "**どんな**音楽をよく聞きますか。",
+    "exampleTr": "Ne tür müzik dinlersin?",
+    "meaningTrAccepted": [
+      "nasıl bir",
+      "ne tür"
+    ],
+    "meaningEnAccepted": [
+      "what kind of"
+    ]
+  },
+  {
+    "order": 336,
+    "word": "授業",
+    "kana": "じゅぎょう",
+    "type": "isim",
+    "meaningTr": "ders",
+    "meaningEn": "class, lesson",
+    "exampleJp": "今日の**授業**はとても面白かったです。",
+    "exampleTr": "Bugünkü ders çok ilginçti.",
+    "meaningTrAccepted": [
+      "ders"
+    ],
+    "meaningEnAccepted": [
+      "class",
+      "lesson"
+    ]
+  },
+  {
+    "order": 337,
+    "word": "教室",
+    "kana": "きょうしつ",
+    "type": "isim",
+    "meaningTr": "sınıf (oda)",
+    "meaningEn": "classroom",
+    "exampleJp": "**教室**に誰もいませんでした。",
+    "exampleTr": "Sınıfta kimse yoktu.",
+    "meaningTrAccepted": [
+      "sınıf"
+    ],
+    "meaningEnAccepted": [
+      "classroom"
+    ]
+  },
+  {
+    "order": 338,
+    "word": "世界",
+    "kana": "せかい",
+    "type": "isim",
+    "meaningTr": "dünya",
+    "meaningEn": "world",
+    "exampleJp": "いつか**世界**を旅行したいです。",
+    "exampleTr": "Bir gün dünyayı gezmek istiyorum.",
+    "meaningTrAccepted": [
+      "dünya"
+    ],
+    "meaningEnAccepted": [
+      "world"
+    ]
+  },
+  {
+    "order": 339,
+    "word": "外国",
+    "kana": "がいこく",
+    "type": "isim",
+    "meaningTr": "yabancı ülke",
+    "meaningEn": "foreign country",
+    "exampleJp": "**外国**で働いてみたいです。",
+    "exampleTr": "Yurt dışında çalışmayı denemek istiyorum.",
+    "meaningTrAccepted": [
+      "yabancı ülke"
+    ],
+    "meaningEnAccepted": [
+      "foreign country"
+    ]
+  },
+  {
+    "order": 340,
+    "word": "英語",
+    "kana": "えいご",
+    "type": "isim",
+    "meaningTr": "İngilizce",
+    "meaningEn": "English (language)",
+    "exampleJp": "**英語**と日本語が話せます。",
+    "exampleTr": "İngilizce ve Japonca konuşabiliyorum.",
+    "meaningTrAccepted": [
+      "İngilizce"
+    ],
+    "meaningEnAccepted": [
+      "English"
+    ]
+  },
+  {
+    "order": 341,
+    "word": "日本語",
+    "kana": "にほんご",
+    "type": "isim",
+    "meaningTr": "Japonca",
+    "meaningEn": "Japanese (language)",
+    "exampleJp": "**日本語**の勉強は楽しいです。",
+    "exampleTr": "Japonca çalışmak keyifli.",
+    "meaningTrAccepted": [
+      "Japonca"
+    ],
+    "meaningEnAccepted": [
+      "Japanese"
+    ]
+  },
+  {
+    "order": 342,
+    "word": "字",
+    "kana": "じ",
+    "type": "isim",
+    "meaningTr": "harf, yazı karakteri",
+    "meaningEn": "letter, character",
+    "exampleJp": "彼は**字**がとてもきれいです。",
+    "exampleTr": "Onun el yazısı çok güzel.",
+    "meaningTrAccepted": [
+      "harf",
+      "yazı karakteri"
+    ],
+    "meaningEnAccepted": [
+      "letter",
+      "character"
+    ]
+  },
+  {
+    "order": 343,
+    "word": "ホテル",
+    "kana": "ホテル",
+    "type": "isim",
+    "meaningTr": "otel",
+    "meaningEn": "hotel",
+    "exampleJp": "駅の近くの**ホテル**を予約しました。",
+    "exampleTr": "İstasyona yakın bir otel ayırttım.",
+    "meaningTrAccepted": [
+      "otel"
+    ],
+    "meaningEnAccepted": [
+      "hotel"
+    ]
+  },
+  {
+    "order": 344,
+    "word": "空港",
+    "kana": "くうこう",
+    "type": "isim",
+    "meaningTr": "havalimanı",
+    "meaningEn": "airport",
+    "exampleJp": "**空港**まで友達を迎えに行きます。",
+    "exampleTr": "Havalimanına arkadaşımı karşılamaya gidiyorum.",
+    "meaningTrAccepted": [
+      "havalimanı"
+    ],
+    "meaningEnAccepted": [
+      "airport"
+    ]
+  },
+  {
+    "order": 345,
+    "word": "お母さん",
+    "kana": "おかあさん",
+    "type": "isim",
+    "meaningTr": "anne (başkasının)",
+    "meaningEn": "mother",
+    "exampleJp": "**お母さん**はお元気ですか。",
+    "exampleTr": "Annen nasıl, iyi mi?",
+    "meaningTrAccepted": [
+      "anne"
+    ],
+    "meaningEnAccepted": [
+      "mother"
+    ]
+  },
+  {
+    "order": 346,
+    "word": "お父さん",
+    "kana": "おとうさん",
+    "type": "isim",
+    "meaningTr": "baba (başkasının)",
+    "meaningEn": "father",
+    "exampleJp": "**お父さん**の仕事は何ですか。",
+    "exampleTr": "Baban ne iş yapıyor?",
+    "meaningTrAccepted": [
+      "baba"
+    ],
+    "meaningEnAccepted": [
+      "father"
+    ]
+  },
+  {
+    "order": 347,
+    "word": "あそこ",
+    "kana": "あそこ",
+    "type": "zamir",
+    "meaningTr": "şurası, orada (uzak)",
+    "meaningEn": "over there",
+    "exampleJp": "**あそこ**に見えるのが私の学校です。",
+    "exampleTr": "Şurada görünen benim okulum.",
+    "meaningTrAccepted": [
+      "şurası",
+      "orada"
+    ],
+    "meaningEnAccepted": [
+      "over there"
+    ]
+  },
+  {
+    "order": 348,
+    "word": "どの",
+    "kana": "どの",
+    "type": "bağlaşık sıfat",
+    "meaningTr": "hangi (isimle)",
+    "meaningEn": "which ~",
+    "exampleJp": "**どの**ケーキにしますか。",
+    "exampleTr": "Hangi pastayı alırsın?",
+    "meaningTrAccepted": [
+      "hangi"
+    ],
+    "meaningEnAccepted": [
+      "which ~"
+    ]
+  },
+  {
+    "order": 349,
+    "word": "デパート",
+    "kana": "デパート",
+    "type": "isim",
+    "meaningTr": "büyük mağaza",
+    "meaningEn": "department store",
+    "exampleJp": "**デパート**で母への贈り物を買いました。",
+    "exampleTr": "Mağazadan anneme hediye aldım.",
+    "meaningTrAccepted": [
+      "büyük mağaza"
+    ],
+    "meaningEnAccepted": [
+      "department store"
+    ]
+  },
+  {
+    "order": 350,
+    "word": "スーパー",
+    "kana": "スーパー",
+    "type": "isim",
+    "meaningTr": "market, süpermarket",
+    "meaningEn": "supermarket",
+    "exampleJp": "帰りに**スーパー**に寄って牛乳を買います。",
+    "exampleTr": "Dönüşte markete uğrayıp süt alacağım.",
+    "meaningTrAccepted": [
+      "market",
+      "süpermarket"
+    ],
+    "meaningEnAccepted": [
+      "supermarket"
+    ]
+  },
+  {
+    "order": 351,
+    "word": "ラジオ",
+    "kana": "ラジオ",
+    "type": "isim",
+    "meaningTr": "radyo",
+    "meaningEn": "radio",
+    "exampleJp": "祖父は毎朝**ラジオ**を聞いています。",
+    "exampleTr": "Dedem her sabah radyo dinler.",
+    "meaningTrAccepted": [
+      "radyo"
+    ],
+    "meaningEnAccepted": [
+      "radio"
+    ]
+  },
+  {
+    "order": 352,
+    "word": "雑誌",
+    "kana": "ざっし",
+    "type": "isim",
+    "meaningTr": "dergi",
+    "meaningEn": "magazine",
+    "exampleJp": "美容院で**雑誌**を読んで待ちました。",
+    "exampleTr": "Kuaförde dergi okuyarak bekledim.",
+    "meaningTrAccepted": [
+      "dergi"
+    ],
+    "meaningEnAccepted": [
+      "magazine"
+    ]
+  },
+  {
+    "order": 353,
+    "word": "百",
+    "kana": "ひゃく",
+    "type": "isim",
+    "meaningTr": "yüz (sayı)",
+    "meaningEn": "hundred",
+    "exampleJp": "この本は**百**年前に書かれました。",
+    "exampleTr": "Bu kitap yüz yıl önce yazılmış.",
+    "meaningTrAccepted": [
+      "yüz"
+    ],
+    "meaningEnAccepted": [
+      "hundred"
+    ]
+  },
+  {
+    "order": 354,
+    "word": "千",
+    "kana": "せん",
+    "type": "isim",
+    "meaningTr": "bin (sayı)",
+    "meaningEn": "thousand",
+    "exampleJp": "この神社は**千**年の歴史があります。",
+    "exampleTr": "Bu tapınağın bin yıllık tarihi var.",
+    "meaningTrAccepted": [
+      "bin"
+    ],
+    "meaningEnAccepted": [
+      "thousand"
+    ]
+  },
+  {
+    "order": 355,
+    "word": "万",
+    "kana": "まん",
+    "type": "isim",
+    "meaningTr": "on bin",
+    "meaningEn": "ten thousand",
+    "exampleJp": "この時計は三**万**円でした。",
+    "exampleTr": "Bu saat otuz bin yendi.",
+    "meaningTrAccepted": [
+      "on bin"
+    ],
+    "meaningEnAccepted": [
+      "ten thousand"
+    ]
+  },
+  {
+    "order": 356,
+    "word": "半",
+    "kana": "はん",
+    "type": "isim",
+    "meaningTr": "buçuk, yarım",
+    "meaningEn": "half",
+    "exampleJp": "毎朝七時**半**に家を出ます。",
+    "exampleTr": "Her sabah yedi buçukta evden çıkarım.",
+    "meaningTrAccepted": [
+      "buçuk",
+      "yarım"
+    ],
+    "meaningEnAccepted": [
+      "half"
+    ]
+  },
+  {
+    "order": 357,
+    "word": "時",
+    "kana": "じ",
+    "type": "isim",
+    "meaningTr": "saat (... saatte)",
+    "meaningEn": "o'clock, hour",
+    "exampleJp": "映画は何**時**に始まりますか。",
+    "exampleTr": "Film saat kaçta başlıyor?",
+    "meaningTrAccepted": [
+      "saat"
+    ],
+    "meaningEnAccepted": [
+      "o'clock",
+      "hour"
+    ]
+  },
+  {
+    "order": 358,
+    "word": "晩",
+    "kana": "ばん",
+    "type": "isim",
+    "meaningTr": "akşam",
+    "meaningEn": "evening",
+    "exampleJp": "今日の**晩**は家でゆっくりします。",
+    "exampleTr": "Bu akşam evde dinleneceğim.",
+    "meaningTrAccepted": [
+      "akşam"
+    ],
+    "meaningEnAccepted": [
+      "evening"
+    ]
+  },
+  {
+    "order": 359,
+    "word": "毎晩",
+    "kana": "まいばん",
+    "type": "isim",
+    "meaningTr": "her akşam",
+    "meaningEn": "every evening",
+    "exampleJp": "**毎晩**十一時ごろ寝ています。",
+    "exampleTr": "Her gece on bir gibi yatıyorum.",
+    "meaningTrAccepted": [
+      "her akşam"
+    ],
+    "meaningEnAccepted": [
+      "every evening"
+    ]
+  },
+  {
+    "order": 360,
+    "word": "おなか",
+    "kana": "おなか",
+    "type": "isim",
+    "meaningTr": "karın, mide",
+    "meaningEn": "stomach",
+    "exampleJp": "朝から何も食べていなくて、**おなか**がすきました。",
+    "exampleTr": "Sabahtan beri bir şey yemedim, acıktım.",
+    "meaningTrAccepted": [
+      "karın",
+      "mide"
+    ],
+    "meaningEnAccepted": [
+      "stomach"
+    ]
+  },
+  {
+    "order": 361,
+    "word": "歯",
+    "kana": "は",
+    "type": "isim",
+    "meaningTr": "diş",
+    "meaningEn": "tooth",
+    "exampleJp": "寝る前に必ず**歯**を磨きます。",
+    "exampleTr": "Yatmadan önce mutlaka dişlerimi fırçalarım.",
+    "meaningTrAccepted": [
+      "diş"
+    ],
+    "meaningEnAccepted": [
+      "tooth"
+    ]
+  },
+  {
+    "order": 362,
+    "word": "熱い",
+    "kana": "あつい",
+    "type": "i-sıfat",
+    "meaningTr": "sıcak (nesne)",
+    "meaningEn": "hot (to the touch)",
+    "exampleJp": "お茶が**熱い**ので、気をつけてください。",
+    "exampleTr": "Çay sıcak, dikkat edin.",
+    "meaningTrAccepted": [
+      "sıcak"
+    ],
+    "meaningEnAccepted": [
+      "hot"
+    ]
+  },
+  {
+    "order": 363,
+    "word": "こわい",
+    "kana": "こわい",
+    "type": "i-sıfat",
+    "meaningTr": "korkunç, korkutucu",
+    "meaningEn": "scary, frightening",
+    "exampleJp": "夜の暗い道は少し**こわい**です。",
+    "exampleTr": "Gece karanlık yollar biraz korkutucu.",
+    "meaningTrAccepted": [
+      "korkunç",
+      "korkutucu"
+    ],
+    "meaningEnAccepted": [
+      "scary",
+      "frightening"
+    ]
+  },
+  {
+    "order": 364,
+    "word": "暇",
+    "kana": "ひま",
+    "type": "na-sıfat",
+    "meaningTr": "boş, müsait (vakit)",
+    "meaningEn": "free (time), not busy",
+    "exampleJp": "明日の午後は**暇**ですか。",
+    "exampleTr": "Yarın öğleden sonra müsait misin?",
+    "meaningTrAccepted": [
+      "boş",
+      "müsait"
+    ],
+    "meaningEnAccepted": [
+      "free",
+      "not busy"
+    ]
+  },
+  {
+    "order": 365,
+    "word": "速い",
+    "kana": "はやい",
+    "type": "i-sıfat",
+    "meaningTr": "hızlı",
+    "meaningEn": "fast (speed)",
+    "exampleJp": "新幹線は本当に**速い**ですね。",
+    "exampleTr": "Shinkansen gerçekten çok hızlı.",
+    "meaningTrAccepted": [
+      "hızlı"
+    ],
+    "meaningEnAccepted": [
+      "fast"
+    ]
+  },
+  {
+    "order": 366,
+    "word": "高校",
+    "kana": "こうこう",
+    "type": "isim",
+    "meaningTr": "lise",
+    "meaningEn": "high school",
+    "exampleJp": "**高校**の友達と今も仲がいいです。",
+    "exampleTr": "Lise arkadaşlarımla hâlâ aram iyi.",
+    "meaningTrAccepted": [
+      "lise"
+    ],
+    "meaningEnAccepted": [
+      "high school"
+    ]
+  },
+  {
+    "order": 367,
+    "word": "大学生",
+    "kana": "だいがくせい",
+    "type": "isim",
+    "meaningTr": "üniversite öğrencisi",
+    "meaningEn": "university student",
+    "exampleJp": "兄は東京の**大学生**です。",
+    "exampleTr": "Ağabeyim Tokyo'da üniversite öğrencisi.",
+    "meaningTrAccepted": [
+      "üniversite öğrencisi"
+    ],
+    "meaningEnAccepted": [
+      "university student"
+    ]
+  },
+  {
+    "order": 368,
+    "word": "留学生",
+    "kana": "りゅうがくせい",
+    "type": "isim",
+    "meaningTr": "yabancı öğrenci",
+    "meaningEn": "international student",
+    "exampleJp": "クラスに**留学生**が五人います。",
+    "exampleTr": "Sınıfta beş yabancı öğrenci var.",
+    "meaningTrAccepted": [
+      "yabancı öğrenci"
+    ],
+    "meaningEnAccepted": [
+      "international student"
+    ]
+  },
+  {
+    "order": 369,
+    "word": "大変",
+    "kana": "たいへん",
+    "type": "na-sıfat",
+    "meaningTr": "zor, çetin; çok",
+    "meaningEn": "tough, hard; very",
+    "exampleJp": "引っ越しは思ったより**大変**でした。",
+    "exampleTr": "Taşınmak sandığımdan zor oldu.",
+    "meaningTrAccepted": [
+      "zor",
+      "çetin",
+      "çok"
+    ],
+    "meaningEnAccepted": [
+      "tough",
+      "hard",
+      "very"
+    ]
+  },
+  {
+    "order": 370,
+    "word": "大学院生",
+    "kana": "だいがくいんせい",
+    "type": "isim",
+    "meaningTr": "yüksek lisans öğrencisi",
+    "meaningEn": "graduate student",
+    "exampleJp": "姉は**大学院生**で、経済を研究しています。",
+    "exampleTr": "Ablam yüksek lisans öğrencisi, ekonomi araştırıyor.",
+    "meaningTrAccepted": [
+      "yüksek lisans öğrencisi"
+    ],
+    "meaningEnAccepted": [
+      "graduate student"
+    ]
+  },
+  {
+    "order": 371,
+    "word": "専攻",
+    "kana": "せんこう",
+    "type": "isim",
+    "meaningTr": "bölüm, ana dal",
+    "meaningEn": "major (study)",
+    "exampleJp": "大学での**専攻**は何ですか。",
+    "exampleTr": "Üniversitedeki bölümün ne?",
+    "meaningTrAccepted": [
+      "bölüm",
+      "ana dal"
+    ],
+    "meaningEnAccepted": [
+      "major"
+    ]
+  },
+  {
+    "order": 372,
+    "word": "電話番号",
+    "kana": "でんわばんごう",
+    "type": "isim",
+    "meaningTr": "telefon numarası",
+    "meaningEn": "phone number",
+    "exampleJp": "お店の**電話番号**を調べました。",
+    "exampleTr": "Dükkânın telefon numarasına baktım.",
+    "meaningTrAccepted": [
+      "telefon numarası"
+    ],
+    "meaningEnAccepted": [
+      "phone number"
+    ]
+  },
+  {
+    "order": 373,
+    "word": "両親",
+    "kana": "りょうしん",
+    "type": "isim",
+    "meaningTr": "anne baba, ebeveyn",
+    "meaningEn": "parents",
+    "exampleJp": "週末に**両親**に電話をかけます。",
+    "exampleTr": "Hafta sonu aileme telefon açarım.",
+    "meaningTrAccepted": [
+      "anne baba",
+      "ebeveyn"
+    ],
+    "meaningEnAccepted": [
+      "parents"
+    ]
+  },
+  {
+    "order": 374,
+    "word": "赤ちゃん",
+    "kana": "あかちゃん",
+    "type": "isim",
+    "meaningTr": "bebek",
+    "meaningEn": "baby",
+    "exampleJp": "隣の家に**赤ちゃん**が生まれました。",
+    "exampleTr": "Komşuların bebeği oldu.",
+    "meaningTrAccepted": [
+      "bebek"
+    ],
+    "meaningEnAccepted": [
+      "baby"
+    ]
+  },
+  {
+    "order": 375,
+    "word": "お姉さん",
+    "kana": "おねえさん",
+    "type": "isim",
+    "meaningTr": "abla (başkasının)",
+    "meaningEn": "older sister",
+    "exampleJp": "**お姉さん**はどこに住んでいますか。",
+    "exampleTr": "Ablan nerede yaşıyor?",
+    "meaningTrAccepted": [
+      "abla"
+    ],
+    "meaningEnAccepted": [
+      "older sister"
+    ]
+  },
+  {
+    "order": 376,
+    "word": "お兄さん",
+    "kana": "おにいさん",
+    "type": "isim",
+    "meaningTr": "abi (başkasının)",
+    "meaningEn": "older brother",
+    "exampleJp": "**お兄さん**は何をしている人ですか。",
+    "exampleTr": "Abin ne iş yapıyor?",
+    "meaningTrAccepted": [
+      "abi"
+    ],
+    "meaningEnAccepted": [
+      "older brother"
+    ]
+  },
+  {
+    "order": 377,
+    "word": "おじいさん",
+    "kana": "おじいさん",
+    "type": "isim",
+    "meaningTr": "dede",
+    "meaningEn": "grandfather",
+    "exampleJp": "**おじいさん**は毎朝散歩をしています。",
+    "exampleTr": "Dedem her sabah yürüyüş yapar.",
+    "meaningTrAccepted": [
+      "dede"
+    ],
+    "meaningEnAccepted": [
+      "grandfather"
+    ]
+  },
+  {
+    "order": 378,
+    "word": "おばあさん",
+    "kana": "おばあさん",
+    "type": "isim",
+    "meaningTr": "nine",
+    "meaningEn": "grandmother",
+    "exampleJp": "**おばあさん**の料理が世界で一番好きです。",
+    "exampleTr": "En çok ninemin yemeklerini severim.",
+    "meaningTrAccepted": [
+      "nine"
+    ],
+    "meaningEnAccepted": [
+      "grandmother"
+    ]
+  },
+  {
+    "order": 379,
+    "word": "大使館",
+    "kana": "たいしかん",
+    "type": "isim",
+    "meaningTr": "büyükelçilik",
+    "meaningEn": "embassy",
+    "exampleJp": "ビザのことで**大使館**に行ってきました。",
+    "exampleTr": "Vize işi için büyükelçiliğe gittim.",
+    "meaningTrAccepted": [
+      "büyükelçilik"
+    ],
+    "meaningEnAccepted": [
+      "embassy"
+    ]
+  },
+  {
+    "order": 380,
+    "word": "交番",
+    "kana": "こうばん",
+    "type": "isim",
+    "meaningTr": "polis kulübesi",
+    "meaningEn": "police box",
+    "exampleJp": "道が分からなくて、**交番**で聞きました。",
+    "exampleTr": "Yolu bilmiyordum, polis kulübesinde sordum.",
+    "meaningTrAccepted": [
+      "polis kulübesi"
+    ],
+    "meaningEnAccepted": [
+      "police box"
+    ]
+  },
+  {
+    "order": 381,
+    "word": "お寺",
+    "kana": "おてら",
+    "type": "isim",
+    "meaningTr": "tapınak (Budist)",
+    "meaningEn": "temple",
+    "exampleJp": "京都で古い**お寺**をたくさん見ました。",
+    "exampleTr": "Kyoto'da bir sürü eski tapınak gördüm.",
+    "meaningTrAccepted": [
+      "tapınak"
+    ],
+    "meaningEnAccepted": [
+      "temple"
+    ]
+  },
+  {
+    "order": 382,
+    "word": "市",
+    "kana": "し",
+    "type": "isim",
+    "meaningTr": "şehir, belediye",
+    "meaningEn": "city",
+    "exampleJp": "この**市**には大きな公園が三つあります。",
+    "exampleTr": "Bu şehirde üç büyük park var.",
+    "meaningTrAccepted": [
+      "şehir",
+      "belediye"
+    ],
+    "meaningEnAccepted": [
+      "city"
+    ]
+  },
+  {
+    "order": 383,
+    "word": "道",
+    "kana": "みち",
+    "type": "isim",
+    "meaningTr": "yol",
+    "meaningEn": "road, way",
+    "exampleJp": "この**道**をまっすぐ行くと、駅に出ます。",
+    "exampleTr": "Bu yoldan dümdüz gidince istasyona çıkarsın.",
+    "meaningTrAccepted": [
+      "yol"
+    ],
+    "meaningEnAccepted": [
+      "road",
+      "way"
+    ]
+  },
+  {
+    "order": 384,
+    "word": "東",
+    "kana": "ひがし",
+    "type": "isim",
+    "meaningTr": "doğu",
+    "meaningEn": "east",
+    "exampleJp": "太陽は**東**から昇ります。",
+    "exampleTr": "Güneş doğudan doğar.",
+    "meaningTrAccepted": [
+      "doğu"
+    ],
+    "meaningEnAccepted": [
+      "east"
+    ]
+  },
+  {
+    "order": 385,
+    "word": "西",
+    "kana": "にし",
+    "type": "isim",
+    "meaningTr": "batı",
+    "meaningEn": "west",
+    "exampleJp": "空港は町の**西**にあります。",
+    "exampleTr": "Havalimanı şehrin batısında.",
+    "meaningTrAccepted": [
+      "batı"
+    ],
+    "meaningEnAccepted": [
+      "west"
+    ]
+  },
+  {
+    "order": 386,
+    "word": "南",
+    "kana": "みなみ",
+    "type": "isim",
+    "meaningTr": "güney",
+    "meaningEn": "south",
+    "exampleJp": "冬は**南**の国へ旅行したいです。",
+    "exampleTr": "Kışın güney ülkelerine seyahat etmek istiyorum.",
+    "meaningTrAccepted": [
+      "güney"
+    ],
+    "meaningEnAccepted": [
+      "south"
+    ]
+  },
+  {
+    "order": 387,
+    "word": "北",
+    "kana": "きた",
+    "type": "isim",
+    "meaningTr": "kuzey",
+    "meaningEn": "north",
+    "exampleJp": "**北**の地方は雪がたくさん降ります。",
+    "exampleTr": "Kuzey bölgelerde çok kar yağar.",
+    "meaningTrAccepted": [
+      "kuzey"
+    ],
+    "meaningEnAccepted": [
+      "north"
+    ]
+  },
+  {
+    "order": 388,
+    "word": "お酒",
+    "kana": "おさけ",
+    "type": "isim",
+    "meaningTr": "alkol, saki",
+    "meaningEn": "alcohol",
+    "exampleJp": "私は**お酒**があまり飲めません。",
+    "exampleTr": "Ben pek alkol içemem.",
+    "meaningTrAccepted": [
+      "alkol",
+      "saki"
+    ],
+    "meaningEnAccepted": [
+      "alcohol"
+    ]
+  },
+  {
+    "order": 389,
+    "word": "紅茶",
+    "kana": "こうちゃ",
+    "type": "isim",
+    "meaningTr": "siyah çay",
+    "meaningEn": "black tea",
+    "exampleJp": "コーヒーより**紅茶**のほうが好きです。",
+    "exampleTr": "Kahveden çok çay severim.",
+    "meaningTrAccepted": [
+      "siyah çay"
+    ],
+    "meaningEnAccepted": [
+      "black tea"
+    ]
+  },
+  {
+    "order": 390,
+    "word": "ジュース",
+    "kana": "ジュース",
+    "type": "isim",
+    "meaningTr": "meyve suyu",
+    "meaningEn": "juice",
+    "exampleJp": "子供たちはオレンジ**ジュース**を飲んでいます。",
+    "exampleTr": "Çocuklar portakal suyu içiyor.",
+    "meaningTrAccepted": [
+      "meyve suyu"
+    ],
+    "meaningEnAccepted": [
+      "juice"
+    ]
+  },
+  {
+    "order": 391,
+    "word": "お菓子",
+    "kana": "おかし",
+    "type": "isim",
+    "meaningTr": "tatlı, şekerleme",
+    "meaningEn": "sweets, snacks",
+    "exampleJp": "お土産に日本の**お菓子**を買いました。",
+    "exampleTr": "Hediyelik olarak Japon tatlıları aldım.",
+    "meaningTrAccepted": [
+      "tatlı",
+      "şekerleme"
+    ],
+    "meaningEnAccepted": [
+      "sweets",
+      "snacks"
+    ]
+  },
+  {
+    "order": 392,
+    "word": "ケーキ",
+    "kana": "ケーキ",
+    "type": "isim",
+    "meaningTr": "pasta",
+    "meaningEn": "cake",
+    "exampleJp": "誕生日に**ケーキ**を作ってもらいました。",
+    "exampleTr": "Doğum günümde bana pasta yaptılar.",
+    "meaningTrAccepted": [
+      "pasta"
+    ],
+    "meaningEnAccepted": [
+      "cake"
+    ]
+  },
+  {
+    "order": 393,
+    "word": "天ぷら",
+    "kana": "てんぷら",
+    "type": "isim",
+    "meaningTr": "tempura",
+    "meaningEn": "tempura",
+    "exampleJp": "この店の**天ぷら**は有名ですよ。",
+    "exampleTr": "Bu dükkânın tempurası ünlüdür.",
+    "meaningTrAccepted": [
+      "tempura"
+    ],
+    "meaningEnAccepted": [
+      "tempura"
+    ]
+  },
+  {
+    "order": 394,
+    "word": "ラーメン",
+    "kana": "ラーメン",
+    "type": "isim",
+    "meaningTr": "ramen",
+    "meaningEn": "ramen",
+    "exampleJp": "寒い日は**ラーメン**が食べたくなります。",
+    "exampleTr": "Soğuk günlerde canım ramen ister.",
+    "meaningTrAccepted": [
+      "ramen"
+    ],
+    "meaningEnAccepted": [
+      "ramen"
+    ]
+  },
+  {
+    "order": 395,
+    "word": "寿司",
+    "kana": "すし",
+    "type": "isim",
+    "meaningTr": "suşi",
+    "meaningEn": "sushi",
+    "exampleJp": "日本で本物の**寿司**を食べてみたいです。",
+    "exampleTr": "Japonya'da gerçek suşi yemeyi çok istiyorum.",
+    "meaningTrAccepted": [
+      "suşi"
+    ],
+    "meaningEnAccepted": [
+      "sushi"
+    ]
+  },
+  {
+    "order": 396,
+    "word": "ハンバーガー",
+    "kana": "ハンバーガー",
+    "type": "isim",
+    "meaningTr": "hamburger",
+    "meaningEn": "hamburger",
+    "exampleJp": "昼ご飯に急いで**ハンバーガー**を食べました。",
+    "exampleTr": "Öğle yemeğinde aceleyle hamburger yedim.",
+    "meaningTrAccepted": [
+      "hamburger"
+    ],
+    "meaningEnAccepted": [
+      "hamburger"
+    ]
+  },
+  {
+    "order": 397,
+    "word": "時計台",
+    "kana": "とけいだい",
+    "type": "isim",
+    "meaningTr": "saat kulesi",
+    "meaningEn": "clock tower",
+    "exampleJp": "町の真ん中に古い**時計台**があります。",
+    "exampleTr": "Şehrin ortasında eski bir saat kulesi var.",
+    "meaningTrAccepted": [
+      "saat kulesi"
+    ],
+    "meaningEnAccepted": [
+      "clock tower"
+    ]
+  },
+  {
+    "order": 398,
+    "word": "お土産",
+    "kana": "おみやげ",
+    "type": "isim",
+    "meaningTr": "hediyelik eşya",
+    "meaningEn": "souvenir",
+    "exampleJp": "旅行の**お土産**を友達に配りました。",
+    "exampleTr": "Gezi hediyelerini arkadaşlarıma dağıttım.",
+    "meaningTrAccepted": [
+      "hediyelik eşya"
+    ],
+    "meaningEnAccepted": [
+      "souvenir"
+    ]
+  },
+  {
+    "order": 399,
+    "word": "プレゼント",
+    "kana": "プレゼント",
+    "type": "isim",
+    "meaningTr": "hediye",
+    "meaningEn": "present",
+    "exampleJp": "母の日の**プレゼント**を探しています。",
+    "exampleTr": "Anneler Günü hediyesi arıyorum.",
+    "meaningTrAccepted": [
+      "hediye"
+    ],
+    "meaningEnAccepted": [
+      "present"
+    ]
+  },
+  {
+    "order": 400,
+    "word": "切手",
+    "kana": "きって",
+    "type": "isim",
+    "meaningTr": "pul",
+    "meaningEn": "stamp",
+    "exampleJp": "この手紙にはいくらの**切手**が要りますか。",
+    "exampleTr": "Bu mektuba kaç yenlik pul gerekiyor?",
+    "meaningTrAccepted": [
+      "pul"
+    ],
+    "meaningEnAccepted": [
+      "stamp"
+    ]
+  },
+  {
+    "order": 401,
+    "word": "パソコン",
+    "kana": "パソコン",
+    "type": "isim",
+    "meaningTr": "bilgisayar",
+    "meaningEn": "computer",
+    "exampleJp": "**パソコン**で宿題のレポートを書きました。",
+    "exampleTr": "Ödev raporumu bilgisayarda yazdım.",
+    "meaningTrAccepted": [
+      "bilgisayar"
+    ],
+    "meaningEnAccepted": [
+      "computer"
+    ]
+  },
+  {
+    "order": 402,
+    "word": "カメラ",
+    "kana": "カメラ",
+    "type": "isim",
+    "meaningTr": "kamera, fotoğraf makinesi",
+    "meaningEn": "camera",
+    "exampleJp": "旅行のために新しい**カメラ**を買いました。",
+    "exampleTr": "Seyahat için yeni bir fotoğraf makinesi aldım.",
+    "meaningTrAccepted": [
+      "kamera",
+      "fotoğraf makinesi"
+    ],
+    "meaningEnAccepted": [
+      "camera"
+    ]
+  },
+  {
+    "order": 403,
+    "word": "地下鉄",
+    "kana": "ちかてつ",
+    "type": "isim",
+    "meaningTr": "metro",
+    "meaningEn": "subway",
+    "exampleJp": "**地下鉄**で行くほうが速いですよ。",
+    "exampleTr": "Metroyla gitmek daha hızlı.",
+    "meaningTrAccepted": [
+      "metro"
+    ],
+    "meaningEnAccepted": [
+      "subway"
+    ]
+  },
+  {
+    "order": 404,
+    "word": "船",
+    "kana": "ふね",
+    "type": "isim",
+    "meaningTr": "gemi",
+    "meaningEn": "ship, boat",
+    "exampleJp": "島まで**船**で三十分かかります。",
+    "exampleTr": "Adaya gemiyle yarım saat sürüyor.",
+    "meaningTrAccepted": [
+      "gemi"
+    ],
+    "meaningEnAccepted": [
+      "ship",
+      "boat"
+    ]
+  },
+  {
+    "order": 405,
+    "word": "今週",
+    "kana": "こんしゅう",
+    "type": "isim",
+    "meaningTr": "bu hafta",
+    "meaningEn": "this week",
+    "exampleJp": "**今週**はテストが二つもあります。",
+    "exampleTr": "Bu hafta tam iki sınavım var.",
+    "meaningTrAccepted": [
+      "bu hafta"
+    ],
+    "meaningEnAccepted": [
+      "this week"
+    ]
+  },
+  {
+    "order": 406,
+    "word": "来週",
+    "kana": "らいしゅう",
+    "type": "isim",
+    "meaningTr": "gelecek hafta",
+    "meaningEn": "next week",
+    "exampleJp": "**来週**の土曜日、映画を見に行きませんか。",
+    "exampleTr": "Gelecek cumartesi film izlemeye gidelim mi?",
+    "meaningTrAccepted": [
+      "gelecek hafta"
+    ],
+    "meaningEnAccepted": [
+      "next week"
+    ]
+  },
+  {
+    "order": 407,
+    "word": "先週",
+    "kana": "せんしゅう",
+    "type": "isim",
+    "meaningTr": "geçen hafta",
+    "meaningEn": "last week",
+    "exampleJp": "**先週**から新しい仕事を始めました。",
+    "exampleTr": "Geçen hafta yeni işe başladım.",
+    "meaningTrAccepted": [
+      "geçen hafta"
+    ],
+    "meaningEnAccepted": [
+      "last week"
+    ]
+  },
+  {
+    "order": 408,
+    "word": "今月",
+    "kana": "こんげつ",
+    "type": "isim",
+    "meaningTr": "bu ay",
+    "meaningEn": "this month",
+    "exampleJp": "**今月**は忙しくて、あまり休めませんでした。",
+    "exampleTr": "Bu ay yoğundum, pek dinlenemedim.",
+    "meaningTrAccepted": [
+      "bu ay"
+    ],
+    "meaningEnAccepted": [
+      "this month"
+    ]
+  },
+  {
+    "order": 409,
+    "word": "来月",
+    "kana": "らいげつ",
+    "type": "isim",
+    "meaningTr": "gelecek ay",
+    "meaningEn": "next month",
+    "exampleJp": "**来月**、家族が日本に来ます。",
+    "exampleTr": "Gelecek ay ailem Japonya'ya geliyor.",
+    "meaningTrAccepted": [
+      "gelecek ay"
+    ],
+    "meaningEnAccepted": [
+      "next month"
+    ]
+  },
+  {
+    "order": 410,
+    "word": "先月",
+    "kana": "せんげつ",
+    "type": "isim",
+    "meaningTr": "geçen ay",
+    "meaningEn": "last month",
+    "exampleJp": "**先月**、新しい町に引っ越しました。",
+    "exampleTr": "Geçen ay yeni bir şehre taşındım.",
+    "meaningTrAccepted": [
+      "geçen ay"
+    ],
+    "meaningEnAccepted": [
+      "last month"
+    ]
+  },
+  {
+    "order": 411,
+    "word": "毎週",
+    "kana": "まいしゅう",
+    "type": "isim",
+    "meaningTr": "her hafta",
+    "meaningEn": "every week",
+    "exampleJp": "**毎週**金曜日に日本語の授業があります。",
+    "exampleTr": "Her cuma Japonca dersim var.",
+    "meaningTrAccepted": [
+      "her hafta"
+    ],
+    "meaningEnAccepted": [
+      "every week"
+    ]
+  },
+  {
+    "order": 412,
+    "word": "毎月",
+    "kana": "まいつき",
+    "type": "isim",
+    "meaningTr": "her ay",
+    "meaningEn": "every month",
+    "exampleJp": "**毎月**少しずつお金をためています。",
+    "exampleTr": "Her ay azar azar para biriktiriyorum.",
+    "meaningTrAccepted": [
+      "her ay"
+    ],
+    "meaningEnAccepted": [
+      "every month"
+    ]
+  },
+  {
+    "order": 413,
+    "word": "平日",
+    "kana": "へいじつ",
+    "type": "isim",
+    "meaningTr": "hafta içi",
+    "meaningEn": "weekday",
+    "exampleJp": "**平日**は忙しくて、友達に会えません。",
+    "exampleTr": "Hafta içi yoğunum, arkadaşlarımla görüşemiyorum.",
+    "meaningTrAccepted": [
+      "hafta içi"
+    ],
+    "meaningEnAccepted": [
+      "weekday"
+    ]
+  },
+  {
+    "order": 414,
+    "word": "午前中",
+    "kana": "ごぜんちゅう",
+    "type": "isim",
+    "meaningTr": "öğleden önce",
+    "meaningEn": "in the morning",
+    "exampleJp": "**午前中**に宿題を全部終わらせました。",
+    "exampleTr": "Öğleden önce tüm ödevimi bitirdim.",
+    "meaningTrAccepted": [
+      "öğleden önce"
+    ],
+    "meaningEnAccepted": [
+      "in the morning"
+    ]
+  },
+  {
+    "order": 415,
+    "word": "出かける",
+    "kana": "でかける",
+    "type": "fiil",
+    "meaningTr": "dışarı çıkmak",
+    "meaningEn": "to go out",
+    "exampleJp": "母は買い物に**出かけ**ています。",
+    "exampleTr": "Annem alışverişe çıktı.",
+    "meaningTrAccepted": [
+      "dışarı çıkmak"
+    ],
+    "meaningEnAccepted": [
+      "to go out",
+      "go out"
+    ]
+  },
+  {
+    "order": 416,
+    "word": "死ぬ",
+    "kana": "しぬ",
+    "type": "fiil",
+    "meaningTr": "ölmek",
+    "meaningEn": "to die",
+    "exampleJp": "飼っていた金魚が**死**んでしまいました。",
+    "exampleTr": "Beslediğim Japon balığı öldü.",
+    "meaningTrAccepted": [
+      "ölmek"
+    ],
+    "meaningEnAccepted": [
+      "to die",
+      "die"
+    ]
+  },
+  {
+    "order": 417,
+    "word": "色々",
+    "kana": "いろいろ",
+    "type": "na-sıfat",
+    "meaningTr": "çeşitli, türlü türlü",
+    "meaningEn": "various",
+    "exampleJp": "京都で**色々**なお寺を見ました。",
+    "exampleTr": "Kyoto'da çeşit çeşit tapınak gördüm.",
+    "meaningTrAccepted": [
+      "çeşitli",
+      "türlü türlü"
+    ],
+    "meaningEnAccepted": [
+      "various"
+    ]
+  },
+  {
+    "order": 418,
+    "word": "あまり",
+    "kana": "あまり",
+    "type": "zarf",
+    "meaningTr": "pek (olumsuzla)",
+    "meaningEn": "not much",
+    "exampleJp": "辛い料理は**あまり**好きじゃありません。",
+    "exampleTr": "Acılı yemekleri pek sevmem.",
+    "meaningTrAccepted": [
+      "pek"
+    ],
+    "meaningEnAccepted": [
+      "not much"
+    ]
+  },
+  {
+    "order": 419,
+    "word": "全然",
+    "kana": "ぜんぜん",
+    "type": "zarf",
+    "meaningTr": "hiç (olumsuzla)",
+    "meaningEn": "not at all",
+    "exampleJp": "この漢字は**全然**読めません。",
+    "exampleTr": "Bu kanjiyi hiç okuyamıyorum.",
+    "meaningTrAccepted": [
+      "hiç"
+    ],
+    "meaningEnAccepted": [
+      "not at all"
+    ]
+  },
+  {
+    "order": 420,
+    "word": "たいてい",
+    "kana": "たいてい",
+    "type": "zarf",
+    "meaningTr": "genellikle",
+    "meaningEn": "usually",
+    "exampleJp": "日曜日は**たいてい**家にいます。",
+    "exampleTr": "Pazarları genellikle evdeyim.",
+    "meaningTrAccepted": [
+      "genellikle"
+    ],
+    "meaningEnAccepted": [
+      "usually"
+    ]
+  },
+  {
+    "order": 421,
+    "word": "もっと",
+    "kana": "もっと",
+    "type": "zarf",
+    "meaningTr": "daha",
+    "meaningEn": "more",
+    "exampleJp": "**もっと**ゆっくり話してください。",
+    "exampleTr": "Daha yavaş konuşur musunuz?",
+    "meaningTrAccepted": [
+      "daha"
+    ],
+    "meaningEnAccepted": [
+      "more"
+    ]
+  },
+  {
+    "order": 422,
+    "word": "初めて",
+    "kana": "はじめて",
+    "type": "zarf",
+    "meaningTr": "ilk kez",
+    "meaningEn": "for the first time",
+    "exampleJp": "**初めて**一人で外国へ行きました。",
+    "exampleTr": "İlk kez tek başıma yurt dışına gittim.",
+    "meaningTrAccepted": [
+      "ilk kez"
+    ],
+    "meaningEnAccepted": [
+      "for the first time"
+    ]
+  },
+  {
+    "order": 423,
+    "word": "どうやって",
+    "kana": "どうやって",
+    "type": "zarf",
+    "meaningTr": "nasıl (yöntem)",
+    "meaningEn": "how (method)",
+    "exampleJp": "この料理は**どうやって**作るんですか。",
+    "exampleTr": "Bu yemek nasıl yapılıyor?",
+    "meaningTrAccepted": [
+      "nasıl"
+    ],
+    "meaningEnAccepted": [
+      "how"
+    ]
+  },
+  {
+    "order": 424,
+    "word": "なぜ",
+    "kana": "なぜ",
+    "type": "zarf",
+    "meaningTr": "neden",
+    "meaningEn": "why",
+    "exampleJp": "**なぜ**日本語を勉強しているんですか。",
+    "exampleTr": "Neden Japonca öğreniyorsun?",
+    "meaningTrAccepted": [
+      "neden"
+    ],
+    "meaningEnAccepted": [
+      "why"
+    ]
+  },
+  {
+    "order": 425,
+    "word": "歳",
+    "kana": "さい",
+    "type": "isim",
+    "meaningTr": "yaş (sayaç)",
+    "meaningEn": "years old (counter)",
+    "exampleJp": "弟は今年二十**歳**になります。",
+    "exampleTr": "Kardeşim bu yıl yirmi yaşına giriyor.",
+    "meaningTrAccepted": [
+      "yaş"
+    ],
+    "meaningEnAccepted": [
+      "years old"
+    ]
+  },
+  {
+    "order": 426,
+    "word": "回",
+    "kana": "かい",
+    "type": "isim",
+    "meaningTr": "kez, defa (sayaç)",
+    "meaningEn": "times (counter)",
+    "exampleJp": "この映画は三**回**も見ました。",
+    "exampleTr": "Bu filmi tam üç kez izledim.",
+    "meaningTrAccepted": [
+      "kez",
+      "defa"
+    ],
+    "meaningEnAccepted": [
+      "times"
+    ]
+  },
+  {
+    "order": 427,
+    "word": "枚",
+    "kana": "まい",
+    "type": "isim",
+    "meaningTr": "adet (yassı nesne sayacı)",
+    "meaningEn": "counter for flat objects",
+    "exampleJp": "コピーを五**枚**お願いします。",
+    "exampleTr": "Beş kopya alabilir miyim?",
+    "meaningTrAccepted": [
+      "adet"
+    ],
+    "meaningEnAccepted": [
+      "counter for flat objects"
+    ]
+  },
+  {
+    "order": 428,
+    "word": "毎朝",
+    "kana": "まいあさ",
+    "type": "isim",
+    "meaningTr": "her sabah",
+    "meaningEn": "every morning",
+    "exampleJp": "**毎朝**六時に起きて、走りに行きます。",
+    "exampleTr": "Her sabah altıda kalkıp koşuya çıkarım.",
+    "meaningTrAccepted": [
+      "her sabah"
+    ],
+    "meaningEnAccepted": [
+      "every morning"
+    ]
+  },
+  {
+    "order": 429,
+    "word": "外国人",
+    "kana": "がいこくじん",
+    "type": "isim",
+    "meaningTr": "yabancı",
+    "meaningEn": "foreigner",
+    "exampleJp": "**外国人**がたくさんいます。",
+    "exampleTr": "Çok fazla yabancı var.",
+    "meaningTrAccepted": [
+      "yabancı"
+    ],
+    "meaningEnAccepted": [
+      "foreigner"
+    ]
+  },
+  {
+    "word": "貰う",
+    "kana": "もらう",
+    "type": "fiil",
+    "meaningTr": "almak (hediye/yardım)",
+    "meaningEn": "to receive",
+    "exampleJp": "友達から誕生日のプレゼントを**もら**いました。",
+    "exampleTr": "Arkadaşımdan doğum günü hediyesi aldım.",
+    "meaningTrAccepted": [
+      "almak"
+    ],
+    "meaningEnAccepted": [
+      "to receive",
+      "receive"
+    ],
+    "order": 430
+  },
+  {
+    "word": "入れる",
+    "kana": "いれる",
+    "type": "fiil",
+    "meaningTr": "içine koymak",
+    "meaningEn": "to put in",
+    "exampleJp": "かばんに教科書を**入れ**ました。",
+    "exampleTr": "Çantaya ders kitabını koydum.",
+    "meaningTrAccepted": [
+      "içine koymak"
+    ],
+    "meaningEnAccepted": [
+      "to put in"
+    ],
+    "order": 431
+  },
+  {
+    "word": "出す",
+    "kana": "だす",
+    "type": "fiil",
+    "meaningTr": "çıkarmak, göndermek (mektup)",
+    "meaningEn": "to take out, to mail",
+    "exampleJp": "ポストに手紙を**出**しました。",
+    "exampleTr": "Postane kutusuna mektup attım.",
+    "meaningTrAccepted": [
+      "çıkarmak",
+      "göndermek"
+    ],
+    "meaningEnAccepted": [
+      "to take out",
+      "to mail"
+    ],
+    "order": 432
+  },
+  {
+    "word": "匹",
+    "kana": "ひき",
+    "type": "isim",
+    "meaningTr": "adet (küçük hayvan sayacı)",
+    "meaningEn": "counter for small animals",
+    "exampleJp": "猫が三**匹**います。",
+    "exampleTr": "Üç kedi var.",
+    "meaningTrAccepted": [
+      "adet (hayvan)"
+    ],
+    "meaningEnAccepted": [
+      "counter for animals"
+    ],
+    "order": 433
+  },
+  {
+    "word": "冊",
+    "kana": "さつ",
+    "type": "isim",
+    "meaningTr": "adet (kitap sayacı)",
+    "meaningEn": "counter for books",
+    "exampleJp": "本を二**冊**買いました。",
+    "exampleTr": "İki kitap aldım.",
+    "meaningTrAccepted": [
+      "adet (kitap)"
+    ],
+    "meaningEnAccepted": [
+      "counter for books"
+    ],
+    "order": 434
+  },
+  {
+    "word": "個",
+    "kana": "こ",
+    "type": "isim",
+    "meaningTr": "adet (genel nesne sayacı)",
+    "meaningEn": "counter for small objects",
+    "exampleJp": "りんごを五**個**ください。",
+    "exampleTr": "Beş elma verir misiniz?",
+    "meaningTrAccepted": [
+      "adet"
+    ],
+    "meaningEnAccepted": [
+      "counter for objects"
+    ],
+    "order": 435
+  },
+  {
+    "word": "台",
+    "kana": "だい",
+    "type": "isim",
+    "meaningTr": "adet (makine/araç sayacı)",
+    "meaningEn": "counter for machines/vehicles",
+    "exampleJp": "車が二**台**止まっています。",
+    "exampleTr": "İki araba park etmiş.",
+    "meaningTrAccepted": [
+      "adet (araç)"
+    ],
+    "meaningEnAccepted": [
+      "counter for vehicles"
+    ],
+    "order": 436
+  },
+  {
+    "word": "階",
+    "kana": "かい",
+    "type": "isim",
+    "meaningTr": "kat (bina)",
+    "meaningEn": "floor (counter)",
+    "exampleJp": "トイレは三**階**にあります。",
+    "exampleTr": "Tuvalet üçüncü katta.",
+    "meaningTrAccepted": [
+      "kat"
+    ],
+    "meaningEnAccepted": [
+      "floor"
+    ],
+    "order": 437
+  },
+  {
+    "word": "髪",
+    "kana": "かみ",
+    "type": "isim",
+    "meaningTr": "saç",
+    "meaningEn": "hair",
+    "exampleJp": "**髪**を短く切りました。",
+    "exampleTr": "Saçımı kısa kestirdim.",
+    "meaningTrAccepted": [
+      "saç"
+    ],
+    "meaningEnAccepted": [
+      "hair"
+    ],
+    "order": 438
+  },
+  {
+    "word": "首",
+    "kana": "くび",
+    "type": "isim",
+    "meaningTr": "boyun",
+    "meaningEn": "neck",
+    "exampleJp": "長い時間座っていて**首**が痛いです。",
+    "exampleTr": "Uzun süre oturmaktan boynum ağrıyor.",
+    "meaningTrAccepted": [
+      "boyun"
+    ],
+    "meaningEnAccepted": [
+      "neck"
+    ],
+    "order": 439
+  },
+  {
+    "word": "これから",
+    "kana": "これから",
+    "type": "zarf",
+    "meaningTr": "bundan sonra, şimdiden itibaren",
+    "meaningEn": "from now on",
+    "exampleJp": "**これから**、駅まで歩いて行きます。",
+    "exampleTr": "Şimdi istasyona yürüyerek gideceğim.",
+    "meaningTrAccepted": [
+      "bundan sonra"
+    ],
+    "meaningEnAccepted": [
+      "from now on"
+    ],
+    "order": 440
+  },
+  {
+    "word": "おじさん",
+    "kana": "おじさん",
+    "type": "isim",
+    "meaningTr": "amca, dayı",
+    "meaningEn": "uncle",
+    "exampleJp": "**おじさん**の家は海の近くにあります。",
+    "exampleTr": "Amcamın evi denizin yakınında.",
+    "meaningTrAccepted": [
+      "amca",
+      "dayı"
+    ],
+    "meaningEnAccepted": [
+      "uncle"
+    ],
+    "order": 441
+  },
+  {
+    "word": "おばさん",
+    "kana": "おばさん",
+    "type": "isim",
+    "meaningTr": "teyze, hala",
+    "meaningEn": "aunt",
+    "exampleJp": "**おばさん**がおいしいクッキーを作ってくれました。",
+    "exampleTr": "Teyzem bana lezzetli kurabiye yaptı.",
+    "meaningTrAccepted": [
+      "teyze",
+      "hala"
+    ],
+    "meaningEnAccepted": [
+      "aunt"
+    ],
+    "order": 442
+  },
+  {
+    "word": "どちら",
+    "kana": "どちら",
+    "type": "zamir",
+    "meaningTr": "hangisi, nere (nazik)",
+    "meaningEn": "which, where (polite)",
+    "exampleJp": "お手洗いは**どちら**ですか。",
+    "exampleTr": "Tuvalet hangi tarafta?",
+    "meaningTrAccepted": [
+      "hangisi",
+      "nere"
+    ],
+    "meaningEnAccepted": [
+      "which",
+      "where"
+    ],
+    "order": 443
+  },
+  {
+    "word": "こちら",
+    "kana": "こちら",
+    "type": "zamir",
+    "meaningTr": "bu taraf, burası (nazik)",
+    "meaningEn": "this way, here (polite)",
+    "exampleJp": "**こちら**へどうぞ。",
+    "exampleTr": "Buyurun, bu tarafa.",
+    "meaningTrAccepted": [
+      "bu taraf",
+      "burası"
+    ],
+    "meaningEnAccepted": [
+      "this way",
+      "here"
+    ],
+    "order": 444
+  },
+  {
+    "word": "そちら",
+    "kana": "そちら",
+    "type": "zamir",
+    "meaningTr": "o taraf, orası (nazik)",
+    "meaningEn": "that way, there (polite)",
+    "exampleJp": "**そちら**の席が空いていますよ。",
+    "exampleTr": "O taraftaki koltuk boş.",
+    "meaningTrAccepted": [
+      "o taraf",
+      "orası"
+    ],
+    "meaningEnAccepted": [
+      "that way",
+      "there"
+    ],
+    "order": 445
+  },
+  {
+    "word": "あちら",
+    "kana": "あちら",
+    "type": "zamir",
+    "meaningTr": "şu taraf, orası (uzak, nazik)",
+    "meaningEn": "that way over there (polite)",
+    "exampleJp": "エレベーターは**あちら**です。",
+    "exampleTr": "Asansör şu tarafta.",
+    "meaningTrAccepted": [
+      "şu taraf",
+      "orası"
+    ],
+    "meaningEnAccepted": [
+      "that way over there"
+    ],
+    "order": 446
+  },
+  {
+    "word": "もの",
+    "kana": "もの",
+    "type": "isim",
+    "meaningTr": "şey, nesne",
+    "meaningEn": "thing",
+    "exampleJp": "これは大切な**もの**です。",
+    "exampleTr": "Bu önemli bir şey.",
+    "meaningTrAccepted": [
+      "şey",
+      "nesne"
+    ],
+    "meaningEnAccepted": [
+      "thing"
+    ],
+    "order": 447
+  },
+  {
+    "word": "こと",
+    "kana": "こと",
+    "type": "isim",
+    "meaningTr": "şey, olay (soyut)",
+    "meaningEn": "thing, matter (abstract)",
+    "exampleJp": "心配な**こと**があります。",
+    "exampleTr": "Endişe verici bir şey var.",
+    "meaningTrAccepted": [
+      "şey",
+      "olay"
+    ],
+    "meaningEnAccepted": [
+      "thing",
+      "matter"
+    ],
+    "order": 448
+  },
+  {
+    "word": "とき",
+    "kana": "とき",
+    "type": "isim",
+    "meaningTr": "zaman, an",
+    "meaningEn": "time, moment, when",
+    "exampleJp": "困った**とき**は、いつでも電話してください。",
+    "exampleTr": "Zor durumda kalınca istediğin zaman ara.",
+    "meaningTrAccepted": [
+      "zaman",
+      "an"
+    ],
+    "meaningEnAccepted": [
+      "time",
+      "moment",
+      "when"
+    ],
+    "order": 449
+  },
+  {
+    "word": "ところ",
+    "kana": "ところ",
+    "type": "isim",
+    "meaningTr": "yer, mekân",
+    "meaningEn": "place",
+    "exampleJp": "静かな**ところ**で本を読みたいです。",
+    "exampleTr": "Sessiz bir yerde kitap okumak istiyorum.",
+    "meaningTrAccepted": [
+      "yer",
+      "mekân"
+    ],
+    "meaningEnAccepted": [
+      "place"
+    ],
+    "order": 450
+  },
+  {
+    "order": 451,
+    "word": "かっこいい",
+    "kana": "かっこいい",
+    "type": "i-sıfat",
+    "meaningTr": "havalı, yakışıklı",
+    "meaningEn": "cool, good-looking",
+    "exampleJp": "あの俳優は本当に**かっこいい**です。",
+    "exampleTr": "Şu oyuncu gerçekten çok havalı.",
+    "meaningTrAccepted": [
+      "havalı",
+      "yakışıklı"
+    ],
+    "meaningEnAccepted": [
+      "cool",
+      "good-looking"
+    ]
+  }
+]
