@@ -60,6 +60,12 @@ const UserWordSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     }
+}, {
+    // Aynı kelimeye eşzamanlı iki cevap (çift tıklama/otomatik yeniden deneme)
+    // ikisi de "bugün henüz cevaplanmamış" okuyup ikisini de sayabiliyordu —
+    // save() artık okunan __v ile çakışırsa VersionError atar; submitAnswer
+    // bunu yakalayıp taze durumu yeniden okur (bkz. userword.service.js).
+    optimisticConcurrency: true
 });
 
 UserWordSchema.index({ user: 1, word: 1 }, { unique: true });

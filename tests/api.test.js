@@ -11,7 +11,7 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 
 let mongod, server, BASE;
 let User, Word, UserWord, Notification, QuizAttempt, Event, Progress, Streak, DeviceSession;
-let UserWordService, NotificationService, ProgressService, StreakService, sendEmail;
+let UserWordService, NotificationService, ProgressService, StreakService, StudySessionService, sendEmail;
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -81,6 +81,7 @@ before(async () => {
     NotificationService = require('../modules/notification/notification.service');
     ProgressService = require('../modules/progress/progress.service');
     StreakService = require('../modules/streak/streak.service');
+    StudySessionService = require('../modules/studysession/studysession.service');
 
     // Test kelime seti: 30 N5 + 50 N4 core kelime (quiz çeldiricileri için yeterli havuz)
     const words = [];
@@ -599,6 +600,7 @@ describe('Öğrenme döngüsü (SRS)', () => {
         const user = await createVerifiedUser('srs@test.com', { dailyGoal: 20 });
         userId = user._id;
         token = (await login('srs@test.com')).accessToken;
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
     });
 
     it('günlük havuz dailyGoal kadar kelime verir ve gün içinde sabittir', async () => {
@@ -711,6 +713,31 @@ describe('Öğrenme döngüsü (SRS)', () => {
         await sleep(100); // event yazımı fire-and-forget
         const count = await Event.countDocuments({ user: userId, type: 'answer_submitted' });
         assert.ok(count >= 3);
+    });
+
+    it('eşzamanlı çift cevap aynı kelimeyi iki kez saymaz (race condition)', async () => {
+        // Gerçek bir kullanıcı raporunda aynı kelime 50ms arayla iki kez
+        // "correct" sayılmıştı (çift tıklama/yavaş bağlantıda erken yeniden
+        // deneme): UserWord optimistic concurrency + submitAnswer'daki retry
+        // bunu önlemeli — eşzamanlı iki istekten yalnızca biri sayılmalı.
+        const w = (await api('GET', '/userwords/today?jlptLevel=N5', { token }))
+            .json.data.newWords.find(x => !x.answeredToday);
+        const sBefore = (await api('GET', '/sessions/today', { token })).json.data;
+
+        const [r1, r2] = await Promise.all([
+            api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'correct' } }),
+            api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'correct' } })
+        ]);
+
+        const countedTrue = [r1, r2].filter(r => r.json.data.counted).length;
+        assert.equal(countedTrue, 1, 'aynı kelimeye eşzamanlı iki cevaptan yalnızca biri sayılmalı');
+
+        const sAfter = (await api('GET', '/sessions/today', { token })).json.data;
+        assert.equal(sAfter.totalWords, sBefore.totalWords + 1, 'session sayacı 2 değil 1 artmalı');
+        assert.equal(sAfter.correctCount, sBefore.correctCount + 1);
+
+        const uw = await UserWord.findOne({ user: userId, word: w._id });
+        assert.equal(uw.repetitions, 1, 'SM-2 yalnızca bir kez ilerlemeli');
     });
 });
 
@@ -1002,6 +1029,33 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
         assert.equal(detail.json.data.isKana, true, 'kana-only kelimede isKana true');
     });
 
+    it('today jlptLevel zorunludur — yoksa/geçersizse 400 (hayalet ikinci havuz açılmasın)', async () => {
+        const missing = await api('GET', '/userwords/today', { token });
+        assert.equal(missing.status, 400);
+
+        const invalid = await api('GET', '/userwords/today?jlptLevel=N6', { token });
+        assert.equal(invalid.status, 400);
+    });
+
+    it('dailyGoal gün içinde artınca havuz genişler: önce vadesi gelen tekrarlar, sonra yeni kelimeler', async () => {
+        const up = await api('PUT', '/auth/update-info', { token, body: { dailyGoal: 25 } });
+        assert.equal(up.status, 200);
+
+        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const d = today.json.data;
+        assert.equal(d.progress.total, 25, 'havuz 20→25 genişlemeli');
+        // migi (右) bugün ertelendi (empty) ve vadesi geçmiş durumda: genişleme
+        // kontenjanına yeni kelimeden ÖNCE, tekrar olarak girer — dokunulmuş
+        // (empty dahil) sayıldığı için w0/w1 + migi = 3
+        assert.equal(d.progress.answered, 3, 'önceki cevaplar (w0, w1) + dokunulan migi (empty) sayılır');
+        assert.ok(d.reviewWords.some(r => r.word.kanji === '右'),
+            'vadesi gelmiş kelime top-up kontenjanına önce girer');
+
+        // İkinci çağrı tekrar büyütmemeli (idempotent)
+        const again = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        assert.equal(again.json.data.progress.total, 25);
+    });
+
     it('sessions/complete hazır accuracy yüzdesi döner', async () => {
         const res = await api('PUT', '/sessions/complete', { token });
         assert.equal(res.status, 200);
@@ -1036,24 +1090,6 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
         assert.ok(!res.json.data.mistakes.some(m => m.word.kanji === '上'));
     });
 
-    it('dailyGoal gün içinde artınca havuz genişler: önce vadesi gelen tekrarlar, sonra yeni kelimeler', async () => {
-        const up = await api('PUT', '/auth/update-info', { token, body: { dailyGoal: 25 } });
-        assert.equal(up.status, 200);
-
-        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
-        const d = today.json.data;
-        assert.equal(d.progress.total, 25, 'havuz 20→25 genişlemeli');
-        assert.equal(d.progress.answered, 2, 'önceki cevaplar (w0, w1) korunmalı');
-        // migi (右) bugün ertelendi (empty) ve vadesi geçmiş durumda: genişleme
-        // kontenjanına yeni kelimeden ÖNCE, tekrar olarak girer
-        assert.ok(d.reviewWords.some(r => r.word.kanji === '右'),
-            'vadesi gelmiş kelime top-up kontenjanına önce girer');
-
-        // İkinci çağrı tekrar büyütmemeli (idempotent)
-        const again = await api('GET', '/userwords/today?jlptLevel=N5', { token });
-        assert.equal(again.json.data.progress.total, 25);
-    });
-
     it('tekrar çalışma turu TAM NÖTRDÜR: doğru yükseltmez, yanlış düşürmez, puanlama yine döner', async () => {
         const miru = await Word.findOne({ kanji: '見る' });
         // miru'nun bugünkü nihai cevabı verilmişti (correct); tekrar turu:
@@ -1078,9 +1114,11 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
 
         let today = (await api('GET', '/userwords/today?jlptLevel=N5', { token })).json.data;
         let item = today.newWords.find(x => x._id === w._id);
-        assert.equal(item.answeredToday, false, 'ertelenen kelime remaining\'de kalmalı');
+        assert.equal(item.answeredToday, false, 'nihai cevap yok: kelime yeniden sorulmalı');
+        assert.equal(item.touchedToday, true, 'ama dokunuldu: ilerleme sayacında görünmeli');
         assert.equal(item.todayResult, 'empty', 'istemci "ertelendi" bilgisini görebilmeli');
-        assert.equal(today.progress.answered, before.progress.answered, 'erteleme answered sayılmaz');
+        assert.equal(today.progress.answered, before.progress.answered + 1,
+            'erteleme de Anasayfa\'daki (StudySession) sayaçla tutarlı şekilde ilerleme sayılır');
 
         // İkinci boş geçiş nötrdür, emptyCount şişmez
         await api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'empty' } });
@@ -1102,6 +1140,8 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
         item = today.newWords.find(x => x._id === w._id);
         assert.equal(item.answeredToday, true);
         assert.equal(item.todayResult, 'correct');
+        assert.equal(today.progress.answered, before.progress.answered + 1,
+            'ertelenmişin nihai cevabı ilerlemeyi tekrar artırmaz (kelime zaten sayılmıştı)');
     });
 
     it('günlük oturum TEKTİR: complete sonrası start aynı kaydı yeniden açar', async () => {
@@ -1114,6 +1154,66 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
         assert.equal(started.json.data.isCompleted, false, 'bitmiş oturum yeniden açılmalı');
         assert.equal(await StudySession.countDocuments({ user: user._id }), 1,
             'güne İKİNCİ doküman asla açılmamalı');
+    });
+});
+
+describe('Session güvenilirliği (zorunlu session + idempotent bitirme + yeni tur)', () => {
+    let token, w0, w1, w2;
+
+    before(async () => {
+        await createVerifiedUser('guvenlik@test.com', { dailyGoal: 20 });
+        token = (await login('guvenlik@test.com')).accessToken;
+        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        [w0, w1, w2] = today.json.data.newWords;
+        // BİLEREK /sessions/start çağrılmadı: bypass/hacking senaryosunu test ediyoruz.
+    });
+
+    it('sessions/start çağrılmadan cevap verilemez (UI atlanıp API\'ye doğrudan istek atılamasın)', async () => {
+        const res = await api('POST', '/userwords/answer', { token, body: { wordId: w0._id, result: 'correct' } });
+        assert.equal(res.status, 400, 'session yokken cevap KABUL EDİLMEMELİ');
+
+        const s = await api('GET', '/sessions/today', { token });
+        assert.equal(s.json.data, null, "reddedilen cevap session'ı da kendiliğinden açmamalı");
+    });
+
+    it('sessions/complete birden çok kez çağrılırsa idempotenttir (duration/event tekrarlanmaz)', async () => {
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
+        await api('POST', '/userwords/answer', { token, body: { wordId: w0._id, result: 'correct' } });
+        await api('POST', '/userwords/answer', { token, body: { wordId: w1._id, result: 'wrong' } });
+
+        const first = await api('PUT', '/sessions/complete', { token });
+        assert.equal(first.status, 200);
+        const firstDuration = first.json.data.duration;
+        const firstCompletedAt = first.json.data.completedAt;
+
+        await new Promise(r => setTimeout(r, 20));
+        const second = await api('PUT', '/sessions/complete', { token });
+        assert.equal(second.status, 200);
+        assert.equal(second.json.data.completedAt, firstCompletedAt, 'ikinci çağrı completedAt\'i değiştirmemeli');
+        assert.equal(second.json.data.duration, firstDuration, 'ikinci çağrı duration\'ı büyütmemeli');
+        assert.equal(second.json.data.totalWords, first.json.data.totalWords, 'sayaçlar aynı kalmalı');
+
+        const events = await Event.countDocuments({ user: (await User.findOne({ email: 'guvenlik@test.com' }))._id, type: 'session_completed' });
+        assert.equal(events, 1, 'ikinci tamamlama ayrı bir session_completed event\'i YAZMAMALI');
+    });
+
+    it('session tamamlandıktan sonra today yeni bir tur açar: önceki havuzun kelimeleri tekrar gelmez', async () => {
+        // Önceki testte w0/w1 cevaplandı, session tamamlandı (isCompleted:true).
+        // BİLEREK gerçek istemci sırasıyla: start ÖNCE, today SONRA. Bu sıra
+        // StudySession.isCompleted'ı today'den önce sıfırlardı (regresyon riski);
+        // tetikleyici artık DailyWordPool.roundClosedAt olduğu için etkilenmemeli.
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
+        const newRound = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const newIds = new Set([...newRound.json.data.newWords, ...newRound.json.data.reviewWords].map(w => (w.word || w)._id));
+
+        // w2 önceki turda hiç cevaplanmamıştı (havuzda kalmıştı) — yine de yeni
+        // turda tekrar gelmemeli, çünkü önceki havuzun TAMAMI hariç tutulur
+        const oldPoolWordIds = [w0._id, w1._id, w2._id];
+        const overlap = oldPoolWordIds.filter(id => newIds.has(id));
+        assert.equal(overlap.length, 0, 'yeni tur önceki havuzun kelimelerini İÇERMEMELİ');
+
+        const s = await api('GET', '/sessions/today', { token });
+        assert.equal(s.json.data.isCompleted, false, 'yeni tur session\'ı yeniden açmalı');
     });
 });
 
@@ -1193,12 +1293,62 @@ describe('Ana ekran (Home)', () => {
     });
 });
 
+describe('Anasayfa — çoklu tur: payda SABİT kalır, pay hedefi aşabilir', () => {
+    let token;
+
+    it('1. tur tamamlanıp 2. tur açılınca goal SABİT kalır (büyümez), totalWords aşabilir', async () => {
+        await createVerifiedUser('coklutur@test.com', { dailyGoal: 5 });
+        token = (await login('coklutur@test.com')).accessToken;
+
+        // 1. tur: 5 kelime, hepsini cevapla, oturumu bitir (roundClosedAt set edilir)
+        let today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
+        for (const w of today.json.data.newWords) {
+            await api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'correct' } });
+        }
+        await api('PUT', '/sessions/complete', { token });
+
+        let summary = await api('GET', '/home/summary', { token });
+        assert.equal(summary.json.data.goal, 5, '1. tur bitince payda 5');
+        assert.equal(summary.json.data.today.totalWords, 5);
+
+        // 2. tur: today çağrısı yeni turu açar (roundClosedAt -> null, taze 5 kelime daha)
+        today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        assert.equal(today.json.data.newWords.length, 5, '2. tur da 5 taze kelime getirir');
+        assert.equal(today.json.data.goal, 5, 'ürün kararı: yeni tur paydayı büyütmez, sabit kalır');
+
+        // 2. turda yalnızca 1 kelime cevapla (tur tamamlanmadı)
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
+        const ans = await api('POST', '/userwords/answer', {
+            token, body: { wordId: today.json.data.newWords[0]._id, result: 'correct' }
+        });
+
+        // /userwords/answer yanıtı da AYNI goal/today şeklini taşır — istemci
+        // her cevaptan sonra kendi toplamını hesaplamak yerine buna güvenir
+        assert.equal(ans.json.data.today.totalWords, 6, 'session sayacı turlar arası birikir: 5 + 1');
+        assert.equal(ans.json.data.goal, 5, 'payda hâlâ 5 — büyümedi');
+
+        summary = await api('GET', '/home/summary', { token });
+        assert.equal(summary.json.data.today.totalWords, 6);
+        assert.equal(summary.json.data.goal, 5, 'Anasayfa da aynı sabit paydayı görmeli');
+        assert.ok(summary.json.data.today.totalWords > summary.json.data.goal,
+            'hedefi aşmak normaldir: 6 > 5, ring %100\'ü geçer, payda yerinden oynamaz');
+
+        // /userwords/today da (yeniden çağrılınca) AYNI sayıları görmeli —
+        // üç uç nokta (today/answer/home) tek kaynaktan (StudySession) besleniyor
+        today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        assert.equal(today.json.data.today.totalWords, 6);
+        assert.equal(today.json.data.goal, 5);
+    });
+});
+
 describe('Seviyeler ekranı', () => {
     let token;
 
     before(async () => {
         await createVerifiedUser('seviye@test.com');
         token = (await login('seviye@test.com')).accessToken;
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
         const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
         const [w1, w2] = today.json.data.newWords;
         await api('POST', '/userwords/answer', { token, body: { wordId: w1._id, result: 'correct' } });
@@ -1225,6 +1375,32 @@ describe('Seviyeler ekranı', () => {
 
         const bad = await api('GET', '/userwords/list?masteryLevel=9', { token });
         assert.equal(bad.status, 400);
+    });
+});
+
+describe('Kelime havuzu sıralaması (müfredat/frequencyRank)', () => {
+    let token;
+
+    before(async () => {
+        // Bilerek TERS sırada eklendi: kayıt sırası değil frequencyRank belirlemeli
+        await Word.insertMany([
+            { kanji: '外科医', romaji: 'gekai', meaning: 'surgeon', type: 'isim', jlptLevel: 'N3', isCore: true, frequencyRank: 30 },
+            { kanji: '医者', romaji: 'isha', meaning: 'doctor', type: 'isim', jlptLevel: 'N3', isCore: true, frequencyRank: 10 },
+            { kanji: '看護師', romaji: 'kangoshi', meaning: 'nurse', type: 'isim', jlptLevel: 'N3', isCore: true, frequencyRank: 20 }
+        ]);
+        await createVerifiedUser('siralama@test.com');
+        token = (await login('siralama@test.com')).accessToken;
+    });
+
+    it('yeni kelimeler frequencyRank artan sırada gelir (rastgele DEĞİL — ön koşul kelime önce)', async () => {
+        const res = await api('GET', '/userwords/today?jlptLevel=N3', { token });
+        assert.equal(res.status, 200);
+        const kanjis = res.json.data.newWords.map(w => w.kanji);
+        assert.deepEqual(kanjis, ['医者', '看護師', '外科医'], 'doktor → hemşire → cerrah sırası korunmalı');
+
+        // Aynı gün tekrar çağrıldığında (havuz zaten var) sıra yine korunur
+        const again = await api('GET', '/userwords/today?jlptLevel=N3', { token });
+        assert.deepEqual(again.json.data.newWords.map(w => w.kanji), ['医者', '看護師', '外科医']);
     });
 });
 
@@ -1396,6 +1572,7 @@ describe('Mastery decay', () => {
     });
 
     it('doğru cevap seviyeyi SM-2\'den anında geri yükseltir', async () => {
+        await StudySessionService.startSession(userId, 'N4');
         const result = await UserWordService.submitAnswer(userId, words[0]._id, 'correct');
         assert.ok(result.masteryLevel >= 4, 'düşen seviye ilk doğru cevapta geri zıplamalı');
     });

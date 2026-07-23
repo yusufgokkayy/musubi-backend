@@ -322,11 +322,29 @@ Gövde `Word` alanlarıdır; mobil uygulamanın kullanması gerekmez.
 ## Günlük çalışma — `/userwords`
 
 ### GET /userwords/today?jlptLevel=N5 🔒✉️
+**`jlptLevel` ZORUNLUDUR** (N5-N1, yoksa/geçersizse 400). Havuzun kimliği
+`{user, gün, jlptLevel}` üçlüsüdür — aynı ekran akışı içinde bazen `jlptLevel`
+gönderip bazen göndermemek FARKLI bir havuz saydırır, ikinci bir tane açtırır
+(çift kelime seti, ilerleme çemberinin paydası şişer). Bu uç noktayı çağıran
+her ekran/akış noktası **aynı** `jlptLevel` değerini göndermeli.
+
 Günün havuzunu döner; gün içinde (kullanıcının saat diliminde) tekrar çağrılırsa **aynı liste** döner.
 Tek istisna: `dailyGoal` gün içinde **artarsa** havuz bir sonraki çağrıda fark
-kadar genişler — kontenjana önce **vadesi gelmiş tekrarlar**, kalan yer rastgele
-yeni kelimeler girer (cevaplanmışlar korunur). Hedef azalırsa bugünü etkilemez,
+kadar genişler — kontenjana önce **vadesi gelmiş tekrarlar**, kalan yer yeni
+kelimelerle dolar (cevaplanmışlar korunur). Hedef azalırsa bugünü etkilemez,
 yarınki havuz yeni hedefle kurulur.
+
+**Yeni tur (şimdilik):** `PUT /sessions/complete` ile günün oturumu
+tamamlandıktan sonra bu uç nokta tekrar çağrılırsa, aynı gün içinde bile
+**taze bir havuz** üretilir — önceki havuzdaki (hem tekrar hem yeni) kelimeler
+hariç tutulur, aynı kurallarla (frequencyRank sıralı yeni, vade sıralı tekrar)
+yeniden seçilir. Session da otomatik yeniden açılır (`isCompleted:false`).
+Günün toplam sayaçları (`/sessions/today`) turlar arasında birikmeye devam eder.
+
+`newWords` **rastgele değil**, `frequencyRank` (müfredat/omurga sırası, küçük
+= önce öğretilir) artan sırada gelir — ön koşul kelime (örn. "doktor") sonraki
+kelimeden (örn. "cerrah") önce sorulur. `reviewWords` sırası ayrı bir mantığa
+tabidir (vadesi en eski + en kırılgan önce).
 
 Kaldığın yerden devam: her öğede `answeredToday`/`todayResult`, kökte `progress`
 sayaçları vardır. Ders yarıda kalıp yeniden açıldığında istemci
@@ -365,6 +383,9 @@ kana-only'dir (それから, いつも): istemci "kanji" etiketini ve kanjiyle a
 okunuş satırını gizlemelidir.
 
 ### POST /userwords/answer 🔒✉️
+**Önce `POST /sessions/start` çağrılmış olmalı** — o gün için aktif bir
+`StudySession` yoksa 400 döner. İstemci UI'sını atlayıp doğrudan bu uç
+noktaya istek atarak sınırsız/rastgele kelime cevaplama girişimini kapatır.
 ```jsonc
 // İstek — wordId, Word'ün _id'sidir (UserWord id'si DEĞİL)
 { "wordId": "665f2b...", "result": "correct" }   // correct | easy | empty | wrong

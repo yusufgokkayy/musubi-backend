@@ -4,9 +4,7 @@
   "description": "Musubi — JLPT tabanlı Japonca kelime öğrenme uygulamasının backend API'si",
   "private": true,
   "scripts": {
-    "seed": "node seeds/seed-csv.js",
-    "select-core": "node seeds/select-core.js",
-    "wipe-users": "node seeds/wipe-user-data.js",
+    "seed": "node seeds/seed-veri-seti.js",
     "test": "node --test",
     "dev": "nodemon server.js",
     "start": "node server.js"

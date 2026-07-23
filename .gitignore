@@ -7,10 +7,7 @@ config/.env
 firebase-service-account.json
 
 # Harici kelime listesi (ayrı git klonu, seed için lokalde bulunmalı)
-jlpt-word-list/
-
-# İndirme cache'i (select-core ilk çalıştırmada yeniden indirir)
-seeds/data/
+veri-seti/
 
 # Araç / geçici dosyalar
 .claude/

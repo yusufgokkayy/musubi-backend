@@ -91,7 +91,7 @@ kotoba tarafında `scripts/validate_musubi_sentences.py` (kapı), `08-import-ex.
 - **Prod uygulaması** (mağaza öncesi, sırası önemli): prod URI ile
   `01-fix-words --apply` → `02-dedupe` dry-run incele → `--apply`
   (prod'da UserWord/havuz referansları dolu olabilir; script taşıyor ama
-  çıktı okunmalı) → `npm run seed` → `npm run select-core`.
+  çıktı okunmalı) → `npm run seed:veri-seti`.
 - **Emirhan/istemci**: "Dinle" = kana alanı + cihaz TTS (ja-JP; kanji değil,
   kana verilir; ～ istemcide temizlenir). Ses yalnız sesin cevabı
   sızdırmadığı soru tiplerinde çalıştırılır (reverse/fillblank/image'da

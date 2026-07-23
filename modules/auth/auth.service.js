@@ -97,9 +97,22 @@ const AuthService = {
             throw new AppError('Email gönderilemedi, tekrar deneyin', 500);
         }
 
-        await ProgressService.initializeProgress(user._id);
-        await StreakService.initializeStreak(user._id);
-        await createSession(user._id, refreshToken, deviceName);
+        // Yan kayıtlar (Progress/Streak/oturum) e-posta gönderildikten sonra
+        // oluşur; biri patlarsa yetim User kalmasın diye burada da geri alınır
+        // (mail hatasındaki rollback'le aynı mantık, ama User zaten kaydedilmişken)
+        try {
+            await ProgressService.initializeProgress(user._id);
+            await StreakService.initializeStreak(user._id);
+            await createSession(user._id, refreshToken, deviceName);
+        } catch (err) {
+            await Promise.all([
+                User.findByIdAndDelete(user._id),
+                Progress.deleteMany({ user: user._id }),
+                Streak.deleteMany({ user: user._id }),
+                DeviceSession.deleteMany({ user: user._id })
+            ]);
+            throw new AppError('Hesap oluşturulamadı, tekrar deneyin', 500);
+        }
         logEvent(user._id, 'register');
 
         return { user, accessToken, refreshToken, verificationToken };
@@ -176,14 +189,33 @@ const AuthService = {
                 providerId: profile.providerId,
                 isEmailVerified: true // sağlayıcı doğruladı, mail akışı gerekmez
             });
-            await ProgressService.initializeProgress(user._id);
-            await StreakService.initializeStreak(user._id);
             isNewUser = true;
         }
 
         const accessToken = signAccessToken(user._id);
         const refreshToken = signRefreshToken(user._id);
-        await createSession(user._id, refreshToken, deviceName);
+
+        if (isNewUser) {
+            // register()'daki rollback ile aynı mantık: yeni hesabın yan kayıtları
+            // (Progress/Streak/oturum) patlarsa yetim User kalmasın
+            try {
+                await ProgressService.initializeProgress(user._id);
+                await StreakService.initializeStreak(user._id);
+                await createSession(user._id, refreshToken, deviceName);
+            } catch (err) {
+                await Promise.all([
+                    User.findByIdAndDelete(user._id),
+                    Progress.deleteMany({ user: user._id }),
+                    Streak.deleteMany({ user: user._id }),
+                    DeviceSession.deleteMany({ user: user._id })
+                ]);
+                throw new AppError('Hesap oluşturulamadı, tekrar deneyin', 500);
+            }
+        } else {
+            // Var olan hesap: oturum açma hatası User'ı silmeyi gerektirmez
+            await createSession(user._id, refreshToken, deviceName);
+        }
+
         logEvent(user._id, isNewUser ? 'register' : 'login', { provider, deviceName });
 
         return { user, accessToken, refreshToken, isNewUser };

@@ -20,14 +20,23 @@ const WordSchema = new mongoose.Schema({
         required: [true, 'Please provide meaning']
     },
     // Türkçe anlam (kısa, quiz cevabı olarak gösterilebilir; ≤40 karakter).
-    // content-pipeline Faz 1 üretimiyle dolar (06-import-tr.js); boş olabilir,
-    // client boşsa İngilizce meaning'e düşer.
+    // boş olabilir, client boşsa İngilizce meaning'e düşer.
     meaningTr: {
         type: String
     },
+    // Quiz'de meaningTr dışında kabul edilecek eş anlamlı TR cevaplar.
+    meaningTrAccepted: {
+        type: [String],
+        default: undefined
+    },
+    // Quiz'de meaning dışında kabul edilecek eş anlamlı EN cevaplar.
+    meaningEnAccepted: {
+        type: [String],
+        default: undefined
+    },
     type: {
         type: String,
-        enum: ['fiil', 'sıfat', 'isim', 'zarf', 'diğer'],
+        enum: ['isim', 'fiil', 'i-sıfat', 'na-sıfat', 'zarf', 'zamir', 'bağlaç', 'edat', 'ünlem', 'bağlaşık sıfat', 'kalıp'],
         required: [true, 'Please provide word type']
     },
     jlptLevel: {
@@ -44,6 +53,10 @@ const WordSchema = new mongoose.Schema({
     example: {
         type: String
     },
+    // example'ın Türkçe çevirisi.
+    exampleTr: {
+        type: String
+    },
     // Görselli soru için kelime görseli; boş olan kelimeler bu tipe girmez
     imageUrl: {
         type: String
@@ -54,6 +67,9 @@ const WordSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    // Seviye içi müfredat sırası (küçük = önce öğretilir; örn. ders kitabı/
+    // omurga müfredat sırası). Ön koşul kelimeler (örn. "doktor") sonraki
+    // kelimelerden (örn. "cerrah") önce gelsin diye kullanılır.
     frequencyRank: {
         type: Number
     },

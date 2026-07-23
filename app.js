@@ -30,7 +30,10 @@ if (process.env.NODE_ENV !== 'production') {
             }
         }
     }));
-    app.use(express.static('public'));
+    // no-store: bu dev konsolu sık güncelleniyor; tarayıcı eski app.js'i
+    // önbellekten kullanınca (özellikle sekme hiç yenilenmeden kalınca)
+    // düzeltilmiş bug'lar hâlâ "var" gibi görünüp yanlış teşhise yol açıyordu
+    app.use(express.static('public', { etag: false, lastModified: false, setHeaders: (res) => res.set('Cache-Control', 'no-store') }));
 } else {
     app.use(helmet());
 }
@@ -54,7 +57,7 @@ app.use('/api', generalLimiter);
 
 // E-posta linklerinin indiği tarayıcı sayfaları (HTML, /api dışında):
 // GET /verify-email/:token ve GET /reset-password/:token
-app.use(require('./modules/auth/landing.routes'));
+app.use(require('./modules/auth/auth.landing.routes'));
 
 app.use('/api/auth', require('./modules/auth/auth.routes'));
 app.use('/api/words', require('./modules/word/word.routes'));

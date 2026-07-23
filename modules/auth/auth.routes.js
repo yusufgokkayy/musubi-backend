@@ -15,7 +15,7 @@ router.post('/refresh', AuthController.refresh);
 router.get('/me',               protect, isEmailVerified, AuthController.getMe);
 router.post('/forgot-password', authLimiter, AuthController.forgotPassword);
 router.post('/reset-password',  authLimiter, AuthController.resetPassword);
-router.get('/verify-email/:token', AuthController.verifyEmail);
+router.get('/verify-email/:token', authLimiter, AuthController.verifyEmail);
 router.post('/verify-email',    authLimiter, AuthController.verifyEmailPost);
 router.put('/update-info',      protect, isEmailVerified, AuthController.updateInfo);
 router.post('/resend-verification-email', authLimiter, AuthController.resendVerificationEmail);

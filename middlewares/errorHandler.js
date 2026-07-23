@@ -15,6 +15,12 @@ const errorHandler = (err, req, res, next) => {
         statusCode = 400;
     }
 
+    // Geçersiz ObjectId formatı (örn. :id param) — yakalanmazsa 500 dönerdi
+    if (err.name === 'CastError') {
+        message = 'Invalid ID format';
+        statusCode = 400;
+    }
+
     // JWT hataları
     if (err.name === 'JsonWebTokenError') {
         message = 'Invalid token';

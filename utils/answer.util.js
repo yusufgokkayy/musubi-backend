@@ -25,4 +25,15 @@ const gradeTyping = (answer, correctAnswers) => {
     return correctAnswers.some(c => normalizeAnswer(c) === typed);
 };
 
-module.exports = { normalizeAnswer, meaningVariants, gradeTyping };
+// Kelimenin quiz/yazma sorusunda kabul edilecek doğru cevap varyantları.
+// Uygulama tr-only (preferences.language enum'ı yalnızca 'tr'): kullanıcı
+// Türkçe anlamı yazar, bu yüzden temel karşılaştırma meaningTr'dir; boşsa
+// (henüz çevrilmemiş kelime) İngilizce meaning'e düşülür. meaningTrAccepted/
+// meaningEnAccepted, hangi alan baz alındıysa onun eş anlamlı ek varyantlarıdır.
+const wordAnswerVariants = (word) => {
+    const base = word.meaningTr || word.meaning;
+    const accepted = word.meaningTr ? word.meaningTrAccepted : word.meaningEnAccepted;
+    return [...new Set([...meaningVariants(base), ...(accepted || [])])];
+};
+
+module.exports = { normalizeAnswer, meaningVariants, gradeTyping, wordAnswerVariants };
