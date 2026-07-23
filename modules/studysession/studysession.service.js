@@ -45,18 +45,32 @@ const StudySessionService = {
     // tutmuyor" bug'ının olası kaynaklarından biri). Artık submitAnswer'ın
     // session sırasına bağımlılığı yok.
     async updateSession(userId, result, { fromEmpty = false, jlptLevel } = {}) {
-        const session = await this.startSession(userId, jlptLevel);
+        await this.startSession(userId, jlptLevel);
+        const today = await startOfTodayForUser(userId);
 
-        if (fromEmpty) {
-            session.emptyCount = Math.max(0, session.emptyCount - 1);
-        } else {
-            session.totalWords += 1;
+        // $inc ile atomik güncelleme: read-modify-write (findOne + save) iki
+        // eşzamanlı cevapta (network retry/double-tap) birinin sayacını kaybediyordu
+        // ("sayılar bazen tutmuyor" bug'ının olası bir kaynağı) — $inc bu yarışı önler.
+        const inc = {};
+        if (fromEmpty) inc.emptyCount = -1;
+        else inc.totalWords = 1;
+        if (result === 'correct' || result === 'easy') inc.correctCount = 1;
+        else if (result === 'wrong') inc.wrongCount = 1;
+        else if (result === 'empty') inc.emptyCount = 1;
+
+        const session = await StudySession.findOneAndUpdate(
+            { user: userId, date: { $gte: today } },
+            { $inc: inc },
+            { returnDocument: 'after' }
+        );
+
+        // Taban altına inme yalnızca beklenmedik bir sırayla (empty eşleşmeden
+        // decrement) olabilir; negatif göstermemek için düzeltilir
+        if (session.emptyCount < 0) {
+            session.emptyCount = 0;
+            await session.save();
         }
-        if (result === 'correct' || result === 'easy') session.correctCount += 1;
-        else if (result === 'wrong') session.wrongCount += 1;
-        else if (result === 'empty') session.emptyCount += 1;
 
-        await session.save();
         return session;
     },
 

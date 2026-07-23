@@ -30,6 +30,14 @@ const DailyWordPoolSchema = new mongoose.Schema({
     // silinirdi. Bu alan o çağrı sırasından tamamen bağımsız.
     roundClosedAt: {
         type: Date
+    },
+    // Bu havuz/tur kurulurken hedeflenen dailyGoal. Havuz kıtlıktan (yeterli
+    // tekrar/yeni kelime yok) hedefin altında kurulabilir — poolSize'ı hedef
+    // sanıp her /today çağrısında yeniden doldurmaya çalışmak, hiçbir şey
+    // bulunamasa bile payda sabit kalsın diye targetGoal ayrı tutulur.
+    // Genişleme yalnızca dailyGoal bu değerin ÜSTÜNE çıkınca tetiklenir.
+    targetGoal: {
+        type: Number
     }
 });
 

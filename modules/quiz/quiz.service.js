@@ -4,7 +4,7 @@ const Progress = require('../../models/Progress');
 const AppError = require('../../utils/AppError');
 const ProgressService = require('../progress/progress.service');
 const logEvent = require('../../utils/event.util');
-const { meaningVariants, gradeTyping } = require('../../utils/answer.util');
+const { gradeTyping, wordAnswerVariants } = require('../../utils/answer.util');
 
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
 
@@ -84,7 +84,7 @@ const QuizService = {
                     format,
                     // Kelime gösterilir, anlamı yazılır; ses de kelimeyi söyler (cevabı sızdırmaz)
                     prompt: { kanji: word.kanji, romaji: word.romaji, audioUrl: word.audioUrl },
-                    correctAnswers: meaningVariants(word.meaning)
+                    correctAnswers: wordAnswerVariants(word)
                 });
                 continue;
             }
@@ -255,14 +255,14 @@ const QuizService = {
         q.answeredAt = new Date();
 
         // Geri bildirim kartındaki "駅 — istasyon" satırı
-        const word = await Word.findById(q.word).select('kanji meaning');
+        const word = await Word.findById(q.word).select('kanji meaning meaningTr');
 
         const answeredCount = attempt.questions.filter(x => x.answeredAt).length;
         const finished = answeredCount === attempt.questions.length;
 
         const response = {
             correct: isCorrect,
-            word: word ? { kanji: word.kanji, meaning: word.meaning } : null,
+            word: word ? { kanji: word.kanji, meaning: word.meaningTr || word.meaning } : null,
             // Yanlışta "Cevap: ..." satırı için anahtar (soru artık cevaplandı, sızıntı değil)
             ...(q.format === 'typing'
                 ? { correctAnswer: q.correctAnswers[0] }

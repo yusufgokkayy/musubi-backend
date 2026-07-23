@@ -9,6 +9,15 @@ const DailyWordPool = require('../../models/DailyWordPool');
 const AppError = require('../../utils/AppError');
 const { startOfDayInTz, startOfDateInTz, addDays } = require('../../utils/date.util');
 
+// Bir havuzun o günkü boyutu — yalnızca GÜNCEL turun gerçek dizi uzunluğu.
+// Ürün kararı: yeni tur açılınca payda SABİT kalır (önceki turların boyutu
+// eklenmez); kullanıcı hedefini aşarsa StudySession.totalWords (turlar arası
+// hiç sıfırlanmaz) paydayı geçer — "23/20" gibi %100'ü aşan bir oran normaldir,
+// hedef yerinden oynamaz. targetGoal BİLEREK kullanılmaz: kıtlıktan dolayı
+// havuz hedefin altında kurulmuş olabilir (bkz. selectPoolWords), payda her
+// zaman GERÇEKTE havuzda olan kelime sayısını yansıtmalı.
+const poolGoalTotal = (pool) => pool.newWordIds.length + pool.reviewWordIds.length;
+
 const HomeService = {
     async getSummary(userId) {
         const user = await User.findById(userId).select('timezone name dailyGoal');
@@ -56,9 +65,9 @@ const HomeService = {
         // Çemberin paydası = BUGÜNÜN HAVUZU (günün sözleşmesi). dailyGoal canlı
         // tercih değeridir: gün içinde değişince payda anında oynamamalı —
         // havuz genişlerse (hedef artışı) goal zaten onunla birlikte büyür.
-        const todayPoolSize = todayPools.reduce(
-            (sum, p) => sum + p.newWordIds.length + p.reviewWordIds.length, 0
-        );
+        // Birden fazla tur olduysa (aynı gün içinde oturum tamamlanıp yeniden
+        // açıldıysa) kapanan turların hedefleri de dahil edilir (bkz. poolGoalTotal).
+        const todayPoolSize = todayPools.reduce((sum, p) => sum + poolGoalTotal(p), 0);
 
         return {
             name: user?.name || '',        // "Merhaba Emirhan" başlığı
@@ -124,11 +133,9 @@ const HomeService = {
             .filter(([id]) => wordById.has(id))
             .map(([id, result]) => ({ word: wordById.get(id), result }));
 
-        // Çemberin paydası: o günün havuz büyüklüğü (tarihsel hedef);
-        // havuz kaydı yoksa güncel dailyGoal'a düşülür
-        const poolSize = pools.reduce(
-            (sum, p) => sum + p.newWordIds.length + p.reviewWordIds.length, 0
-        );
+        // Çemberin paydası: o günün havuz büyüklüğü (tarihsel hedef, turlar
+        // dahil — bkz. poolGoalTotal); havuz kaydı yoksa güncel dailyGoal'a düşülür
+        const poolSize = pools.reduce((sum, p) => sum + poolGoalTotal(p), 0);
 
         return {
             date: dateStr,
