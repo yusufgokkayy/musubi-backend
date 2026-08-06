@@ -8,10 +8,16 @@ const AuthController = {
     }),
 
     socialLogin: catchAsync(async (req, res) => {
-        const { provider, idToken, name, surname } = req.body;
+        const { provider, idToken, name, surname, consents,
+                dailyGoal, timezone, reminderTime, dailyReminder, language } = req.body;
         const deviceName = req.body.deviceName || req.headers['user-agent'];
         const { user, accessToken, refreshToken, isNewUser } =
-            await AuthService.socialLogin({ provider, idToken, name, surname, deviceName });
+            await AuthService.socialLogin({
+                provider, idToken, name, surname, deviceName,
+                consents, ip: req.ip, userAgent: req.headers['user-agent'],
+                // register ile aynı onboarding alanları; yalnızca yeni hesapta uygulanır
+                dailyGoal, timezone, reminderTime, dailyReminder, language
+            });
         res.status(isNewUser ? 201 : 200).json({
             success: true,
             accessToken,
@@ -23,14 +29,23 @@ const AuthController = {
     }),
 
     register: catchAsync(async (req, res) => {
-        const { name, surname, email, password } = req.body;
+        // Onboarding'in son adımına kadar toplanan her şey tek istekte gelir
+        const { name, surname, email, password, dailyGoal, timezone, reminderTime, dailyReminder, language, consents } = req.body;
         const deviceName = req.body.deviceName || req.headers['user-agent'];
-        const { user, accessToken, refreshToken, verificationToken } = await AuthService.register({ name, surname, email, password, deviceName });
+        const { user, accessToken, refreshToken } = await AuthService.register({
+            name, surname, email, password, deviceName, dailyGoal, timezone, reminderTime, dailyReminder, language,
+            // KVKK rıza kanıtı: kaydın hangi bağlamda yapıldığı
+            consents, ip: req.ip, userAgent: req.headers['user-agent']
+        });
+        // Doğrulama token'ı BİLEREK yanıtta dönmez — hiçbir ortamda.
+        // Eskiden NODE_ENV !== 'production' koşuluyla dönüyordu; bu fail-OPEN
+        // bir kontroldü: deploy'da değişken boş kalırsa token açığa çıkardı.
+        // Testler token'ı sendEmail.outbox'taki maildan okur (gerçek kullanıcı
+        // yolunun aynısı).
         res.status(201).json({
             success: true,
             accessToken,
             refreshToken,
-            ...(process.env.NODE_ENV !== 'production' && { verificationToken }),
             data: { id: user._id, name: user.name }
         });
     }),
@@ -62,6 +77,37 @@ const AuthController = {
         res.status(200).json({ success: true, data: result });
     }),
 
+    // "E-postanı Doğrula" bekleme ekranı için düz durum ucu.
+    // isEmailVerified middleware'i BİLEREK yok — zaten doğrulanmamış kullanıcı
+    // soruyor. /auth/me'yi kullanıp 403'ü "doğrulanmadı" sinyali saymak yerine
+    // ayrı bir uç var çünkü: (1) 403 bir HATA kodudur, başka sebeple gelen
+    // 403'ten ayırt edilemez, (2) bu ekran yoklama yaparsa her istek
+    // errorHandler'da console.warn olarak loglanır ve logları doldurur.
+    getVerificationStatus: catchAsync(async (req, res) => {
+        res.status(200).json({
+            success: true,
+            data: {
+                isEmailVerified: req.user.isEmailVerified,
+                email: req.user.email
+            }
+        });
+    }),
+
+    // Oturum varsa kullanıcının rıza durumu da döner (protect opsiyonel)
+    getConsents: catchAsync(async (req, res) => {
+        const data = await AuthService.getConsentStatus(req.user?.id || null);
+        res.status(200).json({ success: true, data });
+    }),
+
+    acceptConsents: catchAsync(async (req, res) => {
+        const data = await AuthService.acceptConsents(req.user.id, {
+            consents: req.body.consents,
+            ip: req.ip,
+            userAgent: req.headers['user-agent']
+        });
+        res.status(200).json({ success: true, data });
+    }),
+
     getMe: catchAsync(async (req, res) => {
         res.status(200).json({
             success: true,
@@ -70,11 +116,11 @@ const AuthController = {
     }),
 
     forgotPassword: catchAsync(async (req, res) => {
-        const { resetToken } = await AuthService.forgotPassword(req.body.email);
-        res.status(200).json({ 
-            success: true, 
-            message: 'Password reset email sent',
-            ...(process.env.NODE_ENV !== 'production' && { resetToken })
+        // resetToken yanıtta dönmez (register'daki notla aynı gerekçe)
+        await AuthService.forgotPassword(req.body.email);
+        res.status(200).json({
+            success: true,
+            message: 'Password reset email sent'
         });
     }),
 

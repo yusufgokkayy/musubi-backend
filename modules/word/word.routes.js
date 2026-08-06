@@ -1,14 +1,14 @@
 const express = require('express');
 const WordController = require('./word.controller');
-const { protect, isEmailVerified } = require('../../middlewares/auth.middleware');
+const { protect } = require('../../middlewares/auth.middleware');
 const { isAdmin } = require('../../middlewares/auth.middleware');
 
 const router = express.Router();
 
 // Kullanıcı endpointleri
-router.get('/',         protect, isEmailVerified, WordController.getAllWords);
-router.get('/search',   protect, isEmailVerified, WordController.searchWords);
-router.get('/:id',      protect, isEmailVerified, WordController.getWordById);
+router.get('/',         WordController.getAllWords);
+router.get('/search',   WordController.searchWords);
+router.get('/:id',      WordController.getWordById);
 
 // Admin endpointleri
 // router.post('/',        protect, isAdmin, WordController.createWord);

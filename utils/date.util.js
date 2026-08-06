@@ -61,10 +61,27 @@ const localHourInTz = (timeZone, now = new Date()) => {
     }).format(now), 10) % 24;
 };
 
+// Kullanıcının saat dilimindeki gece yarısından beri geçen dakika (0-1439).
+// Hatırlatma saati HH:mm olduğu için saat çözünürlüğü yetmiyor.
+const localMinutesInTz = (timeZone, now = new Date()) => {
+    const tz = safeTimezone(timeZone);
+    const parts = new Intl.DateTimeFormat('en-US', {
+        timeZone: tz, hour: '2-digit', minute: '2-digit', hour12: false
+    }).formatToParts(now);
+    const get = (t) => parseInt(parts.find(p => p.type === t).value, 10);
+    return (get('hour') % 24) * 60 + get('minute');
+};
+
+// "HH:mm" -> gece yarısından beri dakika; biçim bozuksa null
+const parseHHmm = (value) => {
+    const m = /^([01]\d|2[0-3]):([0-5]\d)$/.exec(value || '');
+    return m ? parseInt(m[1], 10) * 60 + parseInt(m[2], 10) : null;
+};
+
 // Kullanıcıyı çekip onun bugün-başlangıcını döndürür (en sık kullanılan kalıp)
 const startOfTodayForUser = async (userId) => {
     const user = await User.findById(userId).select('timezone');
     return startOfDayInTz(user?.timezone);
 };
 
-module.exports = { DEFAULT_TZ, safeTimezone, startOfDayInTz, startOfDateInTz, addDays, localHourInTz, startOfTodayForUser };
+module.exports = { DEFAULT_TZ, safeTimezone, startOfDayInTz, startOfDateInTz, addDays, localHourInTz, localMinutesInTz, parseHHmm, startOfTodayForUser };

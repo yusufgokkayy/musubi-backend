@@ -24,6 +24,24 @@ const protect = catchAsync(async (req, res, next) => {
     next();
 });
 
+// Token varsa kullanıcıyı çözer, yoksa/bozuksa sessizce devam eder.
+// Hem oturumlu hem oturumsuz çağrılabilen uçlar için (ör. GET /auth/consents:
+// giriş ekranı yalnızca güncel sürümleri sorar, girişli kullanıcı ayrıca
+// kendi rıza durumunu da alır). protect'in yerine GEÇMEZ — koruma gereken
+// yerde protect kullanılmalı.
+const optionalAuth = catchAsync(async (req, res, next) => {
+    const header = req.headers.authorization;
+    if (!header?.startsWith('Bearer')) return next();
+
+    try {
+        const decoded = jwt.verify(header.split(' ')[1], process.env.JWT_SECRET);
+        req.user = await User.findById(decoded.id);
+    } catch {
+        // Süresi dolmuş/bozuk token oturumsuz sayılır, istek reddedilmez
+    }
+    next();
+});
+
 const isEmailVerified = (req, res, next) => {
     if (!req.user.isEmailVerified) {
         return next(new AppError('Please verify your email first', 403));
@@ -38,4 +56,4 @@ const isAdmin = (req, res, next) => {
     next();
 };
 
-module.exports = { protect, isEmailVerified, isAdmin };
+module.exports = { protect, optionalAuth, isEmailVerified, isAdmin };

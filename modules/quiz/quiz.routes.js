@@ -1,11 +1,11 @@
 const express = require('express');
 const QuizController = require('./quiz.controller');
-const { protect, isEmailVerified } = require('../../middlewares/auth.middleware');
+// protect + isEmailVerified app.js'te mount seviyesinde uygulanır
 
 const router = express.Router();
 
-router.get('/status',       protect, isEmailVerified, QuizController.getStatus);
-router.post('/start',       protect, isEmailVerified, QuizController.start);
-router.post('/:id/answer',  protect, isEmailVerified, QuizController.answerQuestion);
+router.get('/status',       QuizController.getStatus);
+router.post('/start',       QuizController.start);
+router.post('/:id/answer',  QuizController.answerQuestion);
 
 module.exports = router;

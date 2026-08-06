@@ -24,13 +24,24 @@ const DeviceSessionSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     },
+    // Yalnızca LRU tahliyesi için (5 oturum dolunca en eskisi düşer).
+    // TTL BİLEREK bu alanda DEĞİL: burada olsaydı süre, token ömrü değil
+    // "hareketsizlik" ölçerdi ve JWT_REFRESH_EXPIRE uzatıldığında geçerli
+    // token'ın oturum kaydı erken silinip kullanıcı sebepsiz çıkış yapardı.
     lastUsedAt: {
         type: Date,
-        default: Date.now,
-        // TTL: refresh token zaten 7 günde (JWT_REFRESH_EXPIRE) geçersizleşir;
-        // 8 gün dokunulmayan oturum kaydını Mongo kendisi temizler ki
-        // süresi dolmuş oturumlar koleksiyonda birikmesin
-        index: { expires: '8d' }
+        default: Date.now
+    },
+    // TTL: refresh token'ın KENDİ `exp` claim'inden türetilir (bkz.
+    // auth.service.js createSession). Böylece kayıt ile token tam olarak
+    // aynı anda ölür ve süre ikinci bir yerde tekrar tanımlanmaz —
+    // JWT_REFRESH_EXPIRE değiştiğinde burada düzeltilecek bir şey kalmaz.
+    // Not: Mongo'nun TTL süpürücüsü ~60 sn'de bir çalışır, silme yaklaşıktır;
+    // güvenlik zaten jwt.verify'da, bu yalnızca temizliktir.
+    expiresAt: {
+        type: Date,
+        required: true,
+        index: { expires: 0 }
     }
 });
 
