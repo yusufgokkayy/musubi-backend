@@ -2,7 +2,7 @@
 
 Mobil entegrasyon için tam sözleşme. Tüm yollar `/api` önekiyle başlar, tüm gövdeler JSON'dur (`Content-Type: application/json`).
 
-**Zarf:** Her başarılı yanıt `{ "success": true, ... }`, her hata `{ "success": false, "message": "..." }` biçimindedir.
+**Zarf:** Her başarılı yanıt `{ "success": true, ... }`, her hata `{ "success": false, "message": "..." }` biçimindedir. Bazı hatalar ayrıca `details` nesnesi taşır — istemcinin üzerine iş yapabileceği makine-okur veri (örn. `PUT /sessions/complete` → `{ "pendingWords": 3 }`). `details` isteğe bağlıdır, yokluğunda hata biçimi değişmez.
 
 **Kimlik doğrulama:** 🔒 işaretli endpoint'ler `Authorization: Bearer <accessToken>` başlığı ister. ✉️ işaretli olanlar ayrıca doğrulanmış e-posta gerektirir (aksi halde `403 "Please verify your email first"`). Access token ~15 dk geçerlidir; `401 "Token expired"` alınca `/auth/refresh` çağrılır, o da 401 dönerse login ekranına dönülür.
 
@@ -205,7 +205,7 @@ göstermelidir.
 ```
 Hata: `401 "No refresh token"` / `401 "Invalid refresh token"` (oturum kapatılmış veya süresi dolmuş — login'e dön).
 
-### POST /auth/logout 🔒
+### POST /auth/logout
 ```jsonc
 // İstek — refreshToken verilirse SADECE o cihaz, verilmezse TÜM cihazlar çıkar
 { "refreshToken": "eyJ..." }   // veya boş gövde {}
@@ -213,6 +213,24 @@ Hata: `401 "No refresh token"` / `401 "Invalid refresh token"` (oturum kapatılm
 // 200
 { "success": true, "message": "Logged out" }
 ```
+**Access token BURADA ZORUNLU DEĞİL** (bilerek 🔒 işaretsiz): token 15 dakikada
+ölüyor ve çıkış tam da uzun süre açık kalmış uygulamada isteniyordu — koruma
+altındayken süresi dolmuş token'la gelen istek `401` alıp oturumu ayakta
+bırakıyordu. Gövdedeki `refreshToken` o cihaza sahip olmanın kanıtı sayılır ve
+tek başına yeterlidir. Süresi dolmuş bir access token gönderilmesi zararsızdır.
+
+**Mobil için kural: `refreshToken`'ı her zaman gövdede gönder.** Access token
+geçerliyse gövdesiz çağrı tüm cihazları düşürür; ikisi de yoksa
+`401 "No refresh token"` döner (kapatılacak oturum belirlenemediği için
+sessizce başarı dönmez).
+
+### DELETE /auth/fcm-token 🔒
+Push token'ını siler. Kullanıcı bildirim iznini işletim sisteminden kapattığında çağrılır — `update-info` token'ı **yazar** ama boş değeri yok saydığı için silme yolu yoktu. İdempotent; token zaten yoksa da `200` döner. `isEmailVerified` **aranmaz** (e-posta değişip doğrulama düşse bile kullanıcı kaydı kaldırabilmeli).
+```jsonc
+// 200
+{ "success": true, "message": "Push token temizlendi" }
+```
+> `POST /auth/logout` de token'ı düşürür: ortak kullanılan bir telefonda çıkış yapan kullanıcının token'ı hesabında kalırsa bildirimler bir sonraki kişinin eline gider. Kullanıcı başına **tek** token tutulduğu için çıkışta koşulsuz temizlenir.
 
 ### GET /auth/me 🔒✉️
 ```jsonc
@@ -228,7 +246,7 @@ Hata: `401 "No refresh token"` / `401 "Invalid refresh token"` (oturum kapatılm
     "role": "user",
     "isEmailVerified": true,
     "dailyGoal": 20,
-    "notificationSettings": { "dailyReminder": true, "reminderTime": "10:00", "streakReminder": true, "wordLevelDown": true },
+    "notificationSettings": { "dailyReminder": true, "dailyWord": true, "reminderTime": "10:00", "streakReminder": true, "wordLevelDown": true },
     "consents": { "terms": "1.0", "privacy": "1.0", "kvkk": "1.0", "acceptedAt": "2026-08-04T09:12:00.000Z" },
     "preferences": { "language": "tr", "theme": "light", "fontSize": "medium" },
     "isPremium": false,        // "Reklamları Kaldır" durumu — yalnızca satın alma doğrulaması değiştirir
@@ -250,8 +268,9 @@ Hata: `401 "No refresh token"` / `401 "Invalid refresh token"` (oturum kapatılm
   "fcmToken": "fcm-cihaz-tokeni",     // push için Firebase SDK'dan alınan token
   "timezone": "Europe/Berlin",        // geçersiz değer varsayılana (Europe/Istanbul) düşer
   "notificationSettings": {           // kısmi güncelleme, kalanlar korunur
-    "streakReminder": false,
-    "reminderTime": "14:30"           // HH:mm — "Bildirim Ayarları" ekranındaki saat
+    "streakReminder": false,          // "Seri Koruma Uyarısı"
+    "dailyWord": false,               // "Günlük Kelimeler" — dailyReminder'dan AYRI
+    "reminderTime": "14:30"           // HH:mm — "Pratik Anımsatıcısı" saati
   },
   "preferences": { "theme": "dark" }  // kısmi güncelleme — language: tr | theme: light/dark/system | fontSize: small/medium/large
 }
@@ -612,10 +631,24 @@ true olur; **"Şimdilik Geç" (empty) ertelemedir**: kelime `remaining`'de kalı
       }
     ],
     "newWords": [ /* Word[] + answeredToday/todayResult — bugüne atanmış yeni kelimeler */ ],
-    "progress": { "total": 30, "answered": 12, "remaining": 18 } // ilerleme çemberi
+
+    // DİKKAT: answered burada "kaç kelimeye DOKUNULDU"dur, ertelenenler DAHİL.
+    // İlerleme göstergesi için bunu DEĞİL, aşağıdaki today.completedWords'ü kullan.
+    "progress": { "total": 30, "answered": 12, "remaining": 18 },
+
+    "goal": 30,                  // bu turun boyutu = progress.total
+    "today": {                   // /home/summary ile AYNI kaynak ve şekil
+      "completedWords": 9,       // "X/Y Tamamlandı" ifadesinin PAYI
+      "totalWords": 12,          // dokunulan kelime sayısı (erteleme dahil)
+      "correctCount": 7,
+      "wrongCount": 2,
+      "emptyCount": 3,
+      "isCompleted": false
+    }
   }
 }
 ```
+Ders ekranı kendi yerel sayacını **tutmamalı**: her `/userwords/answer` yanıtı da aynı `goal` + `today` bloğunu döner, başlık her cevapta oradan tazelenir. İki ekranın ayrı kaynaktan beslenip farklı "X/Y" göstermesi böylece imkânsız olur. `completedWords`'ün tanımı ve neden `totalWords` olmadığı için [Hangi sayı ilerlemedir](#ana-ekran--home) notuna bak.
 Not: tüm `Word` yanıtlarında türetilmiş `isKana` alanı vardır — `true` ise kelime
 kana-only'dir (それから, いつも): istemci "kanji" etiketini ve kanjiyle aynı olan
 okunuş satırını gizlemelidir.
@@ -774,6 +807,19 @@ Hata: `404 "No active session found"`.
 // hazır yüzde olarak döner, istemci hesaplamamalıdır
 { "success": true, "data": { /* StudySession */, "accuracy": 40 } }
 ```
+
+**Ertelenmiş kelime varken ders bitirilemez.** "Şimdilik Geç" (`empty`) nihai cevap değildir; o kelimeler gün içinde yeniden sorulmalıdır. Tur burada kapatılsaydı (`roundClosedAt`) havuzdan düşer ve kullanıcı cevaplamadığı hâlde "Tamamlandı" ekranını görürdü.
+
+```jsonc
+// 409 — hâlâ ertelenmiş kelime var
+{
+  "success": false,
+  "message": "Ertelenmiş 3 kelime var, ders tamamlanamaz",
+  "details": { "pendingWords": 3 }
+}
+```
+Doğru akış: `/userwords/today`'i tazele, `answeredToday:false` olanları yeniden sor, kuyruk boşalınca `complete` çağır.
+
 Hata: `404 "No active session found"`.
 
 ### GET /sessions/today 🔒✉️
@@ -978,26 +1024,82 @@ Not: Streak, günün ilk `/userwords/answer` çağrısıyla otomatik güncelleni
 ## Ana ekran — `/home`
 
 ### GET /home/summary 🔒✉️
+Anasayfanın tek istekte tüm verisi. **Hikâye şeridi buna dahil değildir** — her hikâyenin tüm slayt URL'lerini taşıdığı için ayrı tutuldu; `GET /stories` ile paralel çağırın (bkz. [Hikâyeler — `/stories`](#hikâyeler--stories)).
+
 ```jsonc
-// 200 — ana ekranın tek istekte tüm verisi
+// 200
 {
   "success": true,
   "data": {
-    "name": "Emirhan",         // "Merhaba Emirhan" başlığı
-    "goal": 20,                // çemberin PAYDASI: bugünün havuz boyutu (havuz yoksa dailyGoal)
-    "dailyGoal": 20,           // ayarlardaki tercih — çember için goal'u kullan, bunu DEĞİL
-    "today": { "totalWords": 14, "correctCount": 10, "wrongCount": 3, "emptyCount": 1, "isCompleted": false },
-    "streak": { "current": 12, "longest": 21, "lastStudyDate": "2026-07-10T06:45:00.000Z" },  // "12 Günlük Seri" + "En iyi: 21"
-    "progress": [
-      { "jlptLevel": "N5", "isUnlocked": true, "completionRate": 42 }
-      // ... diğer seviyeler
+    "name": "Emirhan",              // "Merhaba Emirhan" başlığı
+    "greeting": "こんにちは",         // ismin üstündeki Japonca satır; kullanıcının
+                                    // saat dilimine göre おはようございます (<11) /
+                                    // こんにちは (<18) / こんばんは
+    "avatarUrl": null,              // başlıktaki avatar — ŞU AN HER HESAPTA null
+                                    // (avatar yükleme henüz yok). Boşsa baş harf çiz.
+    "unreadNotifications": 3,       // zil ikonunun rozeti (0 ise rozet yok)
+
+    "goal": 20,                     // ilerleme çemberinin PAYDASI: bugünün havuz
+                                    // boyutu (havuz yoksa dailyGoal)
+    "dailyGoal": 20,                // ayarlardaki tercih — çember için goal'u kullan, bunu DEĞİL
+    // completedWords = çemberin PAYI (nihai cevabı verilmiş kelime sayısı).
+    // totalWords "kaç kelimeye dokundun"dur ve ertelenenleri de sayar —
+    // çemberde KULLANMA (bkz. aşağıdaki "Hangi sayı ilerlemedir" notu).
+    "today": { "completedWords": 8, "totalWords": 11, "correctCount": 6, "wrongCount": 2, "emptyCount": 3, "isCompleted": false },
+
+    // "🔥 12 Gün" + altındaki yedi daire
+    "streak": {
+      "current": 12,
+      "longest": 21,
+      "lastStudyDate": "2026-08-06T06:45:00.000Z",
+      "week": [                     // içinde bulunulan TAKVİM haftası, Pzt→Paz, hep 7 öğe
+        { "date": "2026-08-03", "weekday": 1, "studied": true,  "isToday": false, "isFuture": false },
+        { "date": "2026-08-04", "weekday": 2, "studied": true,  "isToday": false, "isFuture": false },
+        { "date": "2026-08-05", "weekday": 3, "studied": false, "isToday": false, "isFuture": false },
+        { "date": "2026-08-06", "weekday": 4, "studied": true,  "isToday": true,  "isFuture": false },
+        { "date": "2026-08-07", "weekday": 5, "studied": false, "isToday": false, "isFuture": true }
+        // ... Cmt, Paz
+      ]
+    },
+
+    "todayMistakeCount": 7,         // "Bugünün Hataları — 7 Hata" başlığı: hatanın TAMAMI
+    "todayMistakes": [              // aynı kartın altındaki çipler — ÖNİZLEME, en fazla 8
+      { "id": "665f2b...", "kanji": "食べる", "romaji": "taberu",
+        "meaning": "to eat", "meaningTr": "yemek yemek", "jlptLevel": "N5" }
     ],
-    "pendingReviews": 12,      // şu an vadesi gelmiş tekrar sayısı
-    "tomorrowReviews": 20,     // "Yarın 20 Kart Seri Bekliyor" bandı
-    "todayMistakeCount": 8     // "Bugünün Hataları — 8 Hata" başlığı (liste: GET /userwords/mistakes)
+
+    // --- Aşağıdakilerin yeni tasarımda karşılığı YOK, okumayın (deprecated) ---
+    "progress": [ { "jlptLevel": "N5", "isUnlocked": true, "completionRate": 42 } ],
+    "pendingReviews": 12,
+    "tomorrowReviews": 20
   }
 }
 ```
+
+**`streak.week` nasıl çizilir.** Dizi ham gerçekleri taşır, görsel eşleme istemcinindir:
+
+| Durum | Çizim |
+|---|---|
+| `isToday` | 🔥 alev |
+| `studied && !isToday` | ✓ dolu daire |
+| `isFuture` veya çalışılmamış geçmiş gün | kesikli boş daire |
+
+Gün etiketleri (`Pzt`, `Salı`…) `date`'ten yerel olarak biçimlendirilir; `weekday` 1=Pazartesi … 7=Pazar. Hafta ve `studied` kullanıcının **profil saat dilimine** göre hesaplanır (cihaz saatine göre değil), böylece şeritteki tikler seri sayacıyla aynı şeyi söyler.
+
+`studied` = o gün en az bir **gerçek cevap** verilmiş (doğru veya yanlış). "Şimdilik Geç" (`empty`) çalışma sayılmaz — seri sayacının kuralı da budur.
+
+**Hangi sayı ilerlemedir.** İki farklı sayaç var ve karıştırılmaları 06.08.2026'da bir hataya yol açtı ("20/20 Tamamlandı" yazarken ders bitmiyor, kuyruğu baştan soruyordu):
+
+| Alan | Anlamı | Nerede kullanılır |
+|---|---|---|
+| `completedWords` | Nihai cevabı (doğru/yanlış) verilmiş kelime sayısı | **Çemberin ve "X/Y Tamamlandı" ifadesinin PAYI** |
+| `totalWords` | Dokunulan kelime sayısı — "Şimdilik Geç" dahil | Yalnızca bilgi; ilerleme olarak gösterme |
+
+"Şimdilik Geç" (`empty`) **ilerleme değildir**: kelime gün içinde yeniden sorulur, yani ders bitmemiştir. `totalWords` payda olarak kullanılırsa 18 kelime ertelenmişken ekran "20/20 Tamamlandı" der ama ders devam eder; üstelik sayaç oradan sonra donar (ertelenenin gerçek cevabı `emptyCount`'u düşürür, `totalWords`'e dokunmaz). Aynı kural seri sayacında ve `streak.week`'te de geçerlidir.
+
+`completedWords` her zaman `correctCount + wrongCount`'a eşittir; istemci bunu **kendisi hesaplamamalı**, alanı okumalıdır.
+
+**Deprecated alanlar.** `progress`, `pendingReviews` ve `tomorrowReviews` 04.08.2026 tasarım revizyonunda anasayfadan kalktı ("Yarın N Kart Bekliyor" bandı ve seviye ilerleme listesi artık çizilmiyor). Yayındaki uygulamayı kırmamak için yanıtta duruyorlar; **yeni istemci kodu okumamalı.** Seviye ilerlemesinin asıl yeri `/progress` uçlarıdır.
 
 ### GET /home/calendar 🔒✉️
 ```jsonc
@@ -1019,7 +1121,8 @@ Takvimde bir güne dokununca açılan detay ekranı ("22 Nisan Salı"). `:date` 
   "data": {
     "date": "2026-04-22",
     "goal": 20,                // o günün havuz büyüklüğü (tarihsel hedef; havuz kaydı yoksa güncel dailyGoal)
-    "totalWords": 14,          // çember: 14/20
+    "completedWords": 13,      // çember: 13/20 (nihai cevaplı kelimeler)
+    "totalWords": 14,          // o gün DOKUNULAN kelime sayısı (ertelenenler dahil)
     "correctCount": 10,        // yeşil nokta
     "wrongCount": 3,           // kırmızı nokta
     "emptyCount": 1,           // sarı nokta
@@ -1047,7 +1150,12 @@ Veri olmayan gün `200` + sıfır sayaçlar ve boş `words` ile döner. Hata: `4
   "type": "streak_warning",   // daily_task | word_level_down | streak_warning | streak_reminder | daily_word
   "title": "Serini Kaybedeceksin",
   "body": "1 saat sonra serini kaybedeceksin. Acele et, dersini kaçırma...",
-  "data": { "currentStreak": 12 },   // tipe göre değişir; push deep-link için de aynı içerik gider
+  // tipe göre değişir; push deep-link için de aynı içerik gider:
+  //   daily_task       → { remaining, dailyGoal }
+  //   daily_word       → { wordId, kanji }
+  //   streak_*         → { currentStreak }
+  //   word_level_down  → { source: "decay", count } · tek kelimede ayrıca { wordId, kanji, newLevel }
+  "data": { "currentStreak": 12 },
   "read": false,
   "createdAt": "2026-07-10T20:00:00.000Z"
 }
@@ -1056,15 +1164,28 @@ Veri olmayan gün `200` + sıfır sayaçlar ve boş `words` ile döner. Hata: `4
 Otomatik üretim (kullanıcının KENDİ saat diliminde):
 | Saat | Tip | Örnek |
 |---|---|---|
-| `reminderTime` | `daily_task` | "Bugünün Görevi — Bugün 20 ezberlenecek kelime seni bekliyor!" |
+| `reminderTime` | `daily_task` | "Bugünün Görevi — Bugün 20 ezberlenecek kelime seni bekliyor!" (yalnızca günün işi bitmemişse; sayı KALAN kelimedir) |
 | `reminderTime` | `daily_word` | "Günlük Kelime — Bugünün günlük kelimesi; 危ない (abunai) = tehlikeli" (`data.wordId` ile detaya gidilir) |
 | 19:00 | `streak_reminder` | "12 Günlük Seri! — Serini devam ettirmeyi unutma." (yalnızca serisi olup o gün çalışmamışsa) |
 | 23:00 | `streak_warning` | "Serini Kaybedeceksin — 1 saat sonra serini kaybedeceksin. Acele et, dersini kaçırma..." |
-| cevap/decay anı | `word_level_down` | "危ない (abunai) kelimesinin seviyesi 3. seviyeye düştü. Tekrar hatırla!" |
+| 03:00 UTC (decay) | `word_level_down` | tek kelime: "Kelimenin Seviyesi Düştü — 危ない (abunai) kelimesinin seviyesi 3. seviyeye düştü. Uygulamaya gir tekrar hatırla!" · çok kelime: "Kelimeler tazelenmek istiyor 🌱 — … seni bekliyor." |
 
-`reminderTime` kullanıcı tercihidir (`notificationSettings.reminderTime`, varsayılan `10:00`). Üretim cron'u çeyrek saatte bir çalışır; hatırlatma, seçilen saatten sonraki **2 saat** içinde bir kez gönderilir (cron kaçırılırsa bir sonraki tur yakalar, ama gece yarısına sarkmaz). Aynı gün ikinci kez üretilmez. Hatırlatma saati 19:00/23:00 seçilirse günlük **ve** seri bildirimleri aynı turda üretilir.
+`reminderTime` kullanıcı tercihidir (`notificationSettings.reminderTime`, varsayılan `10:00`). Üretim cron'u çeyrek saatte bir çalışır; hatırlatma, seçilen saatten sonraki **2 saat** içinde bir kez gönderilir (cron kaçırılırsa bir sonraki tur yakalar, ama gece yarısına sarkmaz). Günün son turu (23:45) gün sonuna ayarlanmış saatleri de üstlenir, yani `23:50` gibi bir seçim kaybolmaz. Aynı gün ikinci kez üretilmez. Hatırlatma saati 19:00/23:00 seçilirse günlük **ve** seri bildirimleri aynı turda üretilir.
 
-Kullanıcının `notificationSettings` tercihleri kapalıysa ilgili tip hiç oluşmaz (`daily_task`/`daily_word` → `dailyReminder`, seri tipleri → `streakReminder`, seviye düşüşü → `wordLevelDown`).
+**`daily_task` yalnızca gerçekten iş kaldıysa gider.** Gövdedeki sayı hedef değil **kalan** kelimedir (havuz toplamı − bugün cevaplanan); hedefini bitiren kullanıcıya bildirim hiç oluşmaz. Tek üreticisi bu cron'dur — günün havuzu kurulurken ayrıca üretilmez (kullanıcı o an zaten uygulamanın içindedir).
+
+**`word_level_down` yalnızca gece decay işinden gelir.** Cevap anında üretilmez: düşüş bilgisi `POST /userwords/answer` yanıtındaki `levelDropped` / `previousLevel` / `masteryLevel` alanlarıyla zaten dönüyor ve kullanıcı o sırada uygulamanın içinde. Kısıt: son çalışmadan beri en fazla 3 bildirim, iki bildirim arasında en az 3 gün, aynı gün tek kayıt.
+
+Kullanıcının `notificationSettings` tercihleri kapalıysa ilgili tip hiç oluşmaz — eşleme "Bildirim Ayarları" ekranıyla birebirdir:
+
+| Ayarlar ekranındaki kontrol | Alan | Susan tipler |
+|---|---|---|
+| Günlük Kelimeler (あ) | `dailyWord` | `daily_word` |
+| Seri Koruma Uyarısı (alev) | `streakReminder` | `streak_reminder`, `streak_warning` |
+| Pratik Anımsatıcısı (takvim+saat) + "Anımsatıcıyı Kapat" | `dailyReminder` | `daily_task` |
+| Tekrar Gereken Kelimeler (↘) | `wordLevelDown` | `word_level_down` |
+
+`reminderTime` **iki tip için de** zamanlama kaynağıdır: `dailyReminder` kapalı ama `dailyWord` açıksa günlük kelime yine seçilen saatte gider.
 
 ### GET /notifications?page=1&limit=20 🔒✉️
 ```jsonc
@@ -1114,7 +1235,7 @@ Anasayfanın üstündeki hikâye kartlarının (ve ileride kelime görsellerinin
 
 | Alan | Zorunlu | Açıklama |
 |---|---|---|
-| `image` | evet | Dosyanın kendisi. JPEG, PNG, WebP veya GIF. En fazla **5 MB**. |
+| `image` | evet | Dosyanın kendisi. JPEG, PNG, WebP veya GIF. En fazla **20 MB** — sunucu zaten yeniden kodluyor, tavan telefon fotoğraflarını reddetmesin diye geniş tutuldu. |
 | `preset` | hayır | `story` (varsayılan), `storyCover` veya `word` |
 
 **Ön ayarlar** hem hedef klasörü hem de maksimum boyutu belirler (oran korunur, görsel büyütülmez):
@@ -1144,7 +1265,7 @@ Yüklenen her dosya sunucuda **yeniden kodlanır**: EXIF/konum verisi silinir, y
 ```
 Dosya adı içeriğin hash'idir: aynı görsel iki kez yüklenirse aynı `key` döner (kopya birikmez) ve bir URL'nin işaret ettiği görsel asla değişmez — istemci sonsuza dek cache'leyebilir.
 
-Hatalar: `400 "Görsel dosyası gerekli..."`, `400 "Görsel çok büyük (en fazla 5 MB)"`, `400 "Desteklenmeyen dosya biçimi... (SVG kabul edilmez)"`, `400 "Görsel çözümlenemedi, dosya bozuk olabilir"`, `400 "Geçersiz preset ..."`, `403` (admin değil), `429` (15 dakikada 30 yükleme sınırı).
+Hatalar: `400 "Görsel dosyası gerekli..."`, `400 "Görsel çok büyük (en fazla 20 MB)"`, `400 "Desteklenmeyen dosya biçimi... (SVG kabul edilmez)"`, `400 "Görsel çözümlenemedi, dosya bozuk olabilir"`, `400 "Geçersiz preset ..."`, `403` (admin değil), `429` (15 dakikada 60 yükleme sınırı).
 
 ### DELETE /uploads?key=stories/9f2c...webp 🔒✉️ (admin)
 ```jsonc

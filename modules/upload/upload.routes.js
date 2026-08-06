@@ -12,7 +12,7 @@ const router = express.Router();
 router.use(isAdmin);
 
 // Yükleme ayrı ve sıkı limitle korunur: genel 300/15dk limiti burada anlamsız,
-// tek istek 5 MB gövde + sharp ile CPU harcıyor. Bu, yetkili bir hesabın
+// tek istek 20 MB gövde + sharp ile CPU harcıyor. Bu, yetkili bir hesabın
 // (veya çalınmış bir admin token'ının) sunucuyu yormasının önündeki tek engel.
 router.post('/', uploadLimiter, uploadSingleImage, UploadController.uploadImage);
 router.delete('/', uploadLimiter, UploadController.deleteImage);

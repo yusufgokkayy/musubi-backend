@@ -411,7 +411,7 @@ npm test
 - KVKK açık rıza kaydı hesap açılışında yazılır (sürüm + zaman + IP), sürüm değişince yeniden rıza istenir
 - Arama girdisinde regex escape (ReDoS koruması), JSON body 100 KB limiti
 - Admin paneli (`/admin`) korumasız bir statik sayfadır; koruma çağırdığı uçlardadır. Panel oturumu `sessionStorage`'da tutulur (sekme kapanınca düşer), rol yükseltme panelde değil `npm run make-admin` script'indedir. Sayfa `X-Robots-Tag: noindex` ile servis edilir ve inline script içermez (production CSP `script-src 'self'`)
-- Görsel yükleme: yalnızca admin, ayrı rate limit (30/15 dk), 5 MB sınırı, dosya türü **sihirli baytla** belirlenir (istemcinin `Content-Type`'ına güvenilmez), SVG reddedilir (gömülü script → saklı XSS), her dosya sharp ile yeniden kodlanır (EXIF/GPS temizlenir, dekompresyon bombasına karşı 50 MP girdi sınırı), dosya adı içerik hash'i (kullanıcı girdisi dosya yoluna karışmaz)
+- Görsel yükleme: yalnızca admin, ayrı rate limit (60/15 dk), 20 MB girdi sınırı, dosya türü **sihirli baytla** belirlenir (istemcinin `Content-Type`'ına güvenilmez), SVG reddedilir (gömülü script → saklı XSS), her dosya sharp ile yeniden kodlanır (EXIF/GPS temizlenir, dekompresyon bombasına karşı 50 MP girdi sınırı), dosya adı içerik hash'i (kullanıcı girdisi dosya yoluna karışmaz)
 - Quiz cevap anahtarının sunucuda kalması, sorunun her denemede yeniden üretilmesi
 - Hesap silmede tüm koleksiyonlardan cascade temizlik (KVKK)
 

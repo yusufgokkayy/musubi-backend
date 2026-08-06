@@ -33,7 +33,7 @@ const errorHandler = (err, req, res, next) => {
     }
 
     // multer hataları (dosya boyutu/adedi) istemci hatasıdır; yakalanmazsa
-    // 500 dönerdi ve "5 MB'ı geçtin" bilgisi kullanıcıya hiç ulaşmazdı
+    // 500 dönerdi ve "boyut sınırını geçtin" bilgisi kullanıcıya hiç ulaşmazdı
     if (err.name === 'MulterError') {
         statusCode = 400;
         const { MAX_UPLOAD_BYTES } = require('./upload.middleware');
@@ -58,7 +58,9 @@ const errorHandler = (err, req, res, next) => {
 
     res.status(statusCode).json({
         success: false,
-        message
+        message,
+        // Yalnızca AppError açıkça verdiyse eklenir (bkz. utils/AppError.js)
+        ...(err.details !== undefined && { details: err.details })
     });
 };
 

@@ -4,6 +4,7 @@ const Word = require('../../models/Word');
 const User = require('../../models/User');
 const AppError = require('../../utils/AppError');
 const DailyWordPool = require('../../models/DailyWordPool');
+const StudySession = require('../../models/StudySession');
 const StreakService = require('../streak/streak.service');
 const ProgressService = require('../progress/progress.service');
 const StudySessionService = require('../studysession/studysession.service');
@@ -133,6 +134,11 @@ const decorateTodayWords = async (userId, today, reviewWordsRaw, newWordsRaw) =>
         progress: { total, answered, remaining: total - answered },
         goal: total,
         today: {
+            // Ders başlığındaki "X/Y Tamamlandı"nın PAYI — ertelenenler hariç.
+            // Bitiş koşuluyla (her kelimenin nihai cevabı var mı) aynı şeyi
+            // saymak ZORUNDA: totalWords kullanıldığında başlık 20/20 derken
+            // kuyrukta 18 ertelenmiş kelime kalıyordu.
+            completedWords: StudySession.completedTotal(session),
             totalWords: session?.totalWords || 0,
             correctCount: session?.correctCount || 0,
             wrongCount: session?.wrongCount || 0,
@@ -353,21 +359,12 @@ const UserWordService = {
             goal
         });
 
-        // Günün görevi bildirimi (havuz günde bir kez oluşur)
-        try {
-            const totalToday = reviewWordsRaw.length + newWordsRaw.length;
-            if (totalToday > 0) {
-                await NotificationService.create(userId, {
-                    type: 'daily_task',
-                    title: 'Bugünün Görevi',
-                    body: `Bugün ${totalToday} ezberlenecek kelime seni bekliyor!`,
-                    data: { totalWords: totalToday, jlptLevel }
-                });
-            }
-        } catch (err) {
-            // Bildirim hatası kelime akışını bozmasın
-        }
-
+        // "Bugünün Görevi" bildirimi BİLEREK burada üretilmiyor: havuz, kullanıcı
+        // uygulamayı açtığında kuruluyor — yani kişi zaten içerideyken telefonuna
+        // "bugün X kelime seni bekliyor" push'u gidiyordu. Üstelik cron'daki
+        // üreticiyle birlikte aynı gün iki kart oluşabiliyordu. Tek üretici artık
+        // hatırlatma saatindeki cron (notification.service.js) ve o da yalnızca
+        // gerçekten iş kaldıysa gönderiyor.
         return decorateTodayWords(userId, today, reviewWordsRaw, newWordsRaw);
     },
 
@@ -415,6 +412,7 @@ const UserWordService = {
             return {
                 goal,
                 today: {
+                    completedWords: StudySession.completedTotal(s), // başlığın PAYI
                     totalWords: s?.totalWords || 0,
                     correctCount: s?.correctCount || 0,
                     wrongCount: s?.wrongCount || 0,
@@ -524,23 +522,13 @@ const UserWordService = {
 
                 await userWord.save();
 
-                if (levelDropped) {
-                    try {
-                        await NotificationService.create(userId, {
-                            type: 'word_level_down',
-                            title: 'Kelimenin Seviyesi Düştü',
-                            body: `${wordExists.kanji} (${wordExists.romaji}) kelimesinin seviyesi ${userWord.masteryLevel}. seviyeye düştü. Tekrar hatırla!`,
-                            data: {
-                                wordId: wordExists._id,
-                                kanji: wordExists.kanji,
-                                previousLevel,
-                                newLevel: userWord.masteryLevel
-                            }
-                        });
-                    } catch (err) {
-                        // Bildirim hatası cevap akışını bozmasın
-                    }
-                }
+                // levelDropped için BİLEREK bildirim atılmıyor: kullanıcı cevabı
+                // verirken zaten uygulamanın içinde ve düşüş bilgisi bu çağrının
+                // yanıtında (levelDropped/previousLevel/masteryLevel) dönüyor —
+                // istemci anlık geri bildirimi oradan verir. Eskiden her yanlış
+                // cevap ayrı bir push üretiyordu; 20 kelimelik bir seansta 8
+                // yanlış = 8 push demekti. word_level_down'ın tek üreticisi artık
+                // gece çalışan decay özeti (NotificationService.createDecaySummary).
 
                 // İlk gerçek cevapta streak güncelle (kısmi ilerleme bile sayılsın;
                 // boş geçmek çalışma sinyali değildir, streak'i 2. adım tetiklemez)
@@ -612,9 +600,11 @@ const UserWordService = {
                     }
                 });
                 const key = String(uw.user);
-                const entry = perUser.get(key) || { count: 0, sampleWordIds: [] };
+                const entry = perUser.get(key) || { count: 0, samples: [] };
                 entry.count += 1;
-                if (entry.sampleWordIds.length < 3) entry.sampleWordIds.push(uw.word);
+                // Hedef seviye de taşınır: tek kelime düşmüşse bildirim onu
+                // adıyla ve YENİ SEVİYESİYLE söylüyor (bkz. createDecaySummary)
+                if (entry.samples.length < 3) entry.samples.push({ word: uw.word, level: target });
                 perUser.set(key, entry);
             }
         }

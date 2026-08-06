@@ -1,5 +1,6 @@
 const StudySession = require('../../models/StudySession');
 const DailyWordPool = require('../../models/DailyWordPool');
+const UserWord = require('../../models/UserWord');
 const AppError = require('../../utils/AppError');
 const StreakService = require('../streak/streak.service');
 const { startOfTodayForUser } = require('../../utils/date.util');
@@ -83,6 +84,30 @@ const StudySessionService = {
         });
 
         if (!session) throw new AppError('No active session found', 404);
+
+        // Ertelenmiş ("Şimdilik Geç") kelime dururken ders BİTİRİLEMEZ: turu
+        // kapatmak (roundClosedAt) o kelimeleri günün havuzundan düşürür ve
+        // kullanıcı gerçekte cevaplamadığı hâlde "Tebrikler, tamamlandı"
+        // ekranını görür. Kontrol istemcide de var (kuyruk boşalınca yeniden
+        // sorar) ama tek koruma orası olamaz — ikinci bir istemci ya da bir
+        // yeniden deneme sessizce yanlış özet üretirdi.
+        //
+        // Sayaç yerine UserWord sayılır: emptyCount türetilmiş bir sayaçtır,
+        // bitirmeyi engelleyen karar kaydın kendisine bakmalı.
+        if (!session.isCompleted) {
+            const pending = await UserWord.countDocuments({
+                user: userId,
+                lastReviewDate: { $gte: today },
+                lastResult: 'empty'
+            });
+            if (pending > 0) {
+                throw new AppError(
+                    `Ertelenmiş ${pending} kelime var, ders tamamlanamaz`,
+                    409,
+                    { pendingWords: pending }
+                );
+            }
+        }
 
         // İdempotent: zaten tamamlanmışsa completedAt/duration'ı yeniden
         // hesaplamadan (her tıklamada büyümesin) ve tekrar session_completed

@@ -3,6 +3,8 @@ const User = require('../../models/User');
 const Streak = require('../../models/Streak');
 const Word = require('../../models/Word');
 const Progress = require('../../models/Progress');
+const DailyWordPool = require('../../models/DailyWordPool');
+const StudySession = require('../../models/StudySession');
 const AppError = require('../../utils/AppError');
 const sendNotification = require('../../utils/notification');
 const { startOfDayInTz, localHourInTz, localMinutesInTz, parseHHmm } = require('../../utils/date.util');
@@ -11,6 +13,10 @@ const { startOfDayInTz, localHourInTz, localMinutesInTz, parseHHmm } = require('
 const DEFAULT_REMINDER_MINUTES = 10 * 60;
 // Hatırlatma saatinden sonra bildirimin hâlâ "zamanında" sayıldığı süre
 const REMINDER_GRACE_MINUTES = 120;
+// server.js'teki '*/15 * * * *' ile aynı olmak ZORUNDA: gün dönümünde son turun
+// hangi dakikadan sonra geldiğini bu belirliyor (bkz. lastTickOfDay)
+const CRON_INTERVAL_MINUTES = 15;
+const MINUTES_IN_DAY = 24 * 60;
 
 // Push'u arkaplanda gönderir; asla hata fırlatmaz, cevap gecikmesine eklenmez.
 // FCM "token artık kayıtlı değil" derse token'ı kullanıcıdan siler ki
@@ -31,9 +37,27 @@ const sendPushSafe = (fcmToken, { title, body, data }) => {
 const DECAY_MAX_TOUCHES = 3;
 const DECAY_MIN_GAP_DAYS = 3;
 
-// Bildirim tipi -> kullanıcının notificationSettings bayrağı
+// Bugün kaç kelime kaldı. Havuz hiç kurulmadıysa kullanıcı güne başlamamıştır
+// ve hedefinin tamamı önündedir. "Bugünün Görevi" yalnızca gerçekten iş kaldıysa
+// gider: sabah 20/20'yi bitiren kullanıcıya öğlen "Bugün 20 ezberlenecek kelime
+// seni bekliyor!" demek rahatsız edici — üstelik sayı da yanlış olurdu.
+const remainingWorkToday = async (user, today) => {
+    const pools = await DailyWordPool.find({ user: user._id, date: { $gte: today } })
+        .select('newWordIds reviewWordIds');
+    if (pools.length === 0) return user.dailyGoal || 20;
+
+    const goal = pools.reduce((sum, p) => sum + DailyWordPool.goalTotal(p), 0);
+    const session = await StudySession.findOne({ user: user._id, date: { $gte: today } })
+        .select('totalWords');
+    return Math.max(0, goal - (session?.totalWords || 0));
+};
+
+// Bildirim tipi -> kullanıcının notificationSettings bayrağı.
+// "Bildirim Ayarları" ekranındaki dört kontrolle BİREBİR eşleşir (bkz. User
+// modeli); daily_word ile daily_task BİLEREK ayrı bayraklarda — tasarımda
+// "Günlük Kelimeler" (あ) ve "Pratik Anımsatıcısı" (takvim+saat) ayrı satırlar.
 const SETTING_MAP = {
-    daily_word: 'dailyReminder',
+    daily_word: 'dailyWord',
     daily_task: 'dailyReminder',
     streak_reminder: 'streakReminder',
     streak_warning: 'streakReminder',
@@ -102,11 +126,20 @@ const NotificationService = {
         return { modifiedCount: result.modifiedCount };
     },
 
-    // Decay cron'undan çağrılır: seviyesi düşen kelimeler için TEK özet bildirim.
+    // Decay cron'undan çağrılır: seviyesi düşen kelimeler için TEK bildirim.
     // Kurallar: kullanıcının wordLevelDown tercihi açık olmalı; aynı gün başka
     // word_level_down bildirimi yoksa; son çalışmadan beri en fazla 3 özet;
     // iki özet arasında en az 3 gün. Dil cezalandırıcı değil, davet edici.
-    async createDecaySummary(userId, { count, sampleWordIds = [] }) {
+    //
+    // Bu, word_level_down'ın TEK üreticisidir. Eskiden cevap anında da bildirim
+    // atılıyordu; kullanıcı o sırada zaten uygulamanın içinde olduğu için tek
+    // seansta onlarca push üretiyordu ve düşüş bilgisi submitAnswer yanıtında
+    // (levelDropped/previousLevel) zaten dönüyordu.
+    //
+    // samples: [{ word, level }] — decay kademeli düşürdüğü için hedef seviye
+    // gerçekten 1'den farklı olabilir, tasarımdaki "3. seviyeye düştü" metni
+    // ancak buradan üretilebilir.
+    async createDecaySummary(userId, { count, samples = [] }) {
         const user = await User.findById(userId).select('notificationSettings timezone +fcmToken');
         if (!user || user.notificationSettings?.wordLevelDown === false) return null;
 
@@ -135,13 +168,26 @@ const NotificationService = {
         });
         if (todayAny) return null;
 
-        const sampleWords = await Word.find({ _id: { $in: sampleWordIds } }).select('kanji');
-        const sample = sampleWords.map(w => w.kanji).join(', ');
-        const rest = count - sampleWords.length;
+        const sampleWords = await Word.find({ _id: { $in: samples.map(s => s.word) } })
+            .select('kanji romaji');
+        const levelOf = new Map(samples.map(s => [String(s.word), s.level]));
 
-        const title = 'Kelimeler tazelenmek istiyor 🌱';
-        const body = `${sample}${rest > 0 ? ` ve ${rest} kelime daha` : ''} seni bekliyor. Birkaç dakikada hafızanı tazele!`;
-        const data = { source: 'decay', count };
+        // Tek kelime düştüyse onu adıyla söyle (tasarımdaki kart bu); birden
+        // fazlaysa özete geç — beş ayrı bildirim yerine tek davet.
+        let title, body, data;
+        if (count === 1 && sampleWords[0]) {
+            const w = sampleWords[0];
+            const level = levelOf.get(String(w._id));
+            title = 'Kelimenin Seviyesi Düştü';
+            body = `${w.kanji} (${w.romaji}) kelimesinin seviyesi ${level}. seviyeye düştü. Uygulamaya gir tekrar hatırla!`;
+            data = { source: 'decay', count, wordId: w._id, kanji: w.kanji, newLevel: level };
+        } else {
+            const sample = sampleWords.map(w => w.kanji).join(', ');
+            const rest = count - sampleWords.length;
+            title = 'Kelimeler tazelenmek istiyor 🌱';
+            body = `${sample}${rest > 0 ? ` ve ${rest} kelime daha` : ''} seni bekliyor. Birkaç dakikada hafızanı tazele!`;
+            data = { source: 'decay', count };
+        }
 
         const notification = await Notification.create({
             user: userId, type: 'word_level_down', title, body, data
@@ -174,9 +220,19 @@ const NotificationService = {
                 const sinceReminder = localMinutes - reminderMinutes;
                 // Cron kaçırılırsa (deploy/restart) hatırlatma bir sonraki turda
                 // yakalanır; ama gecikme payını aşınca hiç gönderilmez —
-                // gece yarısı düşen "Bugünün Görevi" bildirimi rahatsız edicidir
+                // gece yarısı düşen "Bugünün Görevi" bildirimi rahatsız edicidir.
+                //
+                // İkinci koşul gün dönümü içindir: günün SON turundan (23:45)
+                // sonra başka tur yok ve pencere ertesi güne sarmıyor, bu yüzden
+                // 23:46-23:59 arası seçilen hatırlatma saati HİÇ çalışmıyordu.
+                // Son tur, günün kalan dakikalarına ayarlanmış hatırlatmaları da
+                // üstlenir (en fazla 14 dakika erken). Modulo ile sarmak yerine
+                // bu tercih edildi: bildirim ertesi güne taşınsaydı gün bazlı
+                // dedupe anahtarı kayar ve kullanıcı aynı gün iki hatırlatma alırdı.
+                const lastTickOfDay = localMinutes >= MINUTES_IN_DAY - CRON_INTERVAL_MINUTES;
                 const inReminderWindow =
-                    sinceReminder >= 0 && sinceReminder < REMINDER_GRACE_MINUTES;
+                    (sinceReminder >= 0 && sinceReminder < REMINDER_GRACE_MINUTES) ||
+                    (lastTickOfDay && sinceReminder < 0);
 
                 if (!inReminderWindow && hour !== 19 && hour !== 23) continue;
 
@@ -189,13 +245,20 @@ const NotificationService = {
                 });
 
                 if (inReminderWindow) {
-                    if (!(await dedupe('daily_task'))) {
-                        await NotificationService.create(user._id, {
-                            type: 'daily_task',
-                            title: 'Bugünün Görevi',
-                            body: `Bugün ${user.dailyGoal || 20} ezberlenecek kelime seni bekliyor!`,
-                            data: { dailyGoal: user.dailyGoal || 20 }
-                        }, user);
+                    // Tercih kapalıysa havuz/session sorgularına hiç girme —
+                    // create() zaten süzerdi ama sorgu bedeli boşuna ödenirdi
+                    if (user.notificationSettings?.dailyReminder !== false &&
+                        !(await dedupe('daily_task'))) {
+                        const remaining = await remainingWorkToday(user, today);
+                        // Hedefini bitiren kullanıcı hatırlatılmaz
+                        if (remaining > 0) {
+                            await NotificationService.create(user._id, {
+                                type: 'daily_task',
+                                title: 'Bugünün Görevi',
+                                body: `Bugün ${remaining} ezberlenecek kelime seni bekliyor!`,
+                                data: { remaining, dailyGoal: user.dailyGoal || 20 }
+                            }, user);
+                        }
                     }
                     if (!(await dedupe('daily_word'))) {
                         const word = await NotificationService.pickDailyWord(user._id);

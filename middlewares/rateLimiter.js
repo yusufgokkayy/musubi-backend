@@ -23,7 +23,7 @@ const authLimiter = rateLimit({
     message: { success: false, message: 'Çok fazla deneme, lütfen 15 dakika sonra tekrar deneyin' }
 });
 
-// Görsel yükleme: admin uçları olsa da tek istek 5 MB gövde okur ve sharp ile
+// Görsel yükleme: admin uçları olsa da tek istek 20 MB gövde okur ve sharp ile
 // yeniden kodlar. Genel limitin (300/15dk) altında kalan bir döngü bile sunucuyu
 // meşgul edebileceği için ayrı tutulur.
 //

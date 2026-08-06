@@ -44,11 +44,36 @@ const startOfDateInTz = (timeZone, dayStr) => {
     return result;
 };
 
+// Bir anın kullanıcının saat dilimindeki takvim günü ("YYYY-MM-DD").
+// Kayıtları güne göre kovalara ayırmanın tek doğru yolu budur: session.date
+// gerçek oluşturulma anıdır, gün başlangıcı değil.
+const localDateStr = (timeZone, date = new Date()) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: safeTimezone(timeZone) }).format(date);
+
 // Kullanıcının saat diliminde bugünün başlangıcı (UTC Date instant'ı olarak)
 const startOfDayInTz = (timeZone, now = new Date()) => {
     const tz = safeTimezone(timeZone);
-    const dayStr = new Intl.DateTimeFormat('en-CA', { timeZone: tz }).format(now); // YYYY-MM-DD
-    return startOfDateInTz(tz, dayStr);
+    return startOfDateInTz(tz, localDateStr(tz, now));
+};
+
+// İçinde bulunulan TAKVİM haftasının (Pazartesi → Pazar) yedi günü,
+// kullanıcının saat diliminde, "YYYY-MM-DD" dizisi olarak.
+//
+// Aritmetik bilerek UTC gece yarısı üzerinde `setUTCDate` ile yapılır, gerçek
+// instant'lara ±24 saat eklenerek DEĞİL: yaz saati geçişinin olduğu haftada
+// bir gün 23 veya 25 saattir, milisaniye toplamak o haftada bir günü atlar ya
+// da tekrar eder. Takvim günü üzerinden sayınca geçiş görünmez olur.
+const weekDatesInTz = (timeZone, now = new Date()) => {
+    const todayStr = localDateStr(timeZone, now);
+    const base = new Date(todayStr + 'T00:00:00Z');
+    // getUTCDay: 0=Pazar. ISO haftası Pazartesi başladığı için kaydırılır.
+    base.setUTCDate(base.getUTCDate() - ((base.getUTCDay() + 6) % 7));
+
+    return Array.from({ length: 7 }, (_, i) => {
+        const d = new Date(base);
+        d.setUTCDate(d.getUTCDate() + i);
+        return d.toISOString().slice(0, 10);
+    });
 };
 
 const addDays = (date, n) => new Date(date.getTime() + n * 24 * 60 * 60 * 1000);
@@ -84,4 +109,4 @@ const startOfTodayForUser = async (userId) => {
     return startOfDayInTz(user?.timezone);
 };
 
-module.exports = { DEFAULT_TZ, safeTimezone, startOfDayInTz, startOfDateInTz, addDays, localHourInTz, localMinutesInTz, parseHHmm, startOfTodayForUser };
+module.exports = { DEFAULT_TZ, safeTimezone, startOfDayInTz, startOfDateInTz, localDateStr, weekDatesInTz, addDays, localHourInTz, localMinutesInTz, parseHHmm, startOfTodayForUser };
