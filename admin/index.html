@@ -1,0 +1,169 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Musubi Panel — Hikâyeler</title>
+<link rel="icon" href="/assets/musubi-logo.png">
+<link rel="stylesheet" href="./admin.css">
+<!-- Gövdeden ÖNCE çalışır: kayıtlı tema stil uygulanmadan yazılsın, açılışta
+     beyaz parlama olmasın. CSP satır içi script'e izin vermediği için ayrı dosya. -->
+<script src="./theme.js"></script>
+</head>
+<body>
+
+<!-- GİRİŞ -->
+<main id="login-view" class="login-view">
+  <form class="login-card" id="login-form" novalidate>
+    <img class="logo" src="/assets/musubi-logo.png" alt="">
+    <p class="eyebrow">管理</p>
+    <h1>Musubi Panel</h1>
+    <p class="lead">Hikâyeleri yönetmek için yönetici hesabınla giriş yap.</p>
+
+    <label class="field">
+      <span>E-posta</span>
+      <input type="email" id="login-email" autocomplete="username" required>
+    </label>
+    <label class="field">
+      <span>Şifre</span>
+      <input type="password" id="login-password" autocomplete="current-password" required>
+    </label>
+
+    <p class="form-error" id="login-error" hidden></p>
+    <button class="btn btn-primary" type="submit" id="login-submit">Giriş Yap</button>
+  </form>
+</main>
+
+<!-- PANEL -->
+<div id="app-view" hidden>
+  <header class="topbar">
+    <div class="topbar-brand">
+      <img src="/assets/musubi-logo.png" alt="">
+      <span>Musubi Panel</span>
+    </div>
+    <div class="topbar-user">
+      <div class="seg" id="theme-seg" role="group" aria-label="Tema">
+        <button type="button" data-theme-choice="system" aria-pressed="true">Sistem</button>
+        <button type="button" data-theme-choice="light" aria-pressed="false">Açık</button>
+        <button type="button" data-theme-choice="dark" aria-pressed="false">Koyu</button>
+      </div>
+      <span id="me-email"></span>
+      <button class="btn btn-ghost" id="logout">Çıkış</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <div class="page-head">
+      <div>
+        <p class="eyebrow">içerik</p>
+        <h1>Hikâyeler</h1>
+        <p class="lead">Anasayfanın üstündeki bilgi kutucukları. Kartları sürükleyerek sıralayabilirsin.</p>
+      </div>
+      <button class="btn btn-primary" id="new-story">+ Yeni Hikâye</button>
+    </div>
+
+    <p class="empty" id="empty-state" hidden>Henüz hikâye yok. Sağ üstten ilkini ekle.</p>
+
+    <section class="grid-section" id="pinned-section" hidden>
+      <p class="eyebrow">📌 Sabitlenenler <span>· şeridin başında durur</span></p>
+      <div class="story-grid" id="pinned-grid" data-group="pinned"></div>
+    </section>
+
+    <section class="grid-section" id="normal-section">
+      <p class="eyebrow" id="normal-heading" hidden>Diğerleri</p>
+      <div class="story-grid" id="story-grid" data-group="normal"></div>
+    </section>
+  </main>
+</div>
+
+<!-- DÜZENLEYİCİ -->
+<div class="drawer-scrim" id="drawer-scrim" hidden></div>
+<aside class="drawer" id="drawer" hidden aria-label="Hikâye düzenleyici">
+  <header class="drawer-head">
+    <h2 id="drawer-title">Yeni Hikâye</h2>
+    <button class="icon-btn" id="drawer-close" aria-label="Kapat">✕</button>
+  </header>
+
+  <div class="drawer-body">
+    <form class="editor" id="story-form" novalidate>
+      <label class="field">
+        <span>Başlık <em>dairenin altında görünür, en fazla 24 karakter</em></span>
+        <input type="text" id="story-title" maxlength="24" required>
+      </label>
+
+      <div class="field">
+        <span>Kapak görseli <em>daire içinde görünür, kare yükle</em></span>
+        <div class="cover-row">
+          <div class="cover-ring" id="cover-preview"><span>görsel yok</span></div>
+          <div class="cover-actions">
+            <button type="button" class="btn btn-soft" id="cover-pick">Kapak Seç</button>
+            <p class="hint">JPEG, PNG veya WebP · en fazla 5 MB</p>
+          </div>
+        </div>
+        <input type="file" id="cover-input" accept="image/jpeg,image/png,image/webp" hidden>
+      </div>
+
+      <div class="field">
+        <span>Slaytlar <em>sürükleyerek sırala, dikey (9:16) görseller en iyi görünür</em></span>
+        <div class="slide-list" id="slide-list"></div>
+        <button type="button" class="btn btn-soft" id="slide-pick">+ Slayt Ekle</button>
+        <input type="file" id="slide-input" accept="image/jpeg,image/png,image/webp" multiple hidden>
+      </div>
+
+      <label class="switch-row">
+        <span>
+          Yayında
+          <em>kapalıyken yalnızca panelde görünür</em>
+        </span>
+        <input type="checkbox" id="story-active" checked>
+        <i class="switch" aria-hidden="true"></i>
+      </label>
+
+      <label class="field">
+        <span>Bitiş tarihi <em>boş bırakılırsa süresiz</em></span>
+        <input type="datetime-local" id="story-expires">
+      </label>
+
+      <p class="form-error" id="editor-error" hidden></p>
+
+      <div class="editor-actions">
+        <button class="btn btn-primary" type="submit" id="story-save">Kaydet</button>
+        <button class="btn btn-danger-ghost" type="button" id="story-delete" hidden>Sil</button>
+      </div>
+    </form>
+
+    <div class="preview">
+      <p class="eyebrow">önizleme</p>
+      <div class="pv-modes" id="pv-modes" role="group" aria-label="Önizleme modu">
+        <button type="button" data-mode="home" aria-pressed="true">Anasayfa</button>
+        <button type="button" data-mode="slide" aria-pressed="false">Slayt</button>
+      </div>
+
+      <div class="phone-frame">
+        <div class="phone-notch"></div>
+        <div class="phone-screen">
+          <!-- Anasayfa modu: hikâye şeridi bağlamıyla birlikte -->
+          <div class="pv-home" id="pv-home">
+            <div class="pv-head">
+              <p class="pv-eyebrow">こんにちは</p>
+              <h3>Merhaba Emirhan</h3>
+            </div>
+            <div class="pv-strip" id="pv-strip"></div>
+            <div class="pv-skeleton" aria-hidden="true"><i></i><i></i><i></i></div>
+          </div>
+
+          <!-- Slayt modu: gerçekte olduğu gibi tam ekran -->
+          <div class="pv-bars" id="pv-bars" hidden></div>
+          <div class="pv-slide" id="pv-slide" hidden>slayt yok</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</aside>
+
+<div class="toast" id="toast" hidden></div>
+
+<script src="./admin.js"></script>
+</body>
+</html>

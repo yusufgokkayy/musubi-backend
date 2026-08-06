@@ -32,6 +32,19 @@ const errorHandler = (err, req, res, next) => {
         statusCode = 401;
     }
 
+    // multer hataları (dosya boyutu/adedi) istemci hatasıdır; yakalanmazsa
+    // 500 dönerdi ve "5 MB'ı geçtin" bilgisi kullanıcıya hiç ulaşmazdı
+    if (err.name === 'MulterError') {
+        statusCode = 400;
+        const { MAX_UPLOAD_BYTES } = require('./upload.middleware');
+        message =
+            err.code === 'LIMIT_FILE_SIZE'
+                ? `Görsel çok büyük (en fazla ${Math.round(MAX_UPLOAD_BYTES / 1024 / 1024)} MB)`
+                : err.code === 'LIMIT_FILE_COUNT' || err.code === 'LIMIT_UNEXPECTED_FILE'
+                    ? "Tek seferde tek görsel yüklenebilir (alan adı: 'image')"
+                    : 'Görsel yüklenemedi';
+    }
+
     // Beklenen istemci hataları (süresi dolan token, yanlış şifre, validasyon)
     // rutin akıştır: tek satır yeter. Tam stack yalnızca gerçek sorunlarda (5xx)
     // basılır ki loglarda sinyal/gürültü ayrımı yapılabilsin.

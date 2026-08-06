@@ -69,9 +69,15 @@ REVIEW_DAILY_LIMIT=10
 
 # Production'da izin verilen origin'ler (virgülle ayrılır)
 CORS_ORIGIN=https://app.ornek.com
+
+# Görsel yükleme (POST /api/uploads)
+STORAGE_DRIVER=local
+UPLOAD_DIR=./uploads
 ```
 
 Push bildirimleri için ayrıca `config/firebase-service-account.json` konur (gitignore'da).
+
+> ⚠️ **Railway'de `UPLOAD_DIR` bir Volume'a bakmalı.** Konteynerin diski kalıcı değildir: Volume bağlanmazsa yüklenen görseller ilk deploy'da sessizce silinir. Railway panelinde servise Volume ekleyip mount path'i (örn. `/data`) verin, ardından `UPLOAD_DIR=/data/uploads` ayarlayın. Volume bağlı bir servis yatayda ölçeklenemez (tek replika) ve dosyalar otomatik yedeklenmez — bkz. `config/storage/`.
 
 ### 4. Veriyi hazırlama
 
@@ -90,15 +96,31 @@ npm start      # production
 
 Geliştirme modunda `http://localhost:5000/` adresi, tüm modülleri uçtan uca test edebileceğin görsel bir konsol açar (`public/`): kayıt/giriş ve e-posta doğrulama (dev tokenlarıyla tek tıkla), SRS kart çalışma, interaktif sınav oynatıcı (tüm soru formatları), seviye dağılımları, kütüphane, bildirimler, ayarlar ve ham istek aracı. Her API çağrısı alttaki istek günlüğüne düşer. **Production'da servis edilmez.**
 
+### 7. Admin paneli
+
+`/admin` adresinde, anasayfanın üstündeki hikâyeleri (bilgi kutucukları) yöneten panel açılır. Dev konsolunun aksine **her ortamda** servis edilir — içerik canlıdan girilir.
+
+```bash
+npm run make-admin -- ornek@mail.com            # mevcut kullanıcıyı yönetici yap
+npm run make-admin -- ornek@mail.com --revoke   # yöneticiliği geri al
+```
+
+Rol yükseltme bilinçli olarak panelde değil bu script'te: adminlik verme yetkisi de tarayıcıda olsaydı, ele geçirilen tek bir admin oturumu kalıcı arka kapı açabilirdi. Panel yalnızca yönetici hesapla giriş kabul eder; oturum sekme kapanınca düşer.
+
 ## Mimari
 
 ```
 app.js                     # Express app + route mount'ları (DB/cron/listen içermez — testler bunu kullanır)
 server.js                  # app + DB bağlantısı + cron'lar + listen + graceful shutdown
 .env                       # ortam değişkenleri (gitignore'da; şablonu .env.example)
+admin/                     # admin paneli (hikâye yönetimi) — /admin altında HER ortamda servis edilir,
+                           # derleme adımı yok; JS ayrı dosyada (production CSP inline script'i engeller).
+                           # theme.js <head>'de ayrı yüklenir: tema gövde çizilmeden uygulansın diye
 assets/                    # marka varlıkları (logo) — her ortamda /assets altında servis edilir
-config/                    # db, firebase, resend, consents, legal/ (hukuki metinlerin kanonik kaynağı)
-middlewares/               # auth (protect, isEmailVerified, isAdmin), rateLimiter, errorHandler
+scripts/                   # tek seferlik bakım script'leri (make-admin)
+config/                    # db, firebase, resend, consents, legal/ (hukuki metinlerin kanonik kaynağı),
+                           # storage/ (görsel depolama adaptörü — sürücü STORAGE_DRIVER ile seçilir)
+middlewares/               # auth (protect, isEmailVerified, isAdmin), rateLimiter, errorHandler, upload (multer)
 models/                    # Mongoose şemaları
 modules/<özellik>/         # her özellik: routes → controller → service üçlüsü
 utils/                     # jwt, catchAsync, AppError, sendEmail, notification (FCM), date.util, event.util,
@@ -205,6 +227,30 @@ içinde bir kez gönderilir (cron kaçarsa sonraki tur yakalar, ama gece yarıs�
 sarkmaz). Üretim `notificationSettings` tercihlerine saygı gösterir ve aynı gün
 aynı tipten mükerrer bildirim oluşturmaz.
 
+### Hikâyeler (anasayfa üstü bilgi kutucukları)
+
+Adminlerin `/admin` panelinden yayımladığı, daire kapak + tam ekran görsel
+kartlardan oluşan şerit. Kart içerikleri düz görseldir; metin/link yoktur.
+
+- Görseller kayıtta **key** olarak durur (`stories/<hash>.webp`), URL değil —
+  depolama sağlayıcısı değişirse kayıtlara dokunmak gerekmez (`config/storage/`).
+- Aynı görsel iki hikâyede aynı key'e düşer (dosya adı içerik hash'i). Bu yüzden
+  hikâye silinirken görsel körlemesine silinmez; başka kullanan varsa dosya kalır.
+- `seen` ayrı bir koleksiyonda (`StoryView`) tutulur; `viewedAt < contentUpdatedAt`
+  olduğunda halka o kullanıcıda yeniden yanar. `updatedAt` KULLANILAMAZ: onu
+  sıralama (`bulkWrite`), yayından kaldırma ve başlık düzeltmesi de ilerletiyor,
+  yani kartları sürüklemek herkesin halkasını yakıyordu. `contentUpdatedAt`
+  yalnızca kapak/slaytlar gerçekten değişince yazılır.
+  `Story.viewedBy: []` dizisi bilinçli olarak kullanılmadı — kullanıcı sayısıyla
+  sınırsız büyür ve 16 MB doküman sınırına dayanır.
+- Süresi dolan hikâye gizlenir, **silinmez** (TTL indeksi yok): admin tarihi
+  uzatıp yeniden yayına alabilir.
+- Sıralama iki kademeli: `{ isPinned: -1, order: 1 }`. `order` global değil,
+  **kendi grubu içinde** geçerli — böylece tek bir global sıra numarası
+  uydurmak gerekmiyor. Sabitleme ve sıralama tek uçtan (`PUT /stories/order`)
+  ve tek `bulkWrite` ile yazılır; ayrı bir "pinle" ucu yok, çünkü bir hikâyeyi
+  gruplar arasında taşımak iki isteğe bölünseydi arada tutarsız bir an olurdu.
+
 ## API Referansı
 
 > **Mobil geliştirici için:** Her endpoint'in tam istek gövdesi, yanıt örneği ve hata durumları **[API.md](API.md)** dosyasındadır. Aşağıdaki tablolar hızlı özet içindir.
@@ -306,10 +352,18 @@ Ekranları diliyle aynı, açık/koyu tema ve TR/EN destekli, dış kaynaksız.
 | GET | `/streak` 🔒✉️ | Seri bilgisi |
 | GET | `/home/summary`, `/home/calendar` 🔒✉️ | Ana ekran verileri |
 | GET/PUT | `/notifications`, `/notifications/:id/read`, `/notifications/read-all` 🔒✉️ | Bildirimler |
+| — | `/admin` (tarayıcı sayfası) | Hikâye yönetim paneli — /api dışında, kimlik doğrulama sayfanın çağırdığı uçlarda |
+| POST/DELETE | `/uploads` 🔒✉️ (admin) | Görsel yükleme/silme (`multipart/form-data`, alan `image`) |
+| GET | `/uploads/:key` | Yüklenen görselin kendisi (kimlik doğrulama istemez) |
+| GET | `/stories` 🔒✉️ | Anasayfa üstündeki hikâye şeridi (`seen` bilgisiyle) |
+| POST | `/stories/:id/seen` 🔒✉️ | Hikâyeyi görüldü işaretle |
+| GET/POST/PUT/DELETE | `/stories`, `/stories/admin`, `/stories/order` 🔒✉️ (admin) | Hikâye yönetimi — `/admin` paneli bunları kullanır |
 
 ### Analitik (event log)
 
-Kritik kullanıcı eylemleri `events` koleksiyonuna yazılır (fire-and-forget — ana akışı asla yavaşlatmaz): `register`, `login`, `daily_pool_created`, `answer_submitted`, `quiz_started`, `quiz_completed`, `session_completed`. D1/D7 retention, günlük aktif kullanıcı ve özellik kullanımı bu koleksiyondan hesaplanır; ileride XP sistemi de aynı log'un üzerine kurulur. Örnek — son 7 günün günlük aktif kullanıcısı:
+Kritik kullanıcı eylemleri `events` koleksiyonuna yazılır (fire-and-forget — ana akışı asla yavaşlatmaz): `register`, `login`, `daily_pool_created`, `answer_submitted`, `quiz_started`, `quiz_completed`, `session_completed`, `story_opened`, `story_completed`.
+
+Hikâye olayları `data` alanına `storyId` ile birlikte **`title`** de yazar: hikâye silindikten sonra da ham event'ler okunabilir kalsın diye. Açılma/tamamlanma oranı `GET /api/stories/admin` üzerinden hesaplanıp admin panelinde kartın üstünde gösterilir — elle Mongo sorgusu gerektiren bir analitik, birkaç hafta sonra kimsenin bakmadığı bir şeye dönüşür. D1/D7 retention, günlük aktif kullanıcı ve özellik kullanımı bu koleksiyondan hesaplanır; ileride XP sistemi de aynı log'un üzerine kurulur. Örnek — son 7 günün günlük aktif kullanıcısı:
 
 ```js
 db.events.aggregate([
@@ -356,6 +410,8 @@ npm test
 - Hesap bazlı giriş kilidi: 5/10/15 hatalı denemede 1/5/15 dakika kademeli kilit. IP limitinin kapatamadığı "çok IP'den tek hesabı deneme" senaryosuna karşı; kilit DoS aracına dönüşmesin diye süreler kısa, başarılı giriş ve şifre sıfırlama kilidi kaldırır
 - KVKK açık rıza kaydı hesap açılışında yazılır (sürüm + zaman + IP), sürüm değişince yeniden rıza istenir
 - Arama girdisinde regex escape (ReDoS koruması), JSON body 100 KB limiti
+- Admin paneli (`/admin`) korumasız bir statik sayfadır; koruma çağırdığı uçlardadır. Panel oturumu `sessionStorage`'da tutulur (sekme kapanınca düşer), rol yükseltme panelde değil `npm run make-admin` script'indedir. Sayfa `X-Robots-Tag: noindex` ile servis edilir ve inline script içermez (production CSP `script-src 'self'`)
+- Görsel yükleme: yalnızca admin, ayrı rate limit (30/15 dk), 5 MB sınırı, dosya türü **sihirli baytla** belirlenir (istemcinin `Content-Type`'ına güvenilmez), SVG reddedilir (gömülü script → saklı XSS), her dosya sharp ile yeniden kodlanır (EXIF/GPS temizlenir, dekompresyon bombasına karşı 50 MP girdi sınırı), dosya adı içerik hash'i (kullanıcı girdisi dosya yoluna karışmaz)
 - Quiz cevap anahtarının sunucuda kalması, sorunun her denemede yeniden üretilmesi
 - Hesap silmede tüm koleksiyonlardan cascade temizlik (KVKK)
 
@@ -370,7 +426,8 @@ npm test
 - [ ] Kelime anlamları şu an **İngilizce** (CSV kaynaklı); MVP iki dilli (EN/TR) çıkacağı için Türkçe çeviri katmanı (`meaningTr`) planlanıyor
 - [ ] `daily_word` (günün kelimesi) bildirimi üretimi
 - [ ] XP/puan sistemi (tasarımdaki "puanları kaybedersin" akışı için — event log üzerine kurulacak)
-- [ ] Profil fotoğrafı yükleme
+- [ ] Profil fotoğrafı yükleme (`/uploads` altyapısı hazır; `User.profile_image` hâlâ `default.jpg` placeholder'ında)
+- [ ] Görseller için kalıcı depolama kararı: Railway Volume mi, CDN'li bir sağlayıcı mı (`STORAGE_DRIVER` seçimi — bkz. `config/storage/`)
 - [ ] Reklam kaldırma / abonelik (IAP makbuz doğrulama)
 - [ ] v2: takipleşme ve sosyal özellikler; sonrası: multiplayer kelime savaşları (websocket, kalıcı sunucu gerektirir)
 

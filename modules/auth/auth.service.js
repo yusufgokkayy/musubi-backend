@@ -7,6 +7,7 @@ const DailyWordPool = require('../../models/DailyWordPool');
 const Notification = require('../../models/Notification');
 const QuizAttempt = require('../../models/QuizAttempt');
 const DeviceSession = require('../../models/DeviceSession');
+const StoryView = require('../../models/StoryView');
 const AppError = require('../../utils/AppError');
 const sendEmail = require('../../utils/sendEmail');
 const clientUrl = require('../../utils/clientUrl');
@@ -125,6 +126,7 @@ const purgeUserData = async (userId) => {
         Notification.deleteMany({ user: userId }),
         QuizAttempt.deleteMany({ user: userId }),
         DeviceSession.deleteMany({ user: userId }),
+        StoryView.deleteMany({ user: userId }),
         Event.deleteMany({ user: userId })
     ]);
     await User.findByIdAndDelete(userId);
