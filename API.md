@@ -1106,6 +1106,134 @@ Elle push testi — giriş yapmış kullanıcının kayıtlı `fcmToken`'ına an
 
 ---
 
+## Görsel yükleme — `/uploads` (yalnızca admin)
+
+Anasayfanın üstündeki hikâye kartlarının (ve ileride kelime görsellerinin) görselleri buradan yüklenir. Mobil uygulamanın **yükleme** uçlarını çağırması gerekmez — normal kullanıcı `403` alır; uygulama yalnızca dönen `url`'i gösterir.
+
+**İstek biçimi:** `multipart/form-data` (bu bölümdeki uçlar JSON almaz).
+
+| Alan | Zorunlu | Açıklama |
+|---|---|---|
+| `image` | evet | Dosyanın kendisi. JPEG, PNG, WebP veya GIF. En fazla **5 MB**. |
+| `preset` | hayır | `story` (varsayılan), `storyCover` veya `word` |
+
+**Ön ayarlar** hem hedef klasörü hem de maksimum boyutu belirler (oran korunur, görsel büyütülmez):
+
+| preset | kullanım | maksimum |
+|---|---|---|
+| `story` | tam ekran hikâye kartı | 1080 × 1920 |
+| `storyCover` | anasayfadaki daire kapak | 512 × 512 |
+| `word` | kelime kartı görseli | 800 × 800 |
+
+Yüklenen her dosya sunucuda **yeniden kodlanır**: EXIF/konum verisi silinir, yön düzeltilir, WebP'e çevrilir. Dolayısıyla dönen dosya her zaman `.webp`'tir ve boyutu gönderdiğinizden farklıdır. SVG **kabul edilmez**; dosya türü uzantıya/`Content-Type`'a değil dosyanın kendi baytlarına bakılarak belirlenir.
+
+### POST /uploads 🔒✉️ (admin)
+```jsonc
+// 201
+{
+  "success": true,
+  "data": {
+    "key": "stories/9f2c4a...b1.webp",                       // kalıcı kimlik — DB'de BU saklanır
+    "url": "https://<backend>/uploads/stories/9f2c4a...b1.webp",
+    "width": 1080,
+    "height": 1697,
+    "bytes": 84210,
+    "preset": "story"
+  }
+}
+```
+Dosya adı içeriğin hash'idir: aynı görsel iki kez yüklenirse aynı `key` döner (kopya birikmez) ve bir URL'nin işaret ettiği görsel asla değişmez — istemci sonsuza dek cache'leyebilir.
+
+Hatalar: `400 "Görsel dosyası gerekli..."`, `400 "Görsel çok büyük (en fazla 5 MB)"`, `400 "Desteklenmeyen dosya biçimi... (SVG kabul edilmez)"`, `400 "Görsel çözümlenemedi, dosya bozuk olabilir"`, `400 "Geçersiz preset ..."`, `403` (admin değil), `429` (15 dakikada 30 yükleme sınırı).
+
+### DELETE /uploads?key=stories/9f2c...webp 🔒✉️ (admin)
+```jsonc
+// 200
+{ "success": true, "message": "Görsel silindi" }
+```
+İdempotenttir: zaten silinmiş bir `key` de `200` döner. Hata: `400 "Geçersiz görsel anahtarı"` (biçime uymayan key).
+
+### GET /uploads/:key
+Görselin kendisi. Kimlik doğrulama **istemez** (uygulamadaki `<Image>` bileşenleri token gönderemez), `Cache-Control: immutable` ile bir yıl cache'lenir. Bulunamazsa `404`.
+
+> Depolama yeri ortam değişkeniyle seçilir (`STORAGE_DRIVER`). Şu an yerel disk kullanılıyor; sağlayıcı değişirse `url` değişir, `key` **değişmez** — bu yüzden istemci tarafında da `url` önbelleğe alınmamalı, kayıtla birlikte gelen güncel `url` kullanılmalıdır.
+
+---
+
+## Hikâyeler — `/stories`
+
+Anasayfanın üstündeki daire şeridi ("bilgi kutucukları"). İçerik adminler tarafından `/admin` panelinden girilir; mobil uygulama yalnızca okur ve "görüldü" işaretler.
+
+`Story` nesnesi (kullanıcı görünümü):
+```jsonc
+{
+  "id": "66b1f2...",
+  "title": "Sakura",                                    // dairenin ALTINDAKİ etiket, en fazla 24 karakter
+  "coverUrl": "https://<backend>/uploads/story-covers/....webp",
+  "seen": false,                                        // false → halka kırmızı, true → gri
+  "isPinned": true,                                     // sabitlenmiş: şeridin başında durur
+  "slides": [
+    { "url": "https://<backend>/uploads/stories/....webp" },
+    { "url": "https://<backend>/uploads/stories/....webp" }
+  ]
+}
+```
+
+### GET /stories 🔒✉️
+Yayında olan ve süresi geçmemiş hikâyeler, gösterim sırasında.
+```jsonc
+// 200
+{ "success": true, "data": [ /* Story[] */ ] }
+```
+Slaytlar listeyle **birlikte** gelir — daireye dokunulduğunda ikinci istek atmaya gerek yok. Hikâye sayısı azdır (onlarca değil, birkaç tane).
+
+Sıra sunucuda belirlenir: **önce sabitlenenler** (`isPinned: true`), sonra diğerleri; her grup kendi içinde adminin panelden verdiği sıradadır. İstemci yeniden sıralamamalı — gelen diziyi olduğu gibi göstersin. `isPinned` yalnızca bilgi amaçlıdır (istenirse rozet gösterilebilir).
+
+### POST /stories/:id/opened 🔒✉️
+Hikâye **açılır açılmaz** çağrılır; gövde yok. `seen` işaretlemez — yalnızca analitik olayı yazar.
+```jsonc
+// 200
+{ "success": true, "message": "Açılma kaydedildi" }
+```
+Hata: `404 "Hikâye bulunamadı"`.
+
+### POST /stories/:id/seen 🔒✉️
+Kullanıcı **son slaytı bitirdiğinde** çağrılır; gövde yok. İdempotenttir, tekrar çağrılabilir. Hem `seen` işaretler hem tamamlanma olayını yazar.
+```jsonc
+// 200
+{ "success": true, "message": "Görüldü olarak işaretlendi" }
+```
+Hata: `404 "Hikâye bulunamadı"` — hikâye izlenirken admin silmiş olabilir; istemci bunu **sessizce yutmalı**, kullanıcıya hata göstermemeli.
+
+> **İkisi birden gönderilmeli.** `opened` açılışta, `seen` yalnızca sonuna kadar izlenirse. Yarıda çıkan kullanıcı yalnızca `opened` üretir; ikisinin farkı "kaç kişi açtı, kaçı bitirdi" ölçümünü verir ve admin panelinde gösterilir. `seen`'i açılışta göndermek bu ölçümü anlamsızlaştırır.
+
+> **`seen` ne zaman sıfırlanır:** yalnızca **görsel içerik** değişince — kapak değiştirilirse veya slaytlar eklenir/çıkarılır/sıralanırsa `seen` o kullanıcı için tekrar `false` olur ve halka yeniden yanar. Başlık düzeltmesi, yayından kaldırıp geri alma, bitiş tarihini uzatma ve hikâyelerin panelden yeniden sıralanması `seen`'i **bozmaz**. İstemci tarafında `seen`'i önbelleğe almayın, her `GET /stories`'te gelen değeri kullanın.
+
+### Yönetim uçları 🔒✉️ (yalnızca admin)
+Mobil uygulamanın kullanması gerekmez; `/admin` paneli bunları çağırır.
+
+| Metot | Yol | Gövde |
+|---|---|---|
+| GET | `/stories/admin` | — (pasif + süresi dolmuşlar dahil hepsi; `openCount`, `completedCount`, `completionRate` ile) |
+| POST | `/stories` | `{ title, coverKey, slides: [key], isActive?, expiresAt? }` → `201 { data: { id } }` |
+| PUT | `/stories/:id` | Aynı alanlar, kısmi gönderilebilir |
+| PUT | `/stories/order` | `{ pinnedIds: [...], normalIds: [...] }` — aşağıya bakın |
+| DELETE | `/stories/:id` | — (hikâye + görüntülenme kayıtları + başka hikâyede kullanılmayan görseller silinir) |
+
+`coverKey` ve `slides` elemanları `POST /api/uploads`'un döndüğü **key**'lerdir, URL değil. Biçime uymayan bir değer `400 "Geçersiz görsel anahtarı (...)"` döner. `expiresAt` boş/`null` ise hikâye süresizdir; tarih geçince hikâye gizlenir ama **silinmez** (admin tarihi uzatıp yeniden yayına alabilir).
+
+Tipik akış: `POST /api/uploads` (preset `storyCover`) → kapak key'i · `POST /api/uploads` (preset `story`) × N → slayt key'leri · `POST /api/stories`.
+
+**Sıralama ve sabitleme tek çağrıdır.** `PUT /stories/order` ekranda görülen iki grubun tamamını alır:
+```jsonc
+{ "pinnedIds": ["id3", "id1"], "normalIds": ["id2", "id4"] }
+```
+Sunucu `isPinned`'i hangi listede olduğuna, `order`'ı da listedeki konuma göre yazar. Ayrı bir "pinle" ucu **yoktur**: pinlemek, bir id'yi diğer listeye taşıyıp bu çağrıyı yapmaktır. İki alan da opsiyoneldir (verilmeyen boş kabul edilir) ama ikisi birden boşsa `400` döner. Bu çağrı `seen` bilgisini **bozmaz** — sıralama ve sabitleme içerik değişikliği sayılmaz.
+
+Yeni oluşturulan hikâye her zaman sabitlenmemiş grubun **sonuna** eklenir.
+
+---
+
 ## Sağlık kontrolü
 
 ### GET /health

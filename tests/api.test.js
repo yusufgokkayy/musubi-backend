@@ -7,9 +7,12 @@
 const { describe, it, before, after } = require('node:test');
 const assert = require('node:assert');
 const mongoose = require('mongoose');
+const os = require('node:os');
+const path = require('node:path');
+const fs = require('node:fs/promises');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 
-let mongod, server, BASE;
+let mongod, server, BASE, uploadDir;
 let User, Word, UserWord, Notification, QuizAttempt, Event, Progress, Streak, DeviceSession;
 let UserWordService, NotificationService, ProgressService, StreakService, StudySessionService, AuthService, sendEmail;
 
@@ -80,6 +83,10 @@ before(async () => {
     mongod = await startMemoryServer();
     process.env.MONGO_URI = mongod.getUri('musubi-test');
     process.env.NODE_ENV = 'test';
+    // Yüklemeler geçici dizine gitsin: app.js statik mount'u require anında
+    // kurduğu için bu satır require'dan ÖNCE olmak zorunda
+    uploadDir = path.join(os.tmpdir(), `musubi-uploads-${process.pid}-${Date.now()}`);
+    process.env.UPLOAD_DIR = uploadDir;
 
     const app = require('../app'); // kökteki .env'i yükler (varsa)
     process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret';
@@ -124,6 +131,7 @@ after(async () => {
     server?.close();
     await mongoose.disconnect();
     await mongod?.stop();
+    if (uploadDir) await fs.rm(uploadDir, { recursive: true, force: true });
 });
 
 describe('Auth', () => {
@@ -2332,5 +2340,603 @@ describe('Hukuki metinler', () => {
         const tr = await pageGet('/legal/terms');
         assert.ok(!tr.text.includes('available in Turkish only'),
             'Türkçe sayfada uyarı görünmemeli');
+    });
+});
+
+describe('Görsel yükleme', () => {
+    const sharp = require('sharp');
+
+    // Test görselleri kodun içinde üretilir: repoya binary dosya eklemeden
+    // gerçek bir JPEG/PNG akışı test edilir
+    const makePng = (width = 1400, height = 2200) =>
+        sharp({ create: { width, height, channels: 3, background: { r: 200, g: 30, b: 60 } } })
+            .png().toBuffer();
+
+    const postImage = async (bytes, { token, filename = 'test.png', preset, field = 'image' } = {}) => {
+        const form = new FormData();
+        if (preset) form.append('preset', preset);
+        if (bytes) form.append(field, new Blob([bytes]), filename);
+        const res = await fetch(BASE + '/uploads', {
+            method: 'POST',
+            headers: { ...(token && { Authorization: 'Bearer ' + token }) },
+            body: form
+        });
+        return { status: res.status, json: await res.json().catch(() => ({})) };
+    };
+
+    // Dönen `url` CLIENT_URL'e göre kurulur; test sunucusu rastgele portta
+    // olduğu için dosya buradan, sunucunun kendi adresinden indirilir
+    const fetchUpload = (key) => fetch(BASE.replace(/\/api$/, '') + '/uploads/' + key);
+
+    let adminToken, userToken;
+
+    before(async () => {
+        await createVerifiedUser('yukleme-admin@test.com', { role: 'admin' });
+        await createVerifiedUser('yukleme-user@test.com');
+        adminToken = (await login('yukleme-admin@test.com')).accessToken;
+        userToken = (await login('yukleme-user@test.com')).accessToken;
+    });
+
+    it('admin görsel yükler: webp\'e çevrilir, boyut sınırlanır, /uploads\'tan servis edilir', async () => {
+        const res = await postImage(await makePng(1400, 2200), { token: adminToken, preset: 'story' });
+        assert.equal(res.status, 201, JSON.stringify(res.json));
+
+        const { key, url, width, height, bytes } = res.json.data;
+        assert.match(key, /^stories\/[a-f0-9]{32}\.webp$/, 'key içerik hash\'i olmalı');
+        assert.ok(url.endsWith('/uploads/' + key), 'url key üzerinden kurulmalı');
+
+        // story ön ayarı 1080x1920'ye sığdırır; oran korunur
+        assert.ok(width <= 1080 && height <= 1920, `boyut sınırlanmalı, geldi: ${width}x${height}`);
+        assert.equal(width, 1080);
+        assert.ok(bytes > 0);
+
+        const served = await fetchUpload(key);
+        assert.equal(served.status, 200);
+        assert.equal(served.headers.get('content-type'), 'image/webp');
+        assert.match(served.headers.get('cache-control') || '', /immutable/,
+            'içerik hash\'li dosya sonsuza dek cache\'lenebilmeli');
+
+        const meta = await sharp(Buffer.from(await served.arrayBuffer())).metadata();
+        assert.equal(meta.format, 'webp');
+        assert.equal(meta.width, width);
+    });
+
+    it('EXIF temizlenir — telefon fotoğrafındaki konum/kimlik verisi yayımlanmaz', async () => {
+        const withExif = await sharp({ create: { width: 400, height: 400, channels: 3, background: { r: 1, g: 2, b: 3 } } })
+            .withExif({ IFD0: { Copyright: 'MUSUBI-GIZLI-KONUM' } })
+            .jpeg().toBuffer();
+        assert.ok((await sharp(withExif).metadata()).exif, 'girdi EXIF taşımalı (test kurulumu)');
+
+        const res = await postImage(withExif, { token: adminToken, filename: 'foto.jpg', preset: 'storyCover' });
+        assert.equal(res.status, 201);
+
+        const served = await fetchUpload(res.json.data.key);
+        const buf = Buffer.from(await served.arrayBuffer());
+        assert.ok(!(await sharp(buf).metadata()).exif, 'çıktıda EXIF kalmamalı');
+        assert.ok(!buf.includes('MUSUBI-GIZLI-KONUM'), 'EXIF içeriği baytlarda da kalmamalı');
+    });
+
+    it('aynı görsel iki kez yüklenince aynı key\'e yazılır (kopya birikmez)', async () => {
+        const png = await makePng(600, 600);
+        const a = await postImage(png, { token: adminToken, preset: 'word' });
+        const b = await postImage(png, { token: adminToken, preset: 'word' });
+        assert.equal(a.status, 201);
+        assert.equal(b.status, 201);
+        assert.equal(a.json.data.key, b.json.data.key);
+    });
+
+    it('SVG ve bozuk dosyalar reddedilir; mimetype\'a güvenilmez', async () => {
+        const svg = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>');
+        // İstemci "image/png" adı ve uzantısı verse bile içeriğe bakılır
+        const asSvg = await postImage(svg, { token: adminToken, filename: 'zararsiz.png' });
+        assert.equal(asSvg.status, 400);
+        assert.match(asSvg.json.message, /SVG kabul edilmez/);
+
+        // Doğru PNG imzası + çöp gövde: 400 olmalı, 500 değil
+        const bozuk = Buffer.concat([
+            Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]),
+            Buffer.alloc(64, 0x41)
+        ]);
+        const res = await postImage(bozuk, { token: adminToken });
+        assert.equal(res.status, 400);
+        assert.match(res.json.message, /çözümlenemedi/);
+    });
+
+    it('5 MB üstü dosya ve tanınmayan preset reddedilir', async () => {
+        const buyuk = Buffer.alloc(6 * 1024 * 1024, 0x00);
+        const res = await postImage(buyuk, { token: adminToken });
+        assert.equal(res.status, 400);
+        assert.match(res.json.message, /çok büyük/);
+
+        const preset = await postImage(await makePng(100, 100), { token: adminToken, preset: '../../etc' });
+        assert.equal(preset.status, 400);
+        assert.match(preset.json.message, /Geçersiz preset/);
+
+        const dosyasiz = await postImage(null, { token: adminToken });
+        assert.equal(dosyasiz.status, 400);
+    });
+
+    it('yükleme yalnızca admin: normal kullanıcı 403, oturumsuz 401', async () => {
+        const png = await makePng(100, 100);
+        assert.equal((await postImage(png, { token: userToken })).status, 403);
+        assert.equal((await postImage(png)).status, 401);
+        assert.equal((await api('DELETE', '/uploads?key=stories/' + 'a'.repeat(32) + '.webp', { token: userToken })).status, 403);
+    });
+
+    it('silme: dizin dışına çıkan key reddedilir, geçerli key siler, olmayan key hata vermez', async () => {
+        const yuklendi = await postImage(await makePng(300, 300), { token: adminToken, preset: 'story' });
+        const key = yuklendi.json.data.key;
+        assert.equal((await fetchUpload(key)).status, 200);
+
+        for (const kotu of ['../../.env', 'stories/../../.env', '/etc/passwd', 'stories/x.webp']) {
+            const res = await api('DELETE', `/uploads?key=${encodeURIComponent(kotu)}`, { token: adminToken });
+            assert.equal(res.status, 400, `reddedilmeliydi: ${kotu}`);
+        }
+
+        assert.equal((await api('DELETE', `/uploads?key=${key}`, { token: adminToken })).status, 200);
+        assert.equal((await fetchUpload(key)).status, 404, 'silinen dosya artık servis edilmemeli');
+
+        // İkinci silme de 200: silme idempotent
+        assert.equal((await api('DELETE', `/uploads?key=${key}`, { token: adminToken })).status, 200);
+    });
+});
+
+describe('Hikâyeler', () => {
+    const sharp = require('sharp');
+    const Story = require('../models/Story');
+    const StoryView = require('../models/StoryView');
+
+    let adminToken, userToken, userId;
+
+    // Her çağrı FARKLI bir görsel üretir (dolayısıyla farklı içerik hash'i),
+    // aksi halde tüm hikâyeler aynı key'i paylaşırdı
+    let tohum = 0;
+    const yeniGorsel = () => {
+        tohum += 37;
+        return sharp({ create: { width: 300, height: 300, channels: 3, background: { r: tohum % 255, g: 60, b: 90 } } })
+            .png().toBuffer();
+    };
+
+    const gorselYukle = async (preset = 'story') => {
+        const form = new FormData();
+        form.append('preset', preset);
+        form.append('image', new Blob([await yeniGorsel()]), 'x.png');
+        const res = await fetch(BASE + '/uploads', {
+            method: 'POST',
+            headers: { Authorization: 'Bearer ' + adminToken },
+            body: form
+        });
+        const json = await res.json();
+        assert.equal(res.status, 201, JSON.stringify(json));
+        return json.data.key;
+    };
+
+    const dosyaVar = async (key) =>
+        (await fetch(BASE.replace(/\/api$/, '') + '/uploads/' + key)).status === 200;
+
+    const hikayeOlustur = async (overrides = {}) => {
+        const body = {
+            title: 'Bilgi',
+            coverKey: overrides.coverKey || await gorselYukle('storyCover'),
+            slides: overrides.slides || [await gorselYukle()],
+            ...overrides
+        };
+        const res = await api('POST', '/stories', { token: adminToken, body });
+        assert.equal(res.status, 201, JSON.stringify(res.json));
+        return res.json.data.id;
+    };
+
+    before(async () => {
+        await createVerifiedUser('hikaye-admin@test.com', { role: 'admin' });
+        const user = await createVerifiedUser('hikaye-user@test.com');
+        userId = user._id;
+        adminToken = (await login('hikaye-admin@test.com')).accessToken;
+        userToken = (await login('hikaye-user@test.com')).accessToken;
+    });
+
+    after(async () => {
+        await Promise.all([Story.deleteMany({}), StoryView.deleteMany({})]);
+    });
+
+    it('admin hikâye yayımlar, kullanıcı şeritte görür (kapak + slaytlar tam URL)', async () => {
+        const id = await hikayeOlustur({ title: 'Sakura' });
+
+        const res = await api('GET', '/stories', { token: userToken });
+        assert.equal(res.status, 200);
+        const story = res.json.data.find(s => s.id === id);
+        assert.ok(story, 'yayımlanan hikâye listede olmalı');
+        assert.equal(story.title, 'Sakura');
+        assert.match(story.coverUrl, /^https?:\/\/.+\/uploads\/story-covers\/[a-f0-9]{32}\.webp$/);
+        assert.equal(story.slides.length, 1);
+        assert.match(story.slides[0].url, /\/uploads\/stories\//);
+        assert.equal(story.seen, false, 'yeni hikâye görülmemiş olmalı');
+
+        await Story.deleteMany({});
+    });
+
+    it('pasif ve süresi dolmuş hikâyeler gizlenir; sıra `order`a göre', async () => {
+        const yayinda = await hikayeOlustur({ title: 'Yayında' });
+        const pasif = await hikayeOlustur({ title: 'Pasif', isActive: false });
+        const dolmus = await hikayeOlustur({
+            title: 'Dolmuş',
+            expiresAt: new Date(Date.now() - 60_000).toISOString()
+        });
+        const ileride = await hikayeOlustur({
+            title: 'İleride',
+            expiresAt: new Date(Date.now() + 3600_000).toISOString()
+        });
+
+        const gorunen = (await api('GET', '/stories', { token: userToken })).json.data.map(s => s.id);
+        assert.deepEqual(gorunen, [yayinda, ileride], 'yalnızca aktif ve süresi geçmemişler, ekleme sırasında');
+
+        // Admin listesi hepsini görür
+        const hepsi = (await api('GET', '/stories/admin', { token: adminToken })).json.data;
+        assert.equal(hepsi.length, 4);
+        assert.ok(hepsi.every(s => typeof s.openCount === 'number' && typeof s.completedCount === 'number'));
+
+        // Sıralamayı tersine çevir
+        const ters = await api('PUT', '/stories/order', { token: adminToken, body: { normalIds: [ileride, yayinda] } });
+        assert.equal(ters.status, 200);
+        const sonra = (await api('GET', '/stories', { token: userToken })).json.data.map(s => s.id);
+        assert.deepEqual(sonra, [ileride, yayinda]);
+
+        assert.ok(pasif && dolmus); // yukarıda kullanıldı
+        await Story.deleteMany({});
+    });
+
+    it('görüldü işareti idempotent; hikâye güncellenince halka tekrar yanar', async () => {
+        const id = await hikayeOlustur({ title: 'Duyuru' });
+        const seenDurumu = async () =>
+            (await api('GET', '/stories', { token: userToken })).json.data.find(s => s.id === id).seen;
+
+        assert.equal(await seenDurumu(), false);
+
+        assert.equal((await api('POST', `/stories/${id}/seen`, { token: userToken })).status, 200);
+        assert.equal(await seenDurumu(), true);
+
+        // İkinci işaretleme yeni kayıt açmaz
+        assert.equal((await api('POST', `/stories/${id}/seen`, { token: userToken })).status, 200);
+        assert.equal(await StoryView.countDocuments({ user: userId, story: id }), 1);
+
+        // Admin slayt ekleyince kullanıcı için tekrar "görülmemiş" olur
+        await sleep(10);
+        const guncelle = await api('PUT', `/stories/${id}`, {
+            token: adminToken,
+            body: { slides: [await gorselYukle(), await gorselYukle()] }
+        });
+        assert.equal(guncelle.status, 200);
+        assert.equal(await seenDurumu(), false, 'güncellenen hikâye yeniden görülmemiş sayılmalı');
+
+        assert.equal((await api('POST', '/stories/000000000000000000000000/seen', { token: userToken })).status, 404);
+        await Story.deleteMany({});
+    });
+
+    it('yönetim uçları admin ister: normal kullanıcı 403, oturumsuz 401', async () => {
+        const id = await hikayeOlustur();
+
+        for (const [method, path] of [['GET', '/stories/admin'], ['POST', '/stories'], ['PUT', `/stories/${id}`], ['DELETE', `/stories/${id}`], ['PUT', '/stories/order']]) {
+            const govde = method === 'GET' ? undefined : {};
+            assert.equal((await api(method, path, { token: userToken, body: govde })).status, 403, `${method} ${path}`);
+            assert.equal((await api(method, path, { body: govde })).status, 401, `${method} ${path} (oturumsuz)`);
+        }
+
+        // Okuma ucu her doğrulanmış kullanıcıya açık
+        assert.equal((await api('GET', '/stories', { token: userToken })).status, 200);
+        assert.equal((await api('GET', '/stories')).status, 401);
+
+        await Story.deleteMany({});
+    });
+
+    it('görsel anahtarı doğrulanır: dizin dışına çıkan veya uydurma key reddedilir', async () => {
+        const gecerli = await gorselYukle('storyCover');
+
+        const kotuKapak = await api('POST', '/stories', {
+            token: adminToken,
+            body: { title: 'X', coverKey: '../../.env', slides: [await gorselYukle()] }
+        });
+        assert.equal(kotuKapak.status, 400);
+        assert.match(kotuKapak.json.message, /Geçersiz görsel anahtarı \(kapak\)/);
+
+        const kotuSlayt = await api('POST', '/stories', {
+            token: adminToken,
+            body: { title: 'X', coverKey: gecerli, slides: ['stories/olmayan.png'] }
+        });
+        assert.equal(kotuSlayt.status, 400);
+        assert.match(kotuSlayt.json.message, /slayt 1/);
+
+        const slaytsiz = await api('POST', '/stories', {
+            token: adminToken,
+            body: { title: 'X', coverKey: gecerli, slides: [] }
+        });
+        assert.equal(slaytsiz.status, 400);
+
+        const basliksiz = await api('POST', '/stories', {
+            token: adminToken,
+            body: { coverKey: gecerli, slides: [await gorselYukle()] }
+        });
+        assert.equal(basliksiz.status, 400);
+    });
+
+    it('silme: görüntülenme kayıtları ve görseller gider, PAYLAŞILAN görsele dokunulmaz', async () => {
+        const ortakKapak = await gorselYukle('storyCover');
+        const kendiSlayt = await gorselYukle();
+
+        const a = await hikayeOlustur({ title: 'A', coverKey: ortakKapak, slides: [kendiSlayt] });
+        const b = await hikayeOlustur({ title: 'B', coverKey: ortakKapak, slides: [await gorselYukle()] });
+
+        await api('POST', `/stories/${a}/seen`, { token: userToken });
+        assert.equal(await StoryView.countDocuments({ story: a }), 1);
+
+        assert.equal((await api('DELETE', `/stories/${a}`, { token: adminToken })).status, 200);
+        assert.equal(await StoryView.countDocuments({ story: a }), 0, 'görüntülenme kayıtları da silinmeli');
+        assert.equal(await dosyaVar(kendiSlayt), false, 'yalnızca bu hikâyenin kullandığı görsel silinmeli');
+        assert.equal(await dosyaVar(ortakKapak), true, 'B hâlâ kullandığı için ortak kapak DURMALI');
+
+        assert.equal((await api('DELETE', `/stories/${b}`, { token: adminToken })).status, 200);
+        assert.equal(await dosyaVar(ortakKapak), false, 'son kullanan da gidince görsel silinmeli');
+
+        assert.equal((await api('DELETE', '/stories/000000000000000000000000', { token: adminToken })).status, 404);
+    });
+
+    it('güncellemede değişen görsel temizlenir', async () => {
+        const eskiSlayt = await gorselYukle();
+        const id = await hikayeOlustur({ slides: [eskiSlayt] });
+        const yeniSlayt = await gorselYukle();
+
+        assert.equal((await api('PUT', `/stories/${id}`, {
+            token: adminToken, body: { slides: [yeniSlayt] }
+        })).status, 200);
+
+        assert.equal(await dosyaVar(eskiSlayt), false, 'artık kullanılmayan görsel silinmeli');
+        assert.equal(await dosyaVar(yeniSlayt), true);
+
+        await Story.deleteMany({});
+    });
+
+    it('hesap silmede kullanıcının görüntülenme kayıtları da gider (KVKK)', async () => {
+        const gecici = await createVerifiedUser('hikaye-kvkk@test.com');
+        const token = (await login('hikaye-kvkk@test.com')).accessToken;
+        const id = await hikayeOlustur();
+
+        await api('POST', `/stories/${id}/seen`, { token });
+        assert.equal(await StoryView.countDocuments({ user: gecici._id }), 1);
+
+        await AuthService.deleteAccount(gecici._id, { password: 'Testsifre123!' });
+        assert.equal(await StoryView.countDocuments({ user: gecici._id }), 0);
+
+        await Story.deleteMany({});
+    });
+
+    it('admin paneli her ortamda servis edilir ve indekslenmez', async () => {
+        const res = await fetch(BASE.replace(/\/api$/, '') + '/admin/');
+        assert.equal(res.status, 200);
+        assert.match(res.headers.get('content-type') || '', /text\/html/);
+        assert.equal(res.headers.get('x-robots-tag'), 'noindex');
+
+        const html = await res.text();
+        assert.ok(html.includes('admin.js'), 'panel JS ayrı dosyadan yüklenmeli (CSP inline script\'i engelliyor)');
+        assert.ok(!/<script(?![^>]*\ssrc=)/i.test(html), 'inline <script> olmamalı — production CSP çalıştırmaz');
+    });
+
+    // Panel görünürlüğü `hidden` özniteliğiyle yönetiliyor ve .login-view/.drawer/
+    // .btn sınıflarının `display` kuralları tarayıcının [hidden] kuralını eziyor.
+    // Tarayıcı olmadan gerçek görünürlük test edilemiyor; en azından kuralın
+    // silinmediğini garanti ediyoruz — silinirse giriş ekranı sürekli açık kalır,
+    // düzenleyici hiç kapanmaz ve yeni hikâyede "Sil" butonu görünür.
+    it('panel CSS\'i [hidden] kuralını taşımalı (görünürlük buna bağlı)', async () => {
+        const css = await fs.readFile(path.join(__dirname, '../admin/admin.css'), 'utf8');
+        assert.match(css, /\[hidden\]\s*\{\s*display:\s*none\s*!important/,
+            'admin.css [hidden]{display:none !important} kuralını içermeli');
+    });
+
+    it('sıralama değişince "görüldü" bozulmaz', async () => {
+        const a = await hikayeOlustur({ title: 'A' });
+        const b = await hikayeOlustur({ title: 'B' });
+
+        await api('POST', `/stories/${a}/seen`, { token: userToken });
+        await api('POST', `/stories/${b}/seen`, { token: userToken });
+
+        await sleep(10);
+        assert.equal((await api('PUT', '/stories/order', { token: adminToken, body: { normalIds: [b, a] } })).status, 200);
+
+        const liste = (await api('GET', '/stories', { token: userToken })).json.data;
+        assert.deepEqual(liste.map(s => s.id), [b, a], 'sıra değişmeli');
+        assert.deepEqual(liste.map(s => s.seen), [true, true],
+            'sıralama içerik değişikliği değil — halkalar yeniden yanmamalı');
+
+        await Story.deleteMany({});
+    });
+
+    it('yayın durumu / başlık / bitiş tarihi değişince "görüldü" bozulmaz', async () => {
+        const id = await hikayeOlustur({ title: 'Eski' });
+        await api('POST', `/stories/${id}/seen`, { token: userToken });
+
+        const seenDurumu = async () =>
+            (await api('GET', '/stories', { token: userToken })).json.data.find(s => s.id === id)?.seen;
+        assert.equal(await seenDurumu(), true);
+
+        for (const govde of [
+            { title: 'Yeni Başlık' },
+            { expiresAt: new Date(Date.now() + 7200_000).toISOString() },
+            { isActive: false },
+            { isActive: true }
+        ]) {
+            await sleep(10);
+            assert.equal((await api('PUT', `/stories/${id}`, { token: adminToken, body: govde })).status, 200);
+        }
+
+        assert.equal(await seenDurumu(), true,
+            'içerik dışı düzenlemeler halkayı yeniden yakmamalı');
+
+        await Story.deleteMany({});
+    });
+
+    it('açılma ve tamamlanma ayrı ayrı kaydedilir; oran panele düşer', async () => {
+        const id = await hikayeOlustur({ title: 'Ölçüm' });
+
+        // Üçüncü bir kullanıcı: açan ama bitirmeyen senaryosu için
+        await createVerifiedUser('hikaye-yarim@test.com');
+        const yarimToken = (await login('hikaye-yarim@test.com')).accessToken;
+
+        // İki kullanıcı açıyor, biri sonuna kadar gidiyor
+        assert.equal((await api('POST', `/stories/${id}/opened`, { token: userToken })).status, 200);
+        assert.equal((await api('POST', `/stories/${id}/opened`, { token: yarimToken })).status, 200);
+        assert.equal((await api('POST', `/stories/${id}/seen`, { token: userToken })).status, 200);
+
+        await sleep(60); // logEvent fire-and-forget, yazımı beklenmez
+
+        // Sorgular bu hikâyeye daraltılıyor: bloktaki diğer testler de /seen
+        // çağırıyor ve olay günlüğü ortak
+        const acilma = await Event.find({ type: 'story_opened', 'data.storyId': String(id) }).lean();
+        assert.equal(acilma.length, 2);
+        assert.equal(acilma[0].data.title, 'Ölçüm', 'hikâye silinse de olay okunabilir kalsın diye başlık yazılmalı');
+        assert.equal(acilma[0].data.slideCount, 1);
+
+        const tamamlama = await Event.find({ type: 'story_completed', 'data.storyId': String(id) }).lean();
+        assert.equal(tamamlama.length, 1);
+
+        const kart = (await api('GET', '/stories/admin', { token: adminToken })).json.data.find(s => s.id === id);
+        assert.equal(kart.openCount, 2);
+        assert.equal(kart.completedCount, 1);
+        assert.equal(kart.completionRate, 0.5);
+
+        // Aynı kullanıcı ikinci kez açarsa oran bozulmamalı — TEKİL kullanıcı sayılır
+        await api('POST', `/stories/${id}/opened`, { token: userToken });
+        await sleep(60);
+        const tekrar = (await api('GET', '/stories/admin', { token: adminToken })).json.data.find(s => s.id === id);
+        assert.equal(tekrar.openCount, 2, 'aynı kullanıcının tekrar açması ayrı kişi sayılmamalı');
+
+        await Event.deleteMany({ type: { $in: ['story_opened', 'story_completed'] } });
+        await Story.deleteMany({});
+    });
+
+    it('açılma kaydı "görüldü" işaretlemez — yarıda bırakan kullanıcının halkası yanık kalır', async () => {
+        const id = await hikayeOlustur();
+
+        await api('POST', `/stories/${id}/opened`, { token: userToken });
+        const liste = (await api('GET', '/stories', { token: userToken })).json.data;
+        assert.equal(liste.find(s => s.id === id).seen, false,
+            'yalnızca açmak yeterli değil; halka sonuna kadar izlenince griye dönmeli');
+
+        assert.equal((await api('POST', '/stories/000000000000000000000000/opened', { token: userToken })).status, 404);
+        assert.equal((await api('POST', `/stories/${id}/opened`)).status, 401);
+
+        await Event.deleteMany({ type: { $in: ['story_opened', 'story_completed'] } });
+        await Story.deleteMany({});
+    });
+
+    it('hiç açılmamış hikâyede oran null döner (0 değil)', async () => {
+        const id = await hikayeOlustur();
+        const kart = (await api('GET', '/stories/admin', { token: adminToken })).json.data.find(s => s.id === id);
+        assert.equal(kart.openCount, 0);
+        assert.equal(kart.completionRate, null,
+            '0 yazmak "kimse bitirmedi" gibi okunur; henüz kimse bakmadı demek');
+        await Story.deleteMany({});
+    });
+
+    it('sabitlenen hikâyeler şeridin başına geçer, grup içi sıra korunur', async () => {
+        const a = await hikayeOlustur({ title: 'A' });
+        const b = await hikayeOlustur({ title: 'B' });
+        const c = await hikayeOlustur({ title: 'C' });
+
+        const sira = async () => (await api('GET', '/stories', { token: userToken })).json.data;
+
+        assert.deepEqual((await sira()).map(s => s.id), [a, b, c], 'başlangıçta ekleme sırası');
+        assert.deepEqual((await sira()).map(s => s.isPinned), [false, false, false]);
+
+        // C ve B sabitlenir (bu sırayla), A sabitlenmemiş kalır
+        assert.equal((await api('PUT', '/stories/order', {
+            token: adminToken, body: { pinnedIds: [c, b], normalIds: [a] }
+        })).status, 200);
+
+        const sonra = await sira();
+        assert.deepEqual(sonra.map(s => s.id), [c, b, a], 'sabitlenenler önce, kendi sıralarında');
+        assert.deepEqual(sonra.map(s => s.isPinned), [true, true, false]);
+
+        // Sabitlenenlerin kendi içinde sırası değişebilir
+        await api('PUT', '/stories/order', { token: adminToken, body: { pinnedIds: [b, c], normalIds: [a] } });
+        assert.deepEqual((await sira()).map(s => s.id), [b, c, a]);
+
+        // Sabitlemeyi kaldırmak hikâyeyi kendi grubuna geri gönderir
+        await api('PUT', '/stories/order', { token: adminToken, body: { pinnedIds: [], normalIds: [a, b, c] } });
+        const bosaltilmis = await sira();
+        assert.deepEqual(bosaltilmis.map(s => s.id), [a, b, c]);
+        assert.ok(bosaltilmis.every(s => s.isPinned === false));
+
+        await Story.deleteMany({});
+    });
+
+    it('yeni hikâye sabitlenenlerin arasına girmez, sona eklenir', async () => {
+        const a = await hikayeOlustur({ title: 'A' });
+        await api('PUT', '/stories/order', { token: adminToken, body: { pinnedIds: [a], normalIds: [] } });
+
+        const b = await hikayeOlustur({ title: 'B' });
+        const liste = (await api('GET', '/stories', { token: userToken })).json.data;
+        assert.deepEqual(liste.map(s => s.id), [a, b], 'sabitlenmiş A başta kalmalı');
+        assert.deepEqual(liste.map(s => s.isPinned), [true, false]);
+
+        await Story.deleteMany({});
+    });
+
+    it('sabitleme "görüldü" bilgisini bozmaz', async () => {
+        const a = await hikayeOlustur({ title: 'A' });
+        const b = await hikayeOlustur({ title: 'B' });
+        await api('POST', `/stories/${a}/seen`, { token: userToken });
+        await api('POST', `/stories/${b}/seen`, { token: userToken });
+
+        await sleep(10);
+        await api('PUT', '/stories/order', { token: adminToken, body: { pinnedIds: [b], normalIds: [a] } });
+
+        const liste = (await api('GET', '/stories', { token: userToken })).json.data;
+        assert.deepEqual(liste.map(s => s.id), [b, a]);
+        assert.deepEqual(liste.map(s => s.seen), [true, true],
+            'sabitleme içerik değişikliği değil — halkalar yeniden yanmamalı');
+
+        await Story.deleteMany({});
+    });
+
+    it('sıralama gövdesi doğrulanır: iki liste de boşsa veya dizi değilse 400', async () => {
+        assert.equal((await api('PUT', '/stories/order', { token: adminToken, body: {} })).status, 400);
+        assert.equal((await api('PUT', '/stories/order', {
+            token: adminToken, body: { pinnedIds: [], normalIds: [] }
+        })).status, 400);
+        const bozuk = await api('PUT', '/stories/order', {
+            token: adminToken, body: { pinnedIds: 'abc', normalIds: [] }
+        });
+        assert.equal(bozuk.status, 400);
+        assert.match(bozuk.json.message, /dizi olmalı/);
+    });
+
+    it('kapak veya slayt değişince "görüldü" sıfırlanır', async () => {
+        const id = await hikayeOlustur();
+        const seenDurumu = async () =>
+            (await api('GET', '/stories', { token: userToken })).json.data.find(s => s.id === id).seen;
+
+        // kapak değişimi
+        await api('POST', `/stories/${id}/seen`, { token: userToken });
+        assert.equal(await seenDurumu(), true);
+        await sleep(10);
+        await api('PUT', `/stories/${id}`, { token: adminToken, body: { coverKey: await gorselYukle('storyCover') } });
+        assert.equal(await seenDurumu(), false, 'kapak değişince halka yeniden yanmalı');
+
+        // slayt değişimi
+        await api('POST', `/stories/${id}/seen`, { token: userToken });
+        assert.equal(await seenDurumu(), true);
+        await sleep(10);
+        await api('PUT', `/stories/${id}`, { token: adminToken, body: { slides: [await gorselYukle()] } });
+        assert.equal(await seenDurumu(), false, 'slayt değişince halka yeniden yanmalı');
+
+        // aynı slaytlar yeniden gönderilirse (panel her kaydetmede hepsini
+        // yolluyor) değişiklik sayılmamalı
+        await api('POST', `/stories/${id}/seen`, { token: userToken });
+        await sleep(10);
+        const mevcut = (await api('GET', '/stories/admin', { token: adminToken })).json.data.find(s => s.id === id);
+        await api('PUT', `/stories/${id}`, {
+            token: adminToken,
+            body: { coverKey: mevcut.coverKey, slides: mevcut.slides.map(s => s.imageKey), title: 'Aynı' }
+        });
+        assert.equal(await seenDurumu(), true, 'değişmeyen görseller yeniden gönderilince halka yanmamalı');
+
+        await Story.deleteMany({});
     });
 });

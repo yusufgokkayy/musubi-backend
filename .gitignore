@@ -9,6 +9,9 @@ firebase-service-account.json
 # Harici kelime listesi (ayrı git klonu, seed için lokalde bulunmalı)
 veri-seti/
 
+# Yüklenen görseller (lokal depolama sürücüsü) — kullanıcı verisi, repoya girmez
+uploads/
+
 # Araç / geçici dosyalar
 .claude/
 *.log

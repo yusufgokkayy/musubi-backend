@@ -46,6 +46,31 @@ app.use('/assets', express.static('assets', {
     immutable: false
 }));
 
+// Yüklenen görseller — yalnızca `local` sürücüde bizden servis edilir;
+// Cloudinary gibi bir sürücüye geçilirse URL'ler oraya işaret eder ve bu mount
+// hiç kurulmaz. Dosya adları içeriğin hash'i olduğu için (bkz. upload.service.js)
+// bir URL'nin işaret ettiği bayt dizisi ASLA değişmez: immutable + 1 yıl cache
+// güvenli, üstelik hikâyeler her anasayfa açılışında istendiği için gerekli.
+const storage = require('./config/storage');
+if (storage.servesLocally) {
+    app.use('/uploads', express.static(storage.root(), {
+        maxAge: '365d',
+        immutable: true,
+        index: false,
+        dotfiles: 'ignore',
+        fallthrough: false
+    }));
+}
+
+// Admin paneli (hikâye yönetimi) — public/ aksine HER ortamda servis edilir,
+// çünkü içerik canlıdan girilir. Sayfanın kendisi korumasızdır; koruma
+// çağırdığı /api uçlarındadır (panel token'sız açılınca giriş ekranı gösterir).
+// helmet'in production CSP'si inline script'i engellediği için panelin JS'i
+// ayrı dosyada durur — admin/admin.js'e inline <script> EKLENMEMELİ.
+app.use('/admin', express.static('admin', {
+    setHeaders: (res) => res.set('X-Robots-Tag', 'noindex')
+}));
+
 // Deploy platformlarının canlılık kontrolü — auth ve rate limit dışında
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
@@ -95,6 +120,10 @@ app.use('/api/streak', requireVerifiedUser, require('./modules/streak/streak.rou
 app.use('/api/home', requireVerifiedUser, require('./modules/home/home.routes'));
 app.use('/api/notifications', requireVerifiedUser, require('./modules/notification/notification.routes'));
 app.use('/api/quiz', requireVerifiedUser, require('./modules/quiz/quiz.routes'));
+// Yükleme uçları ayrıca isAdmin ister — o koruma router'ın kendisinde
+app.use('/api/uploads', requireVerifiedUser, require('./modules/upload/upload.routes'));
+// Hikâyeler: okuma uçları her kullanıcıya açık, yönetim uçları router'da isAdmin'li
+app.use('/api/stories', requireVerifiedUser, require('./modules/story/story.routes'));
 
 app.use(errorHandler);
 
