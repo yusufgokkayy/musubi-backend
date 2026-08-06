@@ -1,12 +1,12 @@
 const express = require('express');
 const NotificationController = require('./notification.controller');
-const { protect, isEmailVerified } = require('../../middlewares/auth.middleware');
+// protect + isEmailVerified app.js'te mount seviyesinde uygulanır
 
 const router = express.Router();
 
-router.get('/',             protect, isEmailVerified, NotificationController.getNotifications);
-router.post('/test',        protect, isEmailVerified, NotificationController.sendTest);
-router.put('/read-all',     protect, isEmailVerified, NotificationController.markAllAsRead);
-router.put('/:id/read',     protect, isEmailVerified, NotificationController.markAsRead);
+router.get('/',             NotificationController.getNotifications);
+router.post('/test',        NotificationController.sendTest);
+router.put('/read-all',     NotificationController.markAllAsRead);
+router.put('/:id/read',     NotificationController.markAsRead);
 
 module.exports = router;

@@ -50,7 +50,7 @@ MONGO_URI=mongodb+srv://...
 JWT_SECRET=<rastgele-uzun-string>
 JWT_EXPIRE=15m
 JWT_REFRESH_SECRET=<farklı-rastgele-uzun-string>
-JWT_REFRESH_EXPIRE=7d
+JWT_REFRESH_EXPIRE=30d
 RESET_PASSWORD_EXPIRE=3600000
 
 CLIENT_URL=http://localhost:5000
@@ -96,11 +96,13 @@ Geliştirme modunda `http://localhost:5000/` adresi, tüm modülleri uçtan uca 
 app.js                     # Express app + route mount'ları (DB/cron/listen içermez — testler bunu kullanır)
 server.js                  # app + DB bağlantısı + cron'lar + listen + graceful shutdown
 .env                       # ortam değişkenleri (gitignore'da; şablonu .env.example)
-config/                    # db, firebase, resend
+assets/                    # marka varlıkları (logo) — her ortamda /assets altında servis edilir
+config/                    # db, firebase, resend, consents, legal/ (hukuki metinlerin kanonik kaynağı)
 middlewares/               # auth (protect, isEmailVerified, isAdmin), rateLimiter, errorHandler
 models/                    # Mongoose şemaları
 modules/<özellik>/         # her özellik: routes → controller → service üçlüsü
-utils/                     # jwt, catchAsync, AppError, sendEmail, notification (FCM), date.util, event.util
+utils/                     # jwt, catchAsync, AppError, sendEmail, notification (FCM), date.util, event.util,
+                           # i18n (TR/EN), webPage (HTML sayfa kabuğu), emailTemplate, password.util
 seeds/                     # seed-veri-seti.js, export-vocab.js (kotoba-analyzer ihracı), PLAN.md
 tests/                     # API sözleşme testleri (npm test)
 ```
@@ -116,7 +118,7 @@ tests/                     # API sözleşme testleri (npm test)
 
 1. **Kayıt** → `POST /api/auth/register` — kullanıcı oluşturulur, N5 kilidi açık `Progress` kayıtları ve `Streak` başlatılır, doğrulama e-postası gönderilir. E-posta gönderilemezse kayıt geri alınır.
 2. **E-posta doğrulama** → `GET /api/auth/verify-email/:token` — çoğu endpoint doğrulanmamış hesaba kapalıdır (`isEmailVerified`).
-3. **Giriş** → `POST /api/auth/login` — `accessToken` (15 dk) + `refreshToken` (7 gün) çifti döner.
+3. **Giriş** → `POST /api/auth/login` — `accessToken` (15 dk) + `refreshToken` (30 gün) çifti döner.
 4. **Token tazeleme** → `POST /api/auth/refresh` — refresh token ile yeni access token alınır.
 
 Refresh token'lar **cihaz başına oturum** olarak saklanır (`DeviceSession` modeli, SHA-256 hash'lenmiş):
@@ -191,13 +193,17 @@ Sorular **her denemede** çekirdek havuzdan taze rastgele üretilir; üç format
 
 | Tip | Ne zaman oluşur |
 |---|---|
-| `daily_task` | Günlük havuz ilk oluşturulduğunda ("Bugün X kelime seni bekliyor") |
+| `daily_task` | Kullanıcının seçtiği hatırlatma saatinde (`notificationSettings.reminderTime`, varsayılan 10:00) ve ayrıca günlük havuz ilk oluşturulduğunda |
+| `daily_word` | Hatırlatma saatinde, günün kelimesi (`data.wordId` ile detaya gidilir) |
+| `streak_reminder` | Serisi **olup** o gün çalışmamış kullanıcıya, yerel saat 19:00'da |
+| `streak_warning` | Aynı koşulla, yerel saat 23:00'te son uyarı |
 | `word_level_down` | Yanlış cevapla seviye düşünce (anlık) veya decay özeti olarak (günde ≤1, `data.source: "decay"`) |
-| `streak_warning` | Serisi olup o gün çalışmamış kullanıcıya, yerel saat 19:00'da |
-| `streak_reminder` | Serisi olmayan ve o gün çalışmamış kullanıcıya, yerel saat 19:00'da |
-| `daily_word` | *Rezerve — günün kelimesi, henüz üretilmiyor* |
 
-Üretim, kullanıcının `notificationSettings` tercihlerine saygı gösterir ve aynı gün aynı tipten mükerrer bildirim oluşturmaz. **FCM push gönderimi henüz bağlı değildir** (altyapı hazır, sonraki faz).
+Hatırlatma saati kullanıcının **kendi saat diliminde** yorumlanır. Bildirim
+cron'u çeyrek saatte bir çalışır; hatırlatma seçilen saatten sonraki 2 saat
+içinde bir kez gönderilir (cron kaçarsa sonraki tur yakalar, ama gece yarısına
+sarkmaz). Üretim `notificationSettings` tercihlerine saygı gösterir ve aynı gün
+aynı tipten mükerrer bildirim oluşturmaz.
 
 ## API Referansı
 
@@ -208,20 +214,54 @@ Tüm yollar `/api` önekiyle başlar. 🔒 = access token gerekli, ✉️ = ayr�
 ### Auth — `/auth`
 | Metot | Yol | Açıklama |
 |---|---|---|
-| POST | `/register` | Kayıt (rate limitli) |
+| POST | `/check-email` | Onboarding e-posta adımı: biçim + müsaitlik |
+| POST | `/register` | Kayıt — onboarding tercihlerini de alır** (rate limitli) |
 | POST | `/login` | Giriş, token çifti döner (rate limitli) |
+| POST | `/social` | Google/Apple ile giriş; hesap yoksa oluşturur |
 | POST | `/refresh` | Yeni access token |
 | POST | `/logout` 🔒 | Tek cihaz (`refreshToken` gövdede) veya tümü |
 | GET | `/me` 🔒✉️ | Mevcut kullanıcı |
-| PUT | `/update-info` 🔒✉️ | Ad, e-posta*, şifre, dailyGoal, fcmToken, bildirim tercihleri |
-| PUT | `/change-password` 🔒✉️ | Şifre değişimi — tüm oturumlar kapanır, taze çift döner |
-| POST | `/forgot-password` | Sıfırlama maili (enumeration korumalı) |
+| GET | `/consents` | Yürürlükteki metin sürümleri; oturumluysa yeniden rıza durumu |
+| PUT | `/consents` 🔒 | Sürüm değişimi sonrası yeniden rıza (KVKK) |
+| PUT | `/update-info` 🔒✉️ | Ad, e-posta*, dailyGoal, fcmToken, timezone, bildirim/uygulama tercihleri |
+| POST | `/verify-password` 🔒✉️ | Şifre değişiminin ilk adımı ("Şifre Girin" ekranı) |
+| PUT | `/change-password` 🔒✉️ | Şifre değişimi — diğer oturumlar kapanır, taze çift döner |
+| POST | `/forgot-password` | Sıfırlama maili |
 | POST | `/reset-password` | Token ile yeni şifre, taze çift döner |
 | GET | `/verify-email/:token` | E-posta doğrulama, taze çift döner |
+| POST | `/verify-email` | Aynısı; `deviceName` yoksa oturum açmaz (web landing) |
 | POST | `/resend-verification-email` | Doğrulama mailini tekrar gönder |
 | DELETE | `/delete-account` 🔒✉️ | Hesap + **tüm ilişkili veri** silinir (KVKK) |
 
 *E-posta değişiminde doğrulama sıfırlanır ve yeni adrese mail gider.
+**`dailyGoal`, `reminderTime`, `dailyReminder`, `timezone`, `consents` — hepsi opsiyonel.
+
+Şifre `update-info`'dan **değiştirilemez** (`400`): tek kapı `change-password`
+(eski şifre doğrulamalı) ve `reset-password` (mail token'lı); ikisi de oturum
+rotasyonu yapar.
+
+### Hukuki metinler — `/legal`
+Kullanıcı Sözleşmesi, Gizlilik Politikası ve KVKK Aydınlatma & Açık Rıza
+Metni **backend'den servis edilir** (uygulamaya gömülü değil): hukuki bir
+düzeltme mağaza onayı beklemeden yayına girer.
+
+| Metot | Yol | Açıklama |
+|---|---|---|
+| GET | `/legal` | Tarayıcı sayfası — metin listesi |
+| GET | `/legal/:doc` | Tarayıcı sayfası — metnin tamamı (`terms`, `privacy`, `kvkk`) |
+| GET | `/api/legal` | JSON — başlık, sürüm, yürürlük tarihi, url |
+| GET | `/api/legal/:doc` | JSON — `intro` + `sections[{heading, body}]` |
+
+Hepsi oturumsuz çalışır. Metinlerin kanonik kaynağı `config/legal/texts.js`;
+rıza sürümleri (`config/consents.js`) oradan **türetilir**, elle yazılmaz.
+Mağaza kayıtlarının istediği gizlilik politikası URL'si: `/legal/privacy`
+(bu sayfalar `robots: index`, token taşıyan landing sayfaları `noindex`).
+
+### E-posta linklerinin indiği web sayfaları
+`GET /verify-email/:token` ve `GET /reset-password/:token` (API dışında, HTML).
+Yan etkisizdirler — mail tarayıcılarının prefetch'i doğrulama yapmaz; işlem
+kullanıcının sayfada tetiklediği POST ile biter. Tasarım uygulamanın Giriş
+Ekranları diliyle aynı, açık/koyu tema ve TR/EN destekli, dış kaynaksız.
 
 ### Kelimeler — `/words`
 | Metot | Yol | Açıklama |
@@ -296,8 +336,9 @@ npm test
 | Zamanlama | İş |
 |---|---|
 | Her saat `:05` | Kendi saat diliminde günü kaçıranların serisini sıfırla |
-| Her saat `:10` | Yerel saati 19:00 olan kullanıcılara seri hatırlatması/uyarısı oluştur |
+| Her 15 dk | Hatırlatma saati (`notificationSettings.reminderTime`) gelen kullanıcılara günlük bildirim; yerel saati 19:00/23:00 olanlara seri hatırlatması/uyarısı oluştur |
 | Her gün 03:00 | Mastery decay: uzun süre tekrar edilmeyen kelimelerin görünen seviyesini düşür + özet bildirim |
+| Her gün 03:30 | 7 gündür doğrulanmamış hesapları yan kayıtlarıyla sil (DB çöpü + e-posta squat temizliği) |
 
 > **Not:** Cron'lar süreç içinde çalışır. Serverless platformlar (ör. Vercel) uzun ömürlü süreç barındırmadığı için bu backend Railway/Render/Fly.io gibi kalıcı Node host'larında çalıştırılmalıdır.
 
@@ -305,10 +346,15 @@ npm test
 
 - `helmet` + production'da origin bazlı CORS (`CORS_ORIGIN`) ve `trust proxy` (rate limit'in proxy arkasında gerçek client IP'sini görmesi için)
 - Rate limit: genel 300 istek/15 dk, hassas auth endpoint'lerinde 20/15 dk; liste endpoint'lerinde `limit` en fazla 100
-- bcrypt (cost 10), şifre min 8 karakter
-- Refresh token'lar DB'de SHA-256 hash'li; cihaz başına oturum, tek tek iptal edilebilir; 8 gün kullanılmayan oturum kayıtları TTL index ile otomatik silinir
+- bcrypt (cost 10); şifre kuralları (8+ karakter, büyük harf, rakam, özel karakter) hem servis katmanında hem `User` şemasında, tek kural kaynağından (`utils/password.util.js`)
+- Feature modüllerinde `protect + isEmailVerified` **mount seviyesinde** uygulanır (`app.js`), rota bazında değil — yeni bir rota korumayı unutamaz
+- Refresh token'lar DB'de SHA-256 hash'li; cihaz başına oturum, tek tek iptal edilebilir. Oturum kaydının TTL'i token'ın kendi `exp` claim'inden türer, yani `JWT_REFRESH_EXPIRE` değişince kendiliğinden uyar
 - Şifre değişimi/sıfırlamada tüm oturumların düşmesi
-- E-posta enumeration koruması (forgot-password ve resend-verification hesap varlığını sızdırmaz), doğrulama/sıfırlama token'ları DB'de hash'li
+- Doğrulama/sıfırlama token'ları DB'de hash'li ve **API yanıtında hiçbir ortamda dönmez** (yalnızca e-postadaki linkte)
+- E-posta enumeration: **bilinçli olarak dürüst cevap** (`check-email` zaten hesap varlığını söylüyor). Karşılığında adres bazlı mail kısıtı — 60 sn cooldown + günde 5 mail, sayaç hesapta tutulduğu için IP değiştirerek aşılamaz
+- `register` ve `/auth/social` aynı onboarding alanlarını kabul eder; tercihler yalnızca hesap açılışında uygulanır, mevcut hesapta yok sayılır
+- Hesap bazlı giriş kilidi: 5/10/15 hatalı denemede 1/5/15 dakika kademeli kilit. IP limitinin kapatamadığı "çok IP'den tek hesabı deneme" senaryosuna karşı; kilit DoS aracına dönüşmesin diye süreler kısa, başarılı giriş ve şifre sıfırlama kilidi kaldırır
+- KVKK açık rıza kaydı hesap açılışında yazılır (sürüm + zaman + IP), sürüm değişince yeniden rıza istenir
 - Arama girdisinde regex escape (ReDoS koruması), JSON body 100 KB limiti
 - Quiz cevap anahtarının sunucuda kalması, sorunun her denemede yeniden üretilmesi
 - Hesap silmede tüm koleksiyonlardan cascade temizlik (KVKK)

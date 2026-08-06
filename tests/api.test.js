@@ -11,7 +11,7 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 
 let mongod, server, BASE;
 let User, Word, UserWord, Notification, QuizAttempt, Event, Progress, Streak, DeviceSession;
-let UserWordService, NotificationService, ProgressService, StreakService, StudySessionService, sendEmail;
+let UserWordService, NotificationService, ProgressService, StreakService, StudySessionService, AuthService, sendEmail;
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -40,7 +40,7 @@ const api = async (method, path, { body, token } = {}) => {
 const createVerifiedUser = async (email, overrides = {}) => {
     const user = await User.create({
         name: 'Test', surname: 'User', email,
-        password: 'testsifre123', isEmailVerified: true,
+        password: 'Testsifre123!', isEmailVerified: true,
         ...overrides
     });
     await ProgressService.initializeProgress(user._id);
@@ -48,9 +48,29 @@ const createVerifiedUser = async (email, overrides = {}) => {
     return user;
 };
 
+// Doğrulama/sıfırlama token'ları API yanıtında BİLEREK dönmüyor (fail-open
+// NODE_ENV kontrolü kaldırıldı — bkz. auth.controller.js). Testler de gerçek
+// kullanıcının izlediği yolu taklit eder: token maildeki linkten okunur.
+const tokenFromLastMail = (path) => {
+    const html = sendEmail.outbox.at(-1)?.html || '';
+    const match = new RegExp(`/${path}/([a-f0-9]{40})`).exec(html);
+    assert.ok(match, `son mailde /${path}/<token> linki bulunamadı`);
+    return match[1];
+};
+const lastVerificationToken = () => tokenFromLastMail('verify-email');
+const lastResetToken = () => tokenFromLastMail('reset-password');
+
+// Adres bazlı mail cooldown'ını geçmiş gibi gösterir — gerçek 60 saniyeyi
+// beklemeden throttle SONRASI akışları test edebilmek için
+const expireMailCooldown = (email, kind = 'verification') =>
+    User.updateOne(
+        { email },
+        { [`mailThrottle.${kind}.lastSentAt`]: new Date(Date.now() - 2 * 60 * 1000) }
+    );
+
 const login = async (email) => {
     const res = await api('POST', '/auth/login', {
-        body: { email, password: 'testsifre123', deviceName: 'test-suite' }
+        body: { email, password: 'Testsifre123!', deviceName: 'test-suite' }
     });
     assert.equal(res.status, 200, 'login başarılı olmalı');
     return res.json;
@@ -82,6 +102,7 @@ before(async () => {
     ProgressService = require('../modules/progress/progress.service');
     StreakService = require('../modules/streak/streak.service');
     StudySessionService = require('../modules/studysession/studysession.service');
+    AuthService = require('../modules/auth/auth.service');
 
     // Test kelime seti: 30 N5 + 50 N4 core kelime (quiz çeldiricileri için yeterli havuz)
     const words = [];
@@ -116,7 +137,7 @@ describe('Auth', () => {
 
         // Enum koruması bilinçli olarak yalnızca forgot-password'de
         const unknown = await api('POST', '/auth/login', {
-            body: { email: 'hicyok@test.com', password: 'testsifre123' }
+            body: { email: 'hicyok@test.com', password: 'Testsifre123!' }
         });
         assert.equal(unknown.status, 404);
         assert.match(unknown.json.message, /kayıtlı bir hesap yok/);
@@ -138,6 +159,484 @@ describe('Auth', () => {
         );
     });
 
+    it('şifre kuralları: yeni şifre belirlenen her kapıda büyük harf, rakam ve özel karakter aranır', async () => {
+        const zayif = [
+            ['kisa1A!', /çok kısa/],
+            ['hepsikucuk123!', /büyük harf/],
+            ['SadeceHarfler!', /büyük harf/],   // rakam yok → aynı birleşik mesaj
+            ['OzelKarakterYok123', /özel karakter/]
+        ];
+
+        // Kapı 1: kayıt
+        for (const [password, beklenen] of zayif) {
+            const res = await api('POST', '/auth/register', {
+                body: { name: 'A', surname: 'B', email: `zayif-${Date.now()}@test.com`, password }
+            });
+            assert.equal(res.status, 400, `${password} reddedilmeli`);
+            assert.match(res.json.message, beklenen);
+        }
+        assert.equal(
+            await User.countDocuments({ email: /^zayif-/ }), 0,
+            'reddedilen kayıttan yetim kullanıcı kalmamalı'
+        );
+
+        // Kapı 2: şifre sıfırlama
+        await createVerifiedUser('kural-reset@test.com');
+        await api('POST', '/auth/forgot-password', { body: { email: 'kural-reset@test.com' } });
+        const rp = await api('POST', '/auth/reset-password', {
+            body: { token: lastResetToken(), password: 'ozelkarakteryok123' }
+        });
+        assert.equal(rp.status, 400);
+        assert.match(rp.json.message, /büyük harf/);
+
+        // Kapı 3: şifre değiştirme — eski şifre hatası kural hatasının ÖNÜNDE gelir
+        const token = (await login('kural-reset@test.com')).accessToken;
+        const yanlisEski = await api('PUT', '/auth/change-password', {
+            token, body: { oldPassword: 'bambaska-sifre', newPassword: 'zayif' }
+        });
+        assert.equal(yanlisEski.status, 401, 'önce mevcut şifre doğrulanır');
+
+        const cp = await api('PUT', '/auth/change-password', {
+            token, body: { oldPassword: 'Testsifre123!', newPassword: 'zayifsifre' }
+        });
+        assert.equal(cp.status, 400);
+        assert.match(cp.json.message, /büyük harf/);
+
+        // Kural öncesi açılmış zayıf şifreli hesap giriş yapmaya DEVAM eder.
+        // Böyle bir hesabı YAZMAK artık validasyondan açık muafiyet ister —
+        // kural veri katmanında da uygulanıyor (migration/import için kaçış yolu)
+        const eski = new User({
+            name: 'Test', surname: 'User', email: 'eski-zayif@test.com',
+            password: 'zayifsifre', isEmailVerified: true
+        });
+        await eski.save({ validateBeforeSave: false });
+
+        const eskiLogin = await api('POST', '/auth/login', {
+            body: { email: 'eski-zayif@test.com', password: 'zayifsifre' }
+        });
+        assert.equal(eskiLogin.status, 200, 'login kuralı BİLEREK uygulamaz');
+    });
+
+    it('şifre kuralları veri katmanında da uygulanır (servisi atlayan yollar için)', async () => {
+        // Servis çağrılmadan doğrudan model üzerinden zayıf şifre yazılamaz
+        await assert.rejects(
+            User.create({ name: 'A', surname: 'B', email: 'model-zayif@test.com', password: 'hepsikucuk123' }),
+            /büyük harf/
+        );
+        assert.equal(await User.countDocuments({ email: 'model-zayif@test.com' }), 0);
+
+        // Kurala uyan şifre sorunsuz yazılır
+        const ok = await User.create({
+            name: 'A', surname: 'B', email: 'model-uygun@test.com', password: 'Kuralauyan1!'
+        });
+        assert.ok(ok._id);
+
+        // KRİTİK: şifre select edilip ALAKASIZ bir sebeple kaydedilirse kural
+        // bcrypt hash'ine karşı çalışmamalı (isModified koruması)
+        const selected = await User.findById(ok._id).select('+password');
+        selected.name = 'Değişti';
+        await assert.doesNotReject(
+            selected.save(),
+            'hash yeniden doğrulanmamalı'
+        );
+
+        // Gerçek şifre değişimi ise hâlâ denetlenir
+        selected.password = 'yinehepsikucuk123';
+        await assert.rejects(selected.save(), /büyük harf/);
+    });
+
+    it('register onboarding seçimlerini kabul eder: günlük hedef, hatırlatma saati, timezone', async () => {
+        const email = `onboarding-${Date.now()}@test.com`;
+        const res = await api('POST', '/auth/register', {
+            body: {
+                name: 'Emir', surname: 'Soylu', email, password: 'Emechar1905!',
+                dailyGoal: 40, reminderTime: '14:30', timezone: 'Europe/Berlin'
+            }
+        });
+        assert.equal(res.status, 201);
+
+        const user = await User.findOne({ email });
+        assert.equal(user.dailyGoal, 40);
+        assert.equal(user.notificationSettings.reminderTime, '14:30');
+        assert.equal(user.timezone, 'Europe/Berlin');
+        assert.equal(user.notificationSettings.streakReminder, true,
+            'tek alan verilince diğer bildirim tercihleri varsayılanda kalmalı');
+    });
+
+    it('"Şimdilik Geç": hatırlatma kapatılır, saat varsayılanda kalır', async () => {
+        const email = `gec-${Date.now()}@test.com`;
+        const res = await api('POST', '/auth/register', {
+            body: { name: 'A', surname: 'B', email, password: 'Emechar1905!', dailyReminder: false }
+        });
+        assert.equal(res.status, 201);
+
+        const user = await User.findOne({ email });
+        assert.equal(user.notificationSettings.dailyReminder, false);
+        assert.equal(user.notificationSettings.reminderTime, '10:00');
+    });
+
+    it('geçersiz hatırlatma saati 400 döner', async () => {
+        const res = await api('PUT', '/auth/update-info', {
+            token: (await login('auth@test.com')).accessToken,
+            body: { notificationSettings: { reminderTime: '25:00' } }
+        });
+        assert.equal(res.status, 400);
+    });
+
+    it('Bildirim Ayarları: tek alan güncellenir, kardeş tercihler korunur', async () => {
+        const user = await createVerifiedUser('bildirim-ayar@test.com');
+        const token = (await login('bildirim-ayar@test.com')).accessToken;
+
+        // Önce bir kardeş alanı varsayılandan farklılaştır
+        await api('PUT', '/auth/update-info', {
+            token, body: { notificationSettings: { streakReminder: false } }
+        });
+
+        // Sonra yalnız saati değiştir — kardeşi ezmemeli
+        const res = await api('PUT', '/auth/update-info', {
+            token, body: { notificationSettings: { reminderTime: '21:15' } }
+        });
+        assert.equal(res.status, 200);
+
+        const fresh = await User.findById(user._id);
+        assert.equal(fresh.notificationSettings.reminderTime, '21:15');
+        assert.equal(fresh.notificationSettings.streakReminder, false, 'önceki değişiklik korunmalı');
+        assert.equal(fresh.notificationSettings.dailyReminder, true, 'dokunulmayan varsayılan korunmalı');
+        assert.equal(fresh.notificationSettings.wordLevelDown, true);
+    });
+
+    it('hesap bazlı giriş kilidi: 5 hatalı denemeden sonra kilitlenir, doğru şifre bile geçmez', async () => {
+        await createVerifiedUser('kilit@test.com');
+
+        // İlk 4 hata: normal 401
+        for (let i = 0; i < 4; i++) {
+            const res = await api('POST', '/auth/login', {
+                body: { email: 'kilit@test.com', password: 'YanlisSifre1!' }
+            });
+            assert.equal(res.status, 401, `${i + 1}. deneme henüz kilitlememeli`);
+        }
+
+        // 5. hata eşiği geçer → kilit
+        const besinci = await api('POST', '/auth/login', {
+            body: { email: 'kilit@test.com', password: 'YanlisSifre1!' }
+        });
+        assert.equal(besinci.status, 429);
+        assert.match(besinci.json.message, /hatalı giriş/);
+
+        // Kilitliyken DOĞRU şifre de geçmemeli — yoksa kilit anlamsız olurdu
+        const dogruSifre = await api('POST', '/auth/login', {
+            body: { email: 'kilit@test.com', password: 'Testsifre123!' }
+        });
+        assert.equal(dogruSifre.status, 429, 'kilit doğru şifreyi de reddetmeli');
+
+        // Kilit süresi dolunca giriş çalışır ve sayaç sıfırlanır
+        await User.updateOne({ email: 'kilit@test.com' },
+            { 'loginThrottle.lockedUntil': new Date(Date.now() - 1000) });
+        const sonra = await api('POST', '/auth/login', {
+            body: { email: 'kilit@test.com', password: 'Testsifre123!', deviceName: 'test-suite' }
+        });
+        assert.equal(sonra.status, 200);
+
+        const user = await User.findOne({ email: 'kilit@test.com' });
+        assert.equal(user.loginThrottle.failureCount, 0, 'başarılı giriş sayacı sıfırlamalı');
+        assert.equal(user.loginThrottle.lockedUntil, undefined);
+    });
+
+    it('giriş kilidi: sosyal hesap uyarısı ve bilinmeyen adres sayaca işlenmez', async () => {
+        // Şifresiz sosyal hesaba yapılan denemeler şifre denemesi değildir
+        const sosyal = await User.create({
+            name: 'S', surname: 'T', email: 'kilit-sosyal@test.com',
+            provider: 'google', providerId: 'kilit-google-1', isEmailVerified: true
+        });
+        for (let i = 0; i < 6; i++) {
+            const res = await api('POST', '/auth/login', {
+                body: { email: 'kilit-sosyal@test.com', password: 'Herhangi1!' }
+            });
+            assert.equal(res.status, 400, 'sosyal hesap yönlendirmesi 400 kalmalı, kilide dönüşmemeli');
+        }
+        const fresh = await User.findById(sosyal._id);
+        assert.ok(!fresh.loginThrottle?.failureCount, 'sosyal uyarı sayaca işlenmemeli');
+    });
+
+    it('giriş kilidi: şifre sıfırlama kilidi kaldırır (çıkmaza girilmemeli)', async () => {
+        await createVerifiedUser('kilit-reset@test.com');
+        for (let i = 0; i < 5; i++) {
+            await api('POST', '/auth/login', {
+                body: { email: 'kilit-reset@test.com', password: 'YanlisSifre1!' }
+            });
+        }
+        const kilitli = await api('POST', '/auth/login', {
+            body: { email: 'kilit-reset@test.com', password: 'Testsifre123!' }
+        });
+        assert.equal(kilitli.status, 429);
+
+        await api('POST', '/auth/forgot-password', { body: { email: 'kilit-reset@test.com' } });
+        const rp = await api('POST', '/auth/reset-password', {
+            body: { token: lastResetToken(), password: 'Yepyeni1Sifre!' }
+        });
+        assert.equal(rp.status, 200);
+
+        // Sıfırlamadan hemen sonra giriş çalışmalı
+        const giris = await api('POST', '/auth/login', {
+            body: { email: 'kilit-reset@test.com', password: 'Yepyeni1Sifre!', deviceName: 'test-suite' }
+        });
+        assert.equal(giris.status, 200, 'sıfırlama sonrası kilit kalkmalı');
+    });
+
+    it('verification-status: doğrulama bekleme ekranı durumu 200 ile okur, 403 ile değil', async () => {
+        const email = `durum-${Date.now()}@test.com`;
+        const reg = await api('POST', '/auth/register', {
+            body: { name: 'A', surname: 'B', email, password: 'Emechar1905!', deviceName: 'test-suite' }
+        });
+        const token = reg.json.accessToken;
+
+        // Doğrulanmadan önce: 200 + false (403 DEĞİL — durum sinyali hata kodu olmamalı)
+        const once = await api('GET', '/auth/verification-status', { token });
+        assert.equal(once.status, 200, 'doğrulanmamış kullanıcı da bu ucu okuyabilmeli');
+        assert.equal(once.json.data.isEmailVerified, false);
+        assert.equal(once.json.data.email, email, 'ekranda gösterilecek adres');
+
+        // Aynı token'la /auth/me hâlâ 403 — bu uç onun yerine geçmiyor
+        const me = await api('GET', '/auth/me', { token });
+        assert.equal(me.status, 403);
+
+        // Kullanıcı web'den doğrular (deviceName yok → oturum açılmaz)
+        await api('POST', '/auth/verify-email', { body: { token: lastVerificationToken() } });
+
+        // Uygulamadaki buton aynı token'la tekrar sorar → artık true
+        const sonra = await api('GET', '/auth/verification-status', { token });
+        assert.equal(sonra.json.data.isEmailVerified, true);
+
+        // Ve mevcut token'la doğrudan içeri girebilmeli — yeniden giriş gerekmez
+        const meSonra = await api('GET', '/auth/me', { token });
+        assert.equal(meSonra.status, 200, 'kayıt token\'ı doğrulama sonrası çalışmalı');
+    });
+
+    it('KVKK: rıza kaydı hesap açılışında yazılır, ispat için bağlam saklanır', async () => {
+        const { CURRENT_CONSENT_VERSIONS } = require('../config/consents');
+        const email = `riza-${Date.now()}@test.com`;
+
+        const res = await api('POST', '/auth/register', {
+            body: { name: 'A', surname: 'B', email, password: 'Emechar1905!' }
+        });
+        assert.equal(res.status, 201);
+
+        const user = await User.findOne({ email });
+        assert.equal(user.consents.terms, CURRENT_CONSENT_VERSIONS.terms);
+        assert.equal(user.consents.privacy, CURRENT_CONSENT_VERSIONS.privacy);
+        assert.equal(user.consents.kvkk, CURRENT_CONSENT_VERSIONS.kvkk);
+        assert.ok(user.consents.acceptedAt, 'rıza zamanı kaydedilmeli');
+        assert.ok(user.consents.ip, 'ispat için IP kaydedilmeli');
+    });
+
+    it('KVKK: güncel olmayan sürüm gönderen istemcinin kaydı reddedilir', async () => {
+        const email = `eskisurum-${Date.now()}@test.com`;
+        const res = await api('POST', '/auth/register', {
+            body: {
+                name: 'A', surname: 'B', email, password: 'Emechar1905!',
+                consents: { terms: '0.9', privacy: '1.0', kvkk: '1.0' }
+            }
+        });
+        assert.equal(res.status, 400, 'kullanıcının görmediği metne rıza kaydedilemez');
+        assert.match(res.json.message, /güncel değil/);
+        assert.equal(await User.countDocuments({ email }), 0, 'rızasız hesap oluşmamalı');
+    });
+
+    it('KVKK: sürüm değişince yeniden rıza gerekir ve kaydedilebilir', async () => {
+        const consentsConfig = require('../config/consents');
+        const email = `yeniden-${Date.now()}@test.com`;
+        await api('POST', '/auth/register', {
+            body: { name: 'A', surname: 'B', email, password: 'Emechar1905!' }
+        });
+        await User.updateOne({ email }, { isEmailVerified: true });
+        const token = (await api('POST', '/auth/login', {
+            body: { email, password: 'Emechar1905!', deviceName: 'test-suite' }
+        })).json.accessToken;
+
+        // Başlangıçta güncel
+        const before = await api('GET', '/auth/consents', { token });
+        assert.equal(before.json.data.reconsentRequired, false);
+
+        // Gizlilik politikası sürümü yükseltilir
+        const original = consentsConfig.CURRENT_CONSENT_VERSIONS.privacy;
+        consentsConfig.CURRENT_CONSENT_VERSIONS.privacy = '2.0';
+        try {
+            const after = await api('GET', '/auth/consents', { token });
+            assert.equal(after.json.data.reconsentRequired, true);
+            assert.deepEqual(after.json.data.outdated, ['privacy'], 'yalnız değişen metin listelenmeli');
+
+            const accept = await api('PUT', '/auth/consents', {
+                token, body: { consents: { privacy: '2.0' } }
+            });
+            assert.equal(accept.status, 200);
+
+            const done = await api('GET', '/auth/consents', { token });
+            assert.equal(done.json.data.reconsentRequired, false);
+            assert.equal(done.json.data.accepted.privacy, '2.0');
+        } finally {
+            consentsConfig.CURRENT_CONSENT_VERSIONS.privacy = original;
+        }
+    });
+
+    it('KVKK: oturumsuz da güncel sürümler okunabilir (giriş ekranı)', async () => {
+        const res = await api('GET', '/auth/consents');
+        assert.equal(res.status, 200);
+        assert.ok(res.json.data.current.kvkk, 'güncel sürümler oturumsuz dönmeli');
+        assert.equal(res.json.data.accepted, undefined, 'oturumsuz istekte kullanıcı verisi dönmemeli');
+
+        // Karşılama ekranı metin linklerini buradan kurar
+        const kvkk = res.json.data.docs.find(d => d.key === 'kvkk');
+        assert.equal(kvkk.url, '/legal/kvkk');
+        assert.equal(kvkk.version, res.json.data.current.kvkk,
+            'listedeki sürüm, rıza karşılaştırmasındaki sürümle aynı olmalı');
+        assert.ok(kvkk.title && kvkk.effectiveDate);
+    });
+
+    it('doğrulanmamış kullanıcı hiçbir feature modülüne giremez (mount seviyesi koruma)', async () => {
+        const email = `korumasiz-${Date.now()}@test.com`;
+        const reg = await api('POST', '/auth/register', {
+            body: { name: 'A', surname: 'B', email, password: 'Emechar1905!', deviceName: 'test-suite' }
+        });
+        const token = reg.json.accessToken;
+
+        // app.js'te requireVerifiedUser ile mount edilen HER prefix burada olmalı.
+        // Yeni bir modül eklenip listeye yazılmazsa bu test onu yakalamaz —
+        // ama mount seviyesindeki koruma sayesinde yeni modül zaten korumalı doğar.
+        const korumali = [
+            ['GET', '/words'], ['GET', '/words/search?q=a'],
+            ['GET', '/userwords/stats'], ['GET', '/userwords/list'],
+            ['GET', '/sessions/today'], ['GET', '/sessions/history'],
+            ['GET', '/progress'],
+            ['GET', '/streak'],
+            ['GET', '/home/summary'], ['GET', '/home/calendar'],
+            ['GET', '/notifications'],
+            ['GET', '/quiz/status']
+        ];
+
+        for (const [method, path] of korumali) {
+            const res = await api(method, path, { token });
+            assert.equal(res.status, 403, `${method} ${path} doğrulanmamış kullanıcıya 403 dönmeli`);
+        }
+
+        // Tokensiz istek 401 (protect), doğrulanmamış token 403 (isEmailVerified)
+        const anon = await api('GET', '/home/summary');
+        assert.equal(anon.status, 401, 'tokensiz istek 401 olmalı');
+    });
+
+    it('e-posta büyük/küçük harf ve boşluktan bağımsız tek hesaptır', async () => {
+        const res = await api('POST', '/auth/register', {
+            body: { name: 'Emir', surname: 'S', email: '  Emir@Gmail.COM ', password: 'Emechar1905!' }
+        });
+        assert.equal(res.status, 201);
+
+        // Depolanan değer normalize edilmiş olmalı
+        assert.ok(await User.findOne({ email: 'emir@gmail.com' }), 'küçük harfle saklanmalı');
+
+        // check-email aynı adresi farklı yazımla "müsait" göstermemeli
+        const check = await api('POST', '/auth/check-email', { body: { email: 'EMIR@GMAIL.COM' } });
+        assert.equal(check.json.available, false, 'farklı yazım ikinci hesap açmamalı');
+
+        // Login farklı yazımla çalışmalı (asıl kullanıcı acısı buydu)
+        const upper = await api('POST', '/auth/login', {
+            body: { email: 'Emir@Gmail.com', password: 'Emechar1905!' }
+        });
+        assert.equal(upper.status, 200, 'büyük harfli giriş de aynı hesabı bulmalı');
+
+        // Şifre sıfırlama da aynı hesabı bulmalı
+        const fp = await api('POST', '/auth/forgot-password', { body: { email: 'EMIR@gmail.com' } });
+        assert.equal(fp.status, 200);
+    });
+
+    it('ad-soyad kırpılır; yalnız boşluktan oluşan ve aşırı uzun isim reddedilir', async () => {
+        const ok = await api('POST', '/auth/register', {
+            body: { name: '  Emirhan  ', surname: '  Soylu ', email: `kirp-${Date.now()}@test.com`, password: 'Emechar1905!' }
+        });
+        assert.equal(ok.status, 201);
+        assert.equal(ok.json.data.name, 'Emirhan', 'baştaki/sondaki boşluk kırpılmalı');
+
+        const bosluk = await api('POST', '/auth/register', {
+            body: { name: '   ', surname: 'S', email: `bos-${Date.now()}@test.com`, password: 'Emechar1905!' }
+        });
+        assert.equal(bosluk.status, 400, 'yalnız boşluktan oluşan isim required\'ı geçmemeli');
+
+        const uzun = await api('POST', '/auth/register', {
+            body: { name: 'A'.repeat(51), surname: 'S', email: `uzun-${Date.now()}@test.com`, password: 'Emechar1905!' }
+        });
+        assert.equal(uzun.status, 400, '50 karakteri aşan isim reddedilmeli');
+    });
+
+    it('mail bombardımanı: aynı adrese arka arkaya doğrulama maili gönderilemez', async () => {
+        const email = `bombardiman-${Date.now()}@test.com`;
+        await api('POST', '/auth/register', { body: { name: 'A', surname: 'B', email, password: 'Emechar1905!' } });
+
+        // Kayıt maili de sayaca girer; ilk "Tekrar Gönder" ancak cooldown
+        // dolunca çalışır (mobilde bu buton geri sayım göstermeli)
+        const erken = await api('POST', '/auth/resend-verification-email', { body: { email } });
+        assert.equal(erken.status, 429, 'kayıttan hemen sonra tekrar gönderim engellenmeli');
+
+        await expireMailCooldown(email);
+        const ilk = await api('POST', '/auth/resend-verification-email', { body: { email } });
+        assert.equal(ilk.status, 200);
+
+        const outLen = sendEmail.outbox.length;
+        const ikinci = await api('POST', '/auth/resend-verification-email', { body: { email } });
+        assert.equal(ikinci.status, 429, 'cooldown dolmadan ikinci mail gönderilmemeli');
+        assert.equal(sendEmail.outbox.length, outLen, 'engellenen istek mail ATMAMALI');
+
+        // Kısıt IP'de değil hesapta tutulduğu için sayaç kullanıcıda görünür
+        const user = await User.findOne({ email });
+        assert.ok(user.mailThrottle.verification.lastSentAt);
+        assert.equal(user.mailThrottle.verification.dayCount, 2, 'register + resend');
+    });
+
+    it('doğrulanmamış hesap 7 gün sonra yan kayıtlarıyla temizlenir, adres yeniden kayda açılır', async () => {
+        const email = `cop-${Date.now()}@test.com`;
+        await api('POST', '/auth/register', { body: { name: 'A', surname: 'B', email, password: 'Emechar1905!' } });
+        const user = await User.findOne({ email });
+        assert.equal(await Progress.countDocuments({ user: user._id }), 5);
+
+        // Henüz taze — temizlik dokunmamalı
+        await AuthService.purgeUnverifiedAccounts();
+        assert.ok(await User.findById(user._id), 'yeni hesap silinmemeli');
+
+        // 8 gün öncesine çek
+        await User.updateOne({ _id: user._id }, { createdAt: new Date(Date.now() - 8 * 86400000) });
+        const { purged } = await AuthService.purgeUnverifiedAccounts();
+        assert.ok(purged >= 1);
+
+        assert.equal(await User.findById(user._id), null, 'hesap silinmeli');
+        assert.equal(await Progress.countDocuments({ user: user._id }), 0, 'yan kayıtlar da silinmeli');
+        assert.equal(await Streak.countDocuments({ user: user._id }), 0);
+        assert.equal(await DeviceSession.countDocuments({ user: user._id }), 0);
+
+        // Squat edilmiş adres yeniden kullanılabilir olmalı
+        const tekrar = await api('POST', '/auth/register', {
+            body: { name: 'C', surname: 'D', email, password: 'Emechar1905!' }
+        });
+        assert.equal(tekrar.status, 201, 'temizlenen adres yeniden kayda açılmalı');
+    });
+
+    it('doğrulanmış hesap temizlikten etkilenmez', async () => {
+        const user = await createVerifiedUser('kalici@test.com');
+        await User.updateOne({ _id: user._id }, { createdAt: new Date(Date.now() - 90 * 86400000) });
+        await AuthService.purgeUnverifiedAccounts();
+        assert.ok(await User.findById(user._id), 'doğrulanmış hesap asla silinmemeli');
+    });
+
+    it('oturum kaydının ömrü refresh token\'ın kendi exp claim\'inden gelir', async () => {
+        const user = await createVerifiedUser('ttl@test.com');
+        const tokens = await login('ttl@test.com');
+
+        const session = await DeviceSession.findOne({ user: user._id });
+        const { exp } = require('jsonwebtoken').decode(tokens.refreshToken);
+
+        assert.ok(session.expiresAt, 'expiresAt set edilmeli (TTL index bu alanda)');
+        assert.equal(
+            session.expiresAt.getTime(), exp * 1000,
+            'kayıt ile token TAM olarak aynı anda ölmeli — JWT_REFRESH_EXPIRE değişince TTL kendiliğinden uymalı'
+        );
+    });
+
     it('refresh geçerli token ile 200, bozuk token ile 401', async () => {
         const tokens = await login('auth@test.com');
         const ok = await api('POST', '/auth/refresh', { body: { refreshToken: tokens.refreshToken } });
@@ -154,7 +653,7 @@ describe('Auth', () => {
 
         const cp = await api('PUT', '/auth/change-password', {
             token: devA.accessToken,
-            body: { oldPassword: 'testsifre123', newPassword: 'yepyenisifre123', deviceName: 'test-suite' }
+            body: { oldPassword: 'Testsifre123!', newPassword: 'Yepyenisifre123!', deviceName: 'test-suite' }
         });
         assert.equal(cp.status, 200);
         assert.ok(cp.json.data.accessToken && cp.json.data.refreshToken);
@@ -174,19 +673,20 @@ describe('Auth', () => {
 
 describe('E-posta akışları', () => {
     const registerBody = (email, name = 'Posta') => ({
-        body: { name, surname: 'Test', email, password: 'testsifre123', deviceName: 'test-suite' }
+        body: { name, surname: 'Test', email, password: 'Testsifre123!', deviceName: 'test-suite' }
     });
 
     it('register doğrulama maili gönderir; maildeki token e-postayı doğrular', async () => {
         const res = await api('POST', '/auth/register', registerBody('posta@test.com'));
         assert.equal(res.status, 201);
         assert.ok(res.json.accessToken && res.json.refreshToken);
-        assert.ok(res.json.verificationToken, 'test/dev ortamında token yanıtta döner');
+        assert.equal(res.json.verificationToken, undefined,
+            'doğrulama token\'ı hiçbir ortamda yanıtta dönmemeli');
 
         const mail = sendEmail.outbox.at(-1);
         assert.equal(mail.to, 'posta@test.com');
-        assert.match(mail.subject, /Musubi - Email Doğrulama/);
-        assert.ok(mail.html.includes(res.json.verificationToken), 'maildeki link yanıttaki token ile aynı olmalı');
+        assert.match(mail.subject, /Musubi - E-posta Doğrulama/);
+        const verificationToken = lastVerificationToken();
 
         // Yan kayıtlar oluşmuş olmalı
         const user = await User.findOne({ email: 'posta@test.com' });
@@ -197,7 +697,7 @@ describe('E-posta akışları', () => {
         const me = await api('GET', '/auth/me', { token: res.json.accessToken });
         assert.equal(me.status, 403);
 
-        const verify = await api('GET', `/auth/verify-email/${res.json.verificationToken}`);
+        const verify = await api('GET', `/auth/verify-email/${verificationToken}`);
         assert.equal(verify.status, 200);
         assert.ok(verify.json.data.accessToken && verify.json.data.refreshToken, 'doğrulama taze çift dönmeli');
 
@@ -238,6 +738,7 @@ describe('E-posta akışları', () => {
         assert.equal(verified.status, 400, 'zaten doğrulanmışa tekrar mail atılmaz');
 
         await api('POST', '/auth/register', registerBody('tekrar@test.com'));
+        await expireMailCooldown('tekrar@test.com'); // kayıt maili sayaca girdi
         const res = await api('POST', '/auth/resend-verification-email', { body: { email: 'tekrar@test.com' } });
         assert.equal(res.status, 200);
 
@@ -252,27 +753,31 @@ describe('E-posta akışları', () => {
         await createVerifiedUser('sifirla@test.com');
         const oldDevice = await login('sifirla@test.com');
 
+        // Enumeration politikası: her uçta dürüst cevap (check-email zaten
+        // hesap varlığını söylüyor; gizlemek sıfır kazanç, UX kaybıydı)
+        const outLen = sendEmail.outbox.length;
         const unknown = await api('POST', '/auth/forgot-password', { body: { email: 'hicyok@test.com' } });
-        assert.equal(unknown.status, 200, 'enumeration koruması');
+        assert.equal(unknown.status, 404, 'bilinmeyen adres dürüstçe söylenir');
+        assert.equal(sendEmail.outbox.length, outLen, 'bilinmeyen adrese mail atılmamalı');
 
         const fp = await api('POST', '/auth/forgot-password', { body: { email: 'sifirla@test.com' } });
         assert.equal(fp.status, 200);
-        assert.ok(fp.json.resetToken, 'test/dev ortamında token yanıtta döner');
+        assert.equal(fp.json.resetToken, undefined, 'sıfırlama token\'ı yanıtta dönmemeli');
 
         const mail = sendEmail.outbox.at(-1);
         assert.equal(mail.to, 'sifirla@test.com');
         assert.match(mail.subject, /Şifre Sıfırlama/);
-        assert.ok(mail.html.includes(fp.json.resetToken));
+        const resetToken = lastResetToken();
 
         const rp = await api('POST', '/auth/reset-password', {
-            body: { token: fp.json.resetToken, password: 'yenisifre123', deviceName: 'test-suite' }
+            body: { token: resetToken, password: 'Yenisifre123!', deviceName: 'test-suite' }
         });
         assert.equal(rp.status, 200);
         assert.ok(rp.json.data.accessToken && rp.json.data.refreshToken);
 
         // Aynı token ikinci kez kullanılamaz
         const replay = await api('POST', '/auth/reset-password', {
-            body: { token: fp.json.resetToken, password: 'baskasifre123' }
+            body: { token: resetToken, password: 'Baskasifre123!' }
         });
         assert.equal(replay.status, 400);
 
@@ -280,12 +785,12 @@ describe('E-posta akışları', () => {
         assert.equal(oldRefresh.status, 401, 'eski cihazın oturumu düşmeli');
 
         const oldLogin = await api('POST', '/auth/login', {
-            body: { email: 'sifirla@test.com', password: 'testsifre123' }
+            body: { email: 'sifirla@test.com', password: 'Testsifre123!' }
         });
         assert.equal(oldLogin.status, 401, 'eski şifre çalışmamalı');
 
         const newLogin = await api('POST', '/auth/login', {
-            body: { email: 'sifirla@test.com', password: 'yenisifre123' }
+            body: { email: 'sifirla@test.com', password: 'Yenisifre123!' }
         });
         assert.equal(newLogin.status, 200);
     });
@@ -293,8 +798,8 @@ describe('E-posta akışları', () => {
     it('doğrulanmamış hesap da şifre sıfırlayabilir', async () => {
         await api('POST', '/auth/register', registerBody('dogrulanmamis@test.com'));
         const fp = await api('POST', '/auth/forgot-password', { body: { email: 'dogrulanmamis@test.com' } });
-        assert.equal(fp.status, 200);
-        assert.ok(fp.json.resetToken, 'doğrulanmamış hesaba 403 dönülmemeli — link sahipliği zaten kanıtlar');
+        assert.equal(fp.status, 200, 'doğrulanmamış hesaba 403 dönülmemeli — link sahipliği zaten kanıtlar');
+        assert.ok(lastResetToken(), 'sıfırlama maili gitmeli');
     });
 
     it('yeni şifre eskisiyle aynı olamaz: change-password, reset-password ve update-info kapıları', async () => {
@@ -303,37 +808,38 @@ describe('E-posta akışları', () => {
 
         // change-password: eski === yeni → 400 (oturumlar sebepsiz düşürülmez)
         const cp = await api('PUT', '/auth/change-password', {
-            token, body: { oldPassword: 'testsifre123', newPassword: 'testsifre123' }
+            token, body: { oldPassword: 'Testsifre123!', newPassword: 'Testsifre123!' }
         });
         assert.equal(cp.status, 400);
         assert.match(cp.json.message, /aynı olamaz/);
 
         // reset-password: eski şifre yazılmadan geldiği için hash'e karşı kontrol
-        const fp = await api('POST', '/auth/forgot-password', { body: { email: 'aynisifre@test.com' } });
+        await api('POST', '/auth/forgot-password', { body: { email: 'aynisifre@test.com' } });
+        const resetToken = lastResetToken();
         const rp = await api('POST', '/auth/reset-password', {
-            body: { token: fp.json.resetToken, password: 'testsifre123' }
+            body: { token: resetToken, password: 'Testsifre123!' }
         });
         assert.equal(rp.status, 400);
         assert.match(rp.json.message, /aynı olamaz/);
 
         // Aynı token farklı şifreyle hâlâ kullanılabilir (400 token'ı tüketmez)
         const rp2 = await api('POST', '/auth/reset-password', {
-            body: { token: fp.json.resetToken, password: 'apayrisifre123' }
+            body: { token: resetToken, password: 'Apayrisifre123!' }
         });
         assert.equal(rp2.status, 200);
 
         // update-info şifre kabul ETMEZ: eski şifre doğrulamasız + rotasyonsuz
         // değişim güvenlik açığıydı — tek kapı change/reset akışları
         const newToken = (await api('POST', '/auth/login', {
-            body: { email: 'aynisifre@test.com', password: 'apayrisifre123', deviceName: 'test-suite' }
+            body: { email: 'aynisifre@test.com', password: 'Apayrisifre123!', deviceName: 'test-suite' }
         })).json.accessToken;
         const upd = await api('PUT', '/auth/update-info', {
-            token: newToken, body: { password: 'baskabirsifre123' }
+            token: newToken, body: { password: 'Baskabirsifre123!' }
         });
         assert.equal(upd.status, 400);
 
         const still = await api('POST', '/auth/login', {
-            body: { email: 'aynisifre@test.com', password: 'apayrisifre123' }
+            body: { email: 'aynisifre@test.com', password: 'Apayrisifre123!' }
         });
         assert.equal(still.status, 200, 'şifre update-info ile değişmemiş olmalı');
     });
@@ -345,21 +851,86 @@ describe('E-posta akışları', () => {
     };
 
     it('mail linkleri /api yerine landing sayfalarına gider', async () => {
-        const reg = await api('POST', '/auth/register', registerBody('landing-mail@test.com'));
+        await api('POST', '/auth/register', registerBody('landing-mail@test.com'));
         const vMail = sendEmail.outbox.at(-1);
-        assert.ok(vMail.html.includes(`/verify-email/${reg.json.verificationToken}`));
+        assert.ok(vMail.html.includes(`/verify-email/${lastVerificationToken()}`));
         assert.ok(!vMail.html.includes('/api/auth/'), 'mail linki API endpointine gitmemeli');
         assert.ok(/<a href="[^"]*verify-email/.test(vMail.html), 'link <a href> içinde olmalı');
 
-        const fp = await api('POST', '/auth/forgot-password', { body: { email: 'landing-mail@test.com' } });
+        await api('POST', '/auth/forgot-password', { body: { email: 'landing-mail@test.com' } });
         const rMail = sendEmail.outbox.at(-1);
-        assert.ok(rMail.html.includes(`/reset-password/${fp.json.resetToken}`));
+        assert.ok(rMail.html.includes(`/reset-password/${lastResetToken()}`));
         assert.ok(!rMail.html.includes('/api/auth/'));
     });
 
+    it('landing sayfaları TR/EN: ?lang, Accept-Language ve dil bağlantısı', async () => {
+        await api('POST', '/auth/register', registerBody('dil@test.com'));
+        const token = lastVerificationToken();
+
+        const tr = await pageGet(`/verify-email/${token}`);
+        assert.ok(tr.text.includes('E-postanı Doğrula'), 'varsayılan TR olmalı');
+        assert.ok(tr.text.includes('lang="tr"'));
+        assert.ok(tr.text.includes('>Türkçe<') === false && tr.text.includes('>English<'),
+            'TR sayfada karşı dilin etiketi (English) gösterilmeli');
+
+        const en = await pageGet(`/verify-email/${token}?lang=en`);
+        assert.ok(en.text.includes('Verify Your Email'), '?lang=en İngilizce açmalı');
+        assert.ok(en.text.includes('lang="en"'));
+        assert.ok(en.text.includes('>Türkçe<'), 'EN sayfada Türkçe bağlantısı olmalı');
+
+        // Bilinmeyen dil sessizce varsayılana düşer
+        const bogus = await pageGet(`/verify-email/${token}?lang=zz`);
+        assert.ok(bogus.text.includes('E-postanı Doğrula'));
+
+        // Geçersiz link sayfası da çevrilir
+        const invalidEn = await pageGet(`/verify-email/${'0'.repeat(40)}?lang=en`);
+        assert.ok(invalidEn.text.includes('Invalid Link'));
+    });
+
+    it('landing: e-posta maskeli gösterilir, açık adres sayfada geçmez', async () => {
+        await api('POST', '/auth/register', registerBody('maskeleme@test.com'));
+        const page = await pageGet(`/verify-email/${lastVerificationToken()}`);
+        assert.ok(page.text.includes('mas***@test.com'), 'maskeli adres görünmeli');
+        assert.ok(!page.text.includes('maskeleme@test.com'), 'açık adres sayfada olmamalı');
+    });
+
+    it('mail dili kullanıcının tercihini izler ve link aynı dili taşır', async () => {
+        await createVerifiedUser('ingilizce@test.com', { preferences: { language: 'en' } });
+        await api('POST', '/auth/forgot-password', { body: { email: 'ingilizce@test.com' } });
+
+        const mail = sendEmail.outbox.at(-1);
+        assert.match(mail.subject, /Password Reset/, 'konu İngilizce olmalı');
+        assert.ok(mail.html.includes('Reset My Password'), 'buton İngilizce olmalı');
+        assert.ok(mail.html.includes('?lang=en'),
+            'link dili taşımalı — mail İngilizce, açılan sayfa Türkçe olmasın');
+
+        // Tercihi olmayan kullanıcı Türkçe alır
+        await createVerifiedUser('turkce@test.com');
+        await api('POST', '/auth/forgot-password', { body: { email: 'turkce@test.com' } });
+        const trMail = sendEmail.outbox.at(-1);
+        assert.match(trMail.subject, /Şifre Sıfırlama/);
+        assert.ok(trMail.html.includes('?lang=tr'));
+    });
+
+    it('register cihaz dilini kabul eder; marka logosu her ortamda servis edilir', async () => {
+        const email = `dilkayit-${Date.now()}@test.com`;
+        await api('POST', '/auth/register', {
+            body: { name: 'A', surname: 'B', email, password: 'Emechar1905!', language: 'en' }
+        });
+        const user = await User.findOne({ email });
+        assert.equal(user.preferences.language, 'en');
+        assert.match(sendEmail.outbox.at(-1).subject, /Verify Your Email/,
+            'kayıt maili de seçilen dilde gitmeli');
+
+        // Logo public/ altında değil: production'da da servis edilmeli
+        const res = await fetch(BASE.replace(/\/api$/, '') + '/assets/musubi-logo.png');
+        assert.equal(res.status, 200);
+        assert.match(res.headers.get('content-type'), /image\/png/);
+    });
+
     it('verify landing: geçerli tokende doğrulama butonu, geçersizde hata sayfası; sayfa yan etkisizdir', async () => {
-        const reg = await api('POST', '/auth/register', registerBody('landing-verify@test.com'));
-        const token = reg.json.verificationToken;
+        await api('POST', '/auth/register', registerBody('landing-verify@test.com'));
+        const token = lastVerificationToken();
 
         const page = await pageGet(`/verify-email/${token}`);
         assert.equal(page.status, 200);
@@ -383,7 +954,7 @@ describe('E-posta akışları', () => {
         const user = await User.findOne({ email: 'post-verify@test.com' });
         const sessionsBefore = await DeviceSession.countDocuments({ user: user._id });
 
-        const web = await api('POST', '/auth/verify-email', { body: { token: reg.json.verificationToken } });
+        const web = await api('POST', '/auth/verify-email', { body: { token: lastVerificationToken() } });
         assert.equal(web.status, 200);
         assert.ok(!web.json.data.accessToken && !web.json.data.refreshToken, 'web doğrulamada token dönmemeli');
         assert.equal(await DeviceSession.countDocuments({ user: user._id }), sessionsBefore, 'web doğrulama oturum açmamalı');
@@ -394,7 +965,7 @@ describe('E-posta akışları', () => {
         // deviceName ile: login sözleşmesi (uygulama akışı)
         const reg2 = await api('POST', '/auth/register', registerBody('post-verify2@test.com'));
         const app2 = await api('POST', '/auth/verify-email', {
-            body: { token: reg2.json.verificationToken, deviceName: 'Pixel 8' }
+            body: { token: lastVerificationToken(), deviceName: 'Pixel 8' }
         });
         assert.equal(app2.status, 200);
         assert.ok(app2.json.data.accessToken && app2.json.data.refreshToken, 'uygulama doğrulamasında taze çift dönmeli');
@@ -407,15 +978,20 @@ describe('E-posta akışları', () => {
         await createVerifiedUser('landing-reset@test.com');
         await login('landing-reset@test.com');
 
-        const fp = await api('POST', '/auth/forgot-password', { body: { email: 'landing-reset@test.com' } });
-        const page = await pageGet(`/reset-password/${fp.json.resetToken}`);
+        await api('POST', '/auth/forgot-password', { body: { email: 'landing-reset@test.com' } });
+        const resetToken = lastResetToken();
+        const page = await pageGet(`/reset-password/${resetToken}`);
         assert.equal(page.status, 200);
         assert.ok(!page.text.includes('musubi://'), 'ürün kararı: deep link YOK, sıfırlama webde biter');
-        assert.ok(page.text.includes('show-form-btn'), '"Şifreyi Değiştir" butonu olmalı');
-        assert.ok(page.text.includes('id="reset-form" class="hidden"'), 'şifre formu butona basılana dek gizli olmalı');
+        assert.ok(page.text.includes('id="reset-form"'), 'şifre formu doğrudan görünmeli (uygulama tasarımıyla aynı)');
+        assert.ok(page.text.includes('id="p1"') && page.text.includes('id="p2"'), 'şifre ve tekrar alanları olmalı');
+        assert.ok(page.text.includes('id="meter"'), 'güç göstergesi olmalı');
+        // Hesabı maskeli göster: ekran görüntüsü paylaşılırsa adres açığa çıkmasın
+        assert.ok(page.text.includes('***@test.com'), 'e-posta maskeli gösterilmeli');
+        assert.ok(!page.text.includes('landing-reset@test.com'), 'açık adres sayfada olmamalı');
 
         const rp = await api('POST', '/auth/reset-password', {
-            body: { token: fp.json.resetToken, password: 'websifre123' }
+            body: { token: resetToken, password: 'Websifre123!' }
         });
         assert.equal(rp.status, 200);
         assert.ok(!rp.json.data.accessToken, 'web resetinde token dönmemeli');
@@ -424,12 +1000,12 @@ describe('E-posta akışları', () => {
         assert.equal(await DeviceSession.countDocuments({ user: user._id }), 0, 'tüm oturumlar düşmeli, yenisi açılmamalı');
 
         const newLogin = await api('POST', '/auth/login', {
-            body: { email: 'landing-reset@test.com', password: 'websifre123' }
+            body: { email: 'landing-reset@test.com', password: 'Websifre123!' }
         });
         assert.equal(newLogin.status, 200);
 
         // Kullanılmış token ile landing artık hata sayfası basar
-        const usedPage = await pageGet(`/reset-password/${fp.json.resetToken}`);
+        const usedPage = await pageGet(`/reset-password/${resetToken}`);
         assert.ok(usedPage.text.includes('Bağlantı Geçersiz'));
     });
 
@@ -522,11 +1098,52 @@ describe('Onboarding — e-posta kontrolü ve sosyal giriş', () => {
         const user = await User.findOne({ email: 'sosyal@test.com' });
         assert.equal(await Progress.countDocuments({ user: user._id }), 5);
         assert.equal(await Streak.countDocuments({ user: user._id }), 1);
+        assert.ok(user.consents?.acceptedAt,
+            'sosyal kayıt da hesap açılışıdır — KVKK rıza kaydı tutulmalı');
+        assert.equal(user.consents.kvkk, require('../config/consents').CURRENT_CONSENT_VERSIONS.kvkk);
 
         const second = await api('POST', '/auth/social', googleBody());
         assert.equal(second.status, 200);
         assert.equal(second.json.isNewUser, false);
         assert.equal(second.json.data.id, first.json.data.id, 'aynı hesaba girmeli');
+    });
+
+    it('sosyal kayıt onboarding tercihlerini tek istekte alır; mevcut hesapta YOK SAYAR', async () => {
+        const body = googleBody({ sub: 'google-onb-1', email: 'sosyal-onb@test.com' });
+        const first = await api('POST', '/auth/social', {
+            body: {
+                ...body.body,
+                dailyGoal: 40, reminderTime: '21:30',
+                dailyReminder: true, timezone: 'Europe/Berlin'
+            }
+        });
+        assert.equal(first.status, 201);
+        assert.equal(first.json.isNewUser, true);
+
+        const user = await User.findOne({ email: 'sosyal-onb@test.com' });
+        assert.equal(user.dailyGoal, 40, 'hesap açılışında uygulanmalı');
+        assert.equal(user.notificationSettings.reminderTime, '21:30');
+        assert.equal(user.timezone, 'Europe/Berlin');
+        assert.equal(user.notificationSettings.streakReminder, true,
+            'dokunulmayan bildirim tercihleri varsayılanda kalmalı');
+
+        // Kullanıcı sonradan Ayarlar'dan değiştirsin
+        await User.updateOne({ _id: user._id },
+            { dailyGoal: 10, 'notificationSettings.reminderTime': '08:00' });
+
+        // Aynı hesapla tekrar giriş — tercihler EZİLMEMELİ
+        const second = await api('POST', '/auth/social', {
+            body: {
+                ...body.body,
+                dailyGoal: 40, reminderTime: '21:30', timezone: 'Europe/Berlin'
+            }
+        });
+        assert.equal(second.status, 200);
+        assert.equal(second.json.isNewUser, false);
+
+        const after = await User.findById(user._id);
+        assert.equal(after.dailyGoal, 10, 'mevcut hesabın tercihi korunmalı');
+        assert.equal(after.notificationSettings.reminderTime, '08:00');
     });
 
     it('aynı e-postalı local hesap sosyal girişe bağlanır, yeni hesap açılmaz', async () => {
@@ -540,7 +1157,7 @@ describe('Onboarding — e-posta kontrolü ve sosyal giriş', () => {
 
         // Bağlanan hesabın şifresi korunur: e-posta+şifre girişi çalışmaya devam eder
         const pwLogin = await api('POST', '/auth/login', {
-            body: { email: 'hibrit@test.com', password: 'testsifre123' }
+            body: { email: 'hibrit@test.com', password: 'Testsifre123!' }
         });
         assert.equal(pwLogin.status, 200);
     });
@@ -573,7 +1190,7 @@ describe('Onboarding — e-posta kontrolü ve sosyal giriş', () => {
 
         const cp = await api('PUT', '/auth/change-password', {
             token: tokens.accessToken,
-            body: { oldPassword: 'x', newPassword: 'yenisifre123' }
+            body: { oldPassword: 'x', newPassword: 'Yenisifre123!' }
         });
         assert.equal(cp.status, 400, 'şifresiz hesap change-password kullanamaz');
 
@@ -1414,7 +2031,7 @@ describe('Ayarlar ekranı', () => {
 
     it('verify-password: doğru şifre 200, yanlış 401 döner', async () => {
         const ok = await api('POST', '/auth/verify-password', {
-            token, body: { password: 'testsifre123' }
+            token, body: { password: 'Testsifre123!' }
         });
         assert.equal(ok.status, 200);
 
@@ -1489,6 +2106,54 @@ describe('Bildirim üretimi (cron)', () => {
         assert.equal(words.length, 1);
         assert.match(words[0].body, /Bugünün günlük kelimesi/);
         assert.ok(words[0].data.wordId, 'push deep-link için wordId dönmeli');
+    });
+
+    it('hatırlatma kullanıcının seçtiği saatte gider, varsayılan 10:00\'da gitmez', async () => {
+        const user = await createVerifiedUser('saat@test.com', {
+            notificationSettings: { reminderTime: '14:00' }
+        });
+
+        // Seçilen saatten önce hiçbir şey üretilmez
+        await NotificationService.generateDailyNotifications(atIstanbulHour(10));
+        assert.equal(
+            await Notification.countDocuments({ user: user._id, type: 'daily_task' }), 0,
+            '14:00 seçen kullanıcıya 10:00\'da gitmemeli'
+        );
+
+        await NotificationService.generateDailyNotifications(atIstanbulHour(14));
+        assert.equal(await Notification.countDocuments({ user: user._id, type: 'daily_task' }), 1);
+
+        // Çeyrek saatlik cron aynı günü tekrar tetiklese de çoğaltmaz
+        await NotificationService.generateDailyNotifications(atIstanbulHour(15));
+        assert.equal(await Notification.countDocuments({ user: user._id, type: 'daily_task' }), 1);
+
+        // Gecikme payı aşılınca gece yarısına doğru artık gönderilmez
+        const gecikmis = await createVerifiedUser('gecikmis@test.com', {
+            notificationSettings: { reminderTime: '08:00' }
+        });
+        await NotificationService.generateDailyNotifications(atIstanbulHour(22));
+        assert.equal(
+            await Notification.countDocuments({ user: gecikmis._id, type: 'daily_task' }), 0,
+            'gecikme payını aşan hatırlatma hiç gönderilmemeli'
+        );
+    });
+
+    it('hatırlatma saati 19:00 seçilirse günlük VE seri bildirimi aynı turda üretilir', async () => {
+        const user = await createVerifiedUser('cakisma@test.com', {
+            notificationSettings: { reminderTime: '19:00' }
+        });
+        await Streak.updateOne(
+            { user: user._id },
+            { currentStreak: 4, lastStudyDate: new Date(Date.now() - 2 * 86400000) }
+        );
+
+        await NotificationService.generateDailyNotifications(atIstanbulHour(19));
+
+        assert.equal(await Notification.countDocuments({ user: user._id, type: 'daily_task' }), 1);
+        assert.equal(
+            await Notification.countDocuments({ user: user._id, type: 'streak_reminder' }), 1,
+            'günlük hatırlatma seri bildirimini yutmamalı'
+        );
     });
 
     it('19:00 nazik seri hatırlatması, 23:00 son uyarı üretir', async () => {
@@ -1588,7 +2253,7 @@ describe('Hesap silme (KVKK)', () => {
 
         const del = await api('DELETE', '/auth/delete-account', {
             token: tokens.accessToken,
-            body: { password: 'testsifre123' }
+            body: { password: 'Testsifre123!' }
         });
         assert.equal(del.status, 200);
 
@@ -1602,5 +2267,70 @@ describe('Hesap silme (KVKK)', () => {
             Event.countDocuments({ user: user._id })
         ]);
         assert.deepEqual(leftovers, [0, 0, 0, 0, 0, 0]);
+    });
+});
+
+describe('Hukuki metinler', () => {
+    // Sayfalar /api dışında yaşar
+    const pageGet = async (path) => {
+        const res = await fetch(BASE.replace(/\/api$/, '') + path);
+        return { status: res.status, text: await res.text(), robots: res.headers.get('x-robots-tag') };
+    };
+
+    it('metinler oturumsuz okunur; JSON ve HTML aynı kaynaktan gelir', async () => {
+        const list = await api('GET', '/legal');
+        assert.equal(list.status, 200);
+        assert.deepEqual(list.json.data.docs.map(d => d.key), ['terms', 'privacy', 'kvkk']);
+
+        const kvkk = await api('GET', '/legal/kvkk');
+        assert.equal(kvkk.status, 200);
+        assert.equal(kvkk.json.data.sections.length, 6);
+        assert.match(kvkk.json.data.intro, /6698 sayılı/);
+        assert.match(kvkk.json.data.company, /ALPSOY/);
+
+        // Aynı metin HTML sayfada da görünmeli — iki kopya değil, tek kaynak
+        const page = await pageGet('/legal/kvkk');
+        assert.equal(page.status, 200);
+        assert.ok(page.text.includes('Haklarınız (KVKK m. 11)'));
+        assert.ok(page.text.includes('destek@musubi.app'));
+
+        const yok = await api('GET', '/legal/olmayan');
+        assert.equal(yok.status, 404);
+    });
+
+    it('sürüm tek kaynaktan gelir: metin sürümü = rıza sürümü', async () => {
+        const { DOCS } = require('../config/legal/texts');
+        const { CURRENT_CONSENT_VERSIONS } = require('../config/consents');
+        for (const key of ['terms', 'privacy', 'kvkk']) {
+            assert.equal(CURRENT_CONSENT_VERSIONS[key], DOCS[key].version,
+                `${key}: rıza sürümü metnin sürümünden türetilmeli`);
+        }
+    });
+
+    it('mağaza kaydı için indekslenebilir; token sayfaları indekslenmez', async () => {
+        const legal = await pageGet('/legal/privacy');
+        assert.ok(legal.text.includes('name="robots" content="index"'),
+            'gizlilik politikası mağaza kaydı için erişilebilir/indekslenebilir olmalı');
+
+        await api('POST', '/auth/register', {
+            body: { name: 'A', surname: 'B', email: `legal-robots-${Date.now()}@test.com`, password: 'Emechar1905!' }
+        });
+        const landing = await pageGet(`/verify-email/${lastVerificationToken()}`);
+        assert.ok(landing.text.includes('name="robots" content="noindex"'),
+            'token taşıyan sayfa indekslenmemeli');
+    });
+
+    it('EN dilinde metin Türkçe kalır ama bu açıkça söylenir', async () => {
+        const en = await pageGet('/legal/terms?lang=en');
+        assert.ok(en.text.includes('lang="en"'));
+        assert.ok(en.text.includes('Version'), 'arayüz etiketleri çevrilmeli');
+        assert.ok(en.text.includes('available in Turkish only'),
+            'çevirisi olmayan metin için uyarı gösterilmeli');
+        assert.ok(en.text.includes('Hizmetin Tanımı'),
+            'metnin kendisi Türkçe (kanonik) kalmalı — makine çevirisi yok');
+
+        const tr = await pageGet('/legal/terms');
+        assert.ok(!tr.text.includes('available in Turkish only'),
+            'Türkçe sayfada uyarı görünmemeli');
     });
 });

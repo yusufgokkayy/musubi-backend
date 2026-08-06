@@ -38,6 +38,14 @@ if (process.env.NODE_ENV !== 'production') {
     app.use(helmet());
 }
 
+// Marka varlıkları — HER ortamda servis edilir (public/ yalnızca dev'de açık).
+// Hem mail linklerinin indiği web sayfaları hem de e-posta şablonu buradaki
+// logoyu kullanır; tek dosya, iki tüketici.
+app.use('/assets', express.static('assets', {
+    maxAge: '30d',
+    immutable: false
+}));
+
 // Deploy platformlarının canlılık kontrolü — auth ve rate limit dışında
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
@@ -59,15 +67,34 @@ app.use('/api', generalLimiter);
 // GET /verify-email/:token ve GET /reset-password/:token
 app.use(require('./modules/auth/auth.landing.routes'));
 
+// Hukuki metinler: GET /legal (liste) ve GET /legal/:doc (HTML sayfa).
+// Mağaza kayıtlarının istediği "açık erişilebilir gizlilik politikası URL'si"
+// buradan gelir; uygulama da aynı metni /api/legal'dan JSON olarak çeker.
+const legal = require('./modules/legal/legal.routes');
+app.use(legal.pages);
+app.use('/api/legal', legal.api);
+
+// auth BİLEREK korumasız mount edilir: register/login/refresh/forgot gibi
+// uçların açık olması gerekir, koruma o router'da rota rota uygulanır.
 app.use('/api/auth', require('./modules/auth/auth.routes'));
-app.use('/api/words', require('./modules/word/word.routes'));
-app.use('/api/userwords', require('./modules/userword/userword.routes'));
-app.use('/api/sessions', require('./modules/studysession/studysession.routes'));
-app.use('/api/progress', require('./modules/progress/progress.routes'));
-app.use('/api/streak', require('./modules/streak/streak.routes'));
-app.use('/api/home', require('./modules/home/home.routes'));
-app.use('/api/notifications', require('./modules/notification/notification.routes'));
-app.use('/api/quiz', require('./modules/quiz/quiz.routes'));
+
+// Diğer TÜM modüller giriş + doğrulanmış e-posta ister. Koruma rota bazında
+// değil MOUNT seviyesinde uygulanır: eskiden her rotaya tek tek eklenirdi ve
+// yeni bir rota yazan kişi unutursa doğrulanmamış kullanıcıya açık kalırdı.
+// Artık unutmanın sonucu "açık kalıyor" değil, koruma varsayılan.
+// Bir ucun açık olması gerekiyorsa bu listeden çıkarılıp bilinçli olarak
+// ayrı mount edilmeli.
+const { protect, isEmailVerified } = require('./middlewares/auth.middleware');
+const requireVerifiedUser = [protect, isEmailVerified];
+
+app.use('/api/words', requireVerifiedUser, require('./modules/word/word.routes'));
+app.use('/api/userwords', requireVerifiedUser, require('./modules/userword/userword.routes'));
+app.use('/api/sessions', requireVerifiedUser, require('./modules/studysession/studysession.routes'));
+app.use('/api/progress', requireVerifiedUser, require('./modules/progress/progress.routes'));
+app.use('/api/streak', requireVerifiedUser, require('./modules/streak/streak.routes'));
+app.use('/api/home', requireVerifiedUser, require('./modules/home/home.routes'));
+app.use('/api/notifications', requireVerifiedUser, require('./modules/notification/notification.routes'));
+app.use('/api/quiz', requireVerifiedUser, require('./modules/quiz/quiz.routes'));
 
 app.use(errorHandler);
 

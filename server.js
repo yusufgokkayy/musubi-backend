@@ -19,10 +19,11 @@ const app = require('./app');
 const StreakService = require('./modules/streak/streak.service');
 const NotificationService = require('./modules/notification/notification.service');
 const UserWordService = require('./modules/userword/userword.service');
+const AuthService = require('./modules/auth/auth.service');
 
 // Cron logları "[cron]" önekiyle basılır: deploy loglarında bu kelimeyle
 // filtreleyince görevlerin çalıştığı/çalışmadığı doğrudan görülür
-console.log('[cron] 3 görev zamanlandı: streak reset (saatlik :05), bildirim üretimi (saatlik :10), mastery decay (03:00 UTC)');
+console.log('[cron] 4 görev zamanlandı: streak reset (saatlik :05), bildirim üretimi (15 dk), mastery decay (03:00 UTC), doğrulanmamış hesap temizliği (03:30 UTC)');
 
 // Her saat başı çalışır: her kullanıcının KENDİ saat diliminde günü geçmişse
 // serisi sıfırlanır (timezone-aware, idempotent)
@@ -35,9 +36,10 @@ cron.schedule('5 * * * *', async () => {
     }
 });
 
-// Her saat başı çalışır: yerel saati 19:00 olan kullanıcılara, o gün
-// çalışmamışlarsa seri hatırlatması/uyarısı oluşturur
-cron.schedule('10 * * * *', async () => {
+// Çeyrek saatte bir çalışır: hatırlatma saati kullanıcı tercihidir (HH:mm) ve
+// saatlik tur 14:30 seçen kullanıcıyı 15:10'a kaydırırdı. Seri hatırlatmaları
+// (19:00/23:00) aynı turda, gün içi dedupe ile tek sefer üretilir.
+cron.schedule('*/15 * * * *', async () => {
     try {
         await NotificationService.generateDailyNotifications();
         console.log('[cron] bildirim üretimi tamamlandı');
@@ -54,6 +56,18 @@ cron.schedule('0 3 * * *', async () => {
         console.log(`[cron] mastery decay tamamlandı: ${result.affectedWords} kelime, ${result.affectedUsers} kullanıcı`);
     } catch (err) {
         console.error('[cron] Mastery decay hatası:', err.message);
+    }
+});
+
+// Günde bir: 7 gündür doğrulanmamış hesapları ve yan kayıtlarını siler.
+// DB'de çöp birikmesini önler VE squat edilmiş e-posta adresini yeniden
+// kayda açar (saldırgan kurbanın adresiyle kaydolup hesabı rehin tutamaz)
+cron.schedule('30 3 * * *', async () => {
+    try {
+        const { purged } = await AuthService.purgeUnverifiedAccounts();
+        console.log(`[cron] doğrulanmamış hesap temizliği tamamlandı: ${purged} hesap silindi`);
+    } catch (err) {
+        console.error('[cron] Doğrulanmamış hesap temizliği hatası:', err.message);
     }
 });
 

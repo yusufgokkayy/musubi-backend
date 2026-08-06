@@ -5,7 +5,12 @@ const Word = require('../../models/Word');
 const Progress = require('../../models/Progress');
 const AppError = require('../../utils/AppError');
 const sendNotification = require('../../utils/notification');
-const { startOfDayInTz, localHourInTz } = require('../../utils/date.util');
+const { startOfDayInTz, localHourInTz, localMinutesInTz, parseHHmm } = require('../../utils/date.util');
+
+// notificationSettings.reminderTime yoksa/bozuksa kullanılan eski sabit saat
+const DEFAULT_REMINDER_MINUTES = 10 * 60;
+// Hatırlatma saatinden sonra bildirimin hâlâ "zamanında" sayıldığı süre
+const REMINDER_GRACE_MINUTES = 120;
 
 // Push'u arkaplanda gönderir; asla hata fırlatmaz, cevap gecikmesine eklenmez.
 // FCM "token artık kayıtlı değil" derse token'ı kullanıcıdan siler ki
@@ -147,9 +152,9 @@ const NotificationService = {
         return notification;
     },
 
-    // Cron tarafından her saat başı çağrılır (server.js). Her kullanıcının KENDİ
-    // saat dilimindeki saate göre günün bildirimleri üretilir:
-    //   10:00 — "Bugünün Görevi" (daily_task) + "Günlük Kelime" (daily_word)
+    // Cron tarafından çeyrek saatte bir çağrılır (server.js). Her kullanıcının
+    // KENDİ saat dilimindeki saate göre günün bildirimleri üretilir:
+    //   reminderTime — "Bugünün Görevi" (daily_task) + "Günlük Kelime" (daily_word)
     //   19:00 — serisi olup henüz çalışmamışsa nazik hatırlatma (streak_reminder)
     //   23:00 — hâlâ çalışmamışsa son uyarı: "1 saat sonra serini kaybedeceksin" (streak_warning)
     // `now` parametresi test edilebilirlik içindir.
@@ -160,16 +165,30 @@ const NotificationService = {
         for (const user of users) {
             try {
                 const hour = localHourInTz(user.timezone, now);
-                if (hour !== 10 && hour !== 19 && hour !== 23) continue;
+                const localMinutes = localMinutesInTz(user.timezone, now);
+
+                // Hatırlatma saati kullanıcı tercihidir (onboarding'deki saat
+                // seçici). Bozuk/eksik değerde eski sabit davranışa düşülür.
+                const reminderMinutes =
+                    parseHHmm(user.notificationSettings?.reminderTime) ?? DEFAULT_REMINDER_MINUTES;
+                const sinceReminder = localMinutes - reminderMinutes;
+                // Cron kaçırılırsa (deploy/restart) hatırlatma bir sonraki turda
+                // yakalanır; ama gecikme payını aşınca hiç gönderilmez —
+                // gece yarısı düşen "Bugünün Görevi" bildirimi rahatsız edicidir
+                const inReminderWindow =
+                    sinceReminder >= 0 && sinceReminder < REMINDER_GRACE_MINUTES;
+
+                if (!inReminderWindow && hour !== 19 && hour !== 23) continue;
 
                 const today = startOfDayInTz(user.timezone, now);
 
-                // Aynı gün aynı tipten tekrar oluşturma (restart dedupe)
+                // Aynı gün aynı tipten tekrar oluşturma (restart + çeyrek saatlik
+                // tekrar tetikleme dedupe'u)
                 const dedupe = async (type) => Notification.exists({
                     user: user._id, type, createdAt: { $gte: today }
                 });
 
-                if (hour === 10) {
+                if (inReminderWindow) {
                     if (!(await dedupe('daily_task'))) {
                         await NotificationService.create(user._id, {
                             type: 'daily_task',
@@ -189,10 +208,13 @@ const NotificationService = {
                             }, user);
                         }
                     }
-                    continue;
+                    // BİLEREK continue YOK: hatırlatma saatini 19:00/23:00 seçen
+                    // kullanıcı aynı turda seri bildirimini de almalı
                 }
 
                 // 19:00 ve 23:00 yalnızca seri riski taşıyanlara gider
+                if (hour !== 19 && hour !== 23) continue;
+
                 const streak = await Streak.findOne({ user: user._id });
                 const studiedToday = streak?.lastStudyDate && streak.lastStudyDate >= today;
                 if (studiedToday || !(streak?.currentStreak > 0)) continue;

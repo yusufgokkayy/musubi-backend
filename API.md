@@ -32,7 +32,16 @@ Google/Apple ile giriş. Client, sağlayıcı SDK'sından aldığı `idToken`'ı
   "idToken": "eyJhbGciOiJSUzI1...",
   "name": "Yusuf",               // opsiyonel
   "surname": "Gökkaya",          // opsiyonel
-  "deviceName": "Pixel 8"        // opsiyonel; yoksa User-Agent kullanılır
+  "deviceName": "Pixel 8",       // opsiyonel; yoksa User-Agent kullanılır
+  "consents": { "terms": "1.0", "privacy": "1.0", "kvkk": "1.0" },  // opsiyonel, bkz. GET /auth/consents
+
+  // Onboarding tercihleri — register ile AYNI alanlar, hepsi opsiyonel.
+  // YALNIZCA hesap açılışında uygulanır; mevcut hesapla girişte yok sayılır
+  // (kullanıcının Ayarlar'dan değiştirdiği tercihler ezilmesin diye).
+  "dailyGoal": 20,
+  "reminderTime": "14:00",
+  "dailyReminder": true,
+  "timezone": "Europe/Istanbul"
 }
 
 // 201 (yeni hesap) veya 200 (mevcut hesaba giriş)
@@ -47,17 +56,32 @@ Google/Apple ile giriş. Client, sağlayıcı SDK'sından aldığı `idToken`'ı
 ```
 Hatalar: `400 "Desteklenmeyen sağlayıcı"`, `400 "idToken gerekli"`, `400 "Sosyal hesabınızın e-postası doğrulanmamış"`, `401 "Geçersiz sosyal giriş tokenı"`.
 
+Sosyal kayıt da onboarding tercihlerini tek istekte alır — mobil taraf, Google SDK'dan gelen e-postayı önce `check-email`'e sorup yeni kullanıcı ise onboarding ekranlarını gösterir, sonra bu uca hepsini birden gönderir.
+
 Notlar: Sosyal hesabın şifresi yoktur — e-posta+şifre login denemesi `401`, `change-password` `400` döner; şifre belirlemek isterse forgot-password akışı kullanılır (hesap hibrite dönüşür).
 
 ### POST /auth/register
+Onboarding tek istekte biter: e-posta/ad/şifre adımlarının yanında "Hatırlatma
+Bildirimi" ve "Günlük Kelime Hedefi" ekranlarının seçimleri de buraya gelir.
 ```jsonc
 // İstek
 {
   "name": "Yusuf",
   "surname": "Gökkaya",
   "email": "yusuf@ornek.com",
-  "password": "enaz8karakter",
-  "deviceName": "Pixel 8"        // opsiyonel; yoksa User-Agent kullanılır
+  "password": "Enaz8Karakter!",
+  "deviceName": "Pixel 8",       // opsiyonel; yoksa User-Agent kullanılır
+
+  // Aşağıdakilerin hepsi opsiyoneldir; verilmeyen alan varsayılanında kalır
+  "dailyGoal": 20,               // 5-50 (arayüz preset'leri: 5 / 10 / 20 / 40)
+  "reminderTime": "14:30",       // HH:mm, kullanıcının KENDİ saat diliminde
+  "dailyReminder": false,        // "Şimdilik Geç" → hatırlatma kapalı açılır
+  "timezone": "Europe/Istanbul", // geçersizse Europe/Istanbul'a düşülür
+
+  // KVKK: uygulamanın GÖSTERDİĞİ metin sürümleri. Gönderilmesi opsiyoneldir
+  // ama önerilir — sunucudaki güncel sürümle uyuşmazsa kayıt 400 ile reddedilir
+  // (kullanıcının hiç görmediği bir metne rıza kaydedilmemesi için).
+  "consents": { "terms": "1.0", "privacy": "1.0", "kvkk": "1.0" }
 }
 
 // 201
@@ -68,7 +92,35 @@ Notlar: Sosyal hesabın şifresi yoktur — e-posta+şifre login denemesi `401`,
   "data": { "id": "665f1a...", "name": "Yusuf" }
 }
 ```
-Hatalar: `400 "email already in use"`, `400` validasyon (kısa şifre, geçersiz e-posta), `500 "Email gönderilemedi, tekrar deneyin"` (kayıt geri alınır). Geliştirme ortamında yanıta test için `verificationToken` da eklenir (production'da eklenmez).
+Hatalar: `400 "email already in use"`, `400` validasyon (şifre kuralları, geçersiz e-posta, geçersiz `reminderTime`, 50 karakteri aşan ad/soyad), `500 "Email gönderilemedi, tekrar deneyin"` (kayıt geri alınır).
+
+**Doğrulama token'ı yanıtta DÖNMEZ** — hiçbir ortamda. Eskiden `NODE_ENV !== 'production'` koşuluyla dönüyordu; bu fail-open bir kontroldü (değişken boş kalırsa token açığa çıkardı). Token yalnızca e-postadaki linkte bulunur. Aynısı `forgot-password`'ün `resetToken`'ı için de geçerlidir.
+
+E-posta `lowercase` + `trim` edilerek saklanır: `Emir@Gmail.com` ile `emir@gmail.com` **aynı hesaptır**. Ad ve soyad `trim` edilir, en fazla 50 karakterdir.
+
+#### Şifre kuralları
+"Yeni Şifre Oluştur" ekranının kuralları sunucuda da uygulanır. Sırayla kontrol
+edilir, ilk ihlal edilen kuralın mesajı `400` ile döner:
+
+| # | Kural | Mesaj |
+|---|---|---|
+| 1 | En az 8 karakter | `Şifreniz çok kısa (en az 8 karakter olmalı).` |
+| 2 | En az bir büyük harf | `Şifrenizde en az bir büyük harf, bir rakam ve bir özel karakter olmalı.` |
+| 3 | En az bir rakam | (aynı mesaj) |
+| 4 | En az bir özel karakter | `Şifrenizi daha sağlam yapmak için bir özel karakter kullanın.` |
+
+Geçen kural sayısı, tasarımdaki güç göstergesinin 4 çubuğuna birebir karşılık
+gelir (1 → "Kötü", 4 → "Çok iyi").
+
+Kurallar **yalnızca yeni şifre belirlenen üç kapıda** çalışır: `register`,
+`reset-password`, `change-password`. `login` BİLEREK uygulamaz — aksi halde
+kural yürürlüğe girmeden önce açılmış zayıf şifreli hesaplar kilitlenirdi.
+`change-password`'de mevcut şifre hatası (`401`) kural hatasının önüne geçer.
+
+Aynı kurallar `User` şemasında da uygulanır (servisi atlayan seed/script/yeni
+uçlar için veri katmanı yedeği); iki katman tek kural dizisinden beslenir.
+Migration veya test amacıyla zayıf şifreli bir kayıt yazmak gerekiyorsa
+`doc.save({ validateBeforeSave: false })` ile açıkça muafiyet istenmelidir.
 
 ### POST /auth/login
 ```jsonc
@@ -84,16 +136,64 @@ Hatalar: `400 "email already in use"`, `400` validasyon (kısa şifre, geçersiz
   "data": { "id": "665f1a...", "name": "Yusuf" }
 }
 ```
-Hatalar (üçü ayrı durumdur, mesajlar ekranda gösterilebilir):
+Hatalar (dördü ayrı durumdur, mesajlar ekranda gösterilebilir):
 - `404 "Bu e-postayla kayıtlı bir hesap yok"` — client "kayıt ol" önerebilir
 - `400 "Bu hesap Google/Apple girişiyle açılmış; ... ile giriş yap"` — sosyal butonları vurgula
 - `401 "Şifreniz yanlış. Lütfen tekrar deneyin."`
+- `429 "Çok fazla hatalı giriş denemesi yapıldı..."` — hesap geçici kilitli (aşağıda)
+
+#### Hesap bazlı giriş kilidi
+IP limitine ek olarak **hesap başına** hatalı deneme sayılır: çok sayıda IP'ye
+sahip bir saldırgan tek hesabı IP limitine takılmadan deneyebilirdi. Sayaç
+hesabın kendisinde tutulur.
+
+| Hatalı deneme | Kilit süresi |
+|---|---|
+| 5 | 1 dakika |
+| 10 | 5 dakika |
+| 15+ | 15 dakika |
+
+- Hatalar **15 dakikalık pencerede** birikir; pencere dolunca sayaç sıfırlanır.
+- Kilitliyken **doğru şifre de reddedilir** (`429`), aksi halde kilit anlamsız olurdu.
+- Başarılı giriş sayacı tamamen sıfırlar.
+- **Şifre sıfırlama ve şifre değiştirme kilidi kaldırır** — kilitli kullanıcı
+  sıfırlama sonrası da giremezse çıkmaza girerdi.
+- Sosyal hesap uyarısı (`400`) ve bilinmeyen adres (`404`) şifre denemesi
+  sayılmaz, sayaca işlenmez.
+
+> Kilit süreleri **bilerek kısa ve kademelidir**: kilidin kendisi bir DoS
+> aracıdır (kurbanın e-postasını bilen biri onu bilerek kilitleyebilir).
+> Amaç saldırganı imkânsıza zorlamak değil, kaba kuvvetin işe yaramayacağı
+> kadar yavaşlatmak.
 
 `isEmailVerified: false` ise client doğrulama bekleme ekranına yönlendirmelidir.
 
-Not: e-posta enumeration koruması BİLİNÇLİ olarak yalnızca `forgot-password`'dedir
-(check-email onboarding gereği hesap varlığını zaten söylüyor); mağaza yayını
-öncesi yeniden değerlendirilecek.
+#### E-posta enumeration politikası
+**Karar: her uçta dürüst cevap.** Bilinmeyen adres `login`, `forgot-password` ve
+`resend-verification-email` uçlarının hepsinde `404 "Bu e-postayla kayıtlı bir
+hesap yok"` döner.
+
+Gerekçe: `check-email` onboarding gereği hesap varlığını zaten açıkça söylüyor
+(tasarımdaki "Bu e-posta ile zaten hesap açılmış" ekranı). Bunu bir uçta gizleyip
+diğerinde söylemek sıfır güvenlik kazancı sağlarken kullanıcıyı yazım hatasında
+sessizce bekletiyordu. Sızan bilgi ("bu adresin Musubi hesabı var") bu ürün için
+düşük hassasiyetlidir.
+
+Karşılığında koruma iki katmana devredildi: IP bazlı `authLimiter` (20/15dk) ve
+**adres bazlı mail kısıtı** (aşağıda).
+
+#### Adres bazlı mail kısıtı
+Mail gönderen uçlar (`register`, `forgot-password`, `resend-verification-email`)
+hedef **hesap** üzerinde sayaç tutar — IP değiştirerek aşılamaz:
+
+| Kural | Değer |
+|---|---|
+| İki mail arası bekleme | 60 saniye |
+| Aynı adrese günlük üst sınır | 5 mail (kayıt maili dahil) |
+
+Aşılırsa `429` döner. **Mobil not:** kayıt maili de sayaca girdiği için "Tekrar
+Gönder" butonu kayıttan hemen sonra `429` alır — buton 60 saniyelik geri sayım
+göstermelidir.
 
 ### POST /auth/refresh
 ```jsonc
@@ -128,7 +228,8 @@ Hata: `401 "No refresh token"` / `401 "Invalid refresh token"` (oturum kapatılm
     "role": "user",
     "isEmailVerified": true,
     "dailyGoal": 20,
-    "notificationSettings": { "dailyReminder": true, "streakReminder": true, "wordLevelDown": true },
+    "notificationSettings": { "dailyReminder": true, "reminderTime": "10:00", "streakReminder": true, "wordLevelDown": true },
+    "consents": { "terms": "1.0", "privacy": "1.0", "kvkk": "1.0", "acceptedAt": "2026-08-04T09:12:00.000Z" },
     "preferences": { "language": "tr", "theme": "light", "fontSize": "medium" },
     "isPremium": false,        // "Reklamları Kaldır" durumu — yalnızca satın alma doğrulaması değiştirir
     "provider": "local",       // local | google | apple
@@ -148,7 +249,10 @@ Hata: `401 "No refresh token"` / `401 "Invalid refresh token"` (oturum kapatılm
   "dailyGoal": 30,                    // 5-50 arası
   "fcmToken": "fcm-cihaz-tokeni",     // push için Firebase SDK'dan alınan token
   "timezone": "Europe/Berlin",        // geçersiz değer varsayılana (Europe/Istanbul) düşer
-  "notificationSettings": { "streakReminder": false },   // kısmi güncelleme, kalanlar korunur
+  "notificationSettings": {           // kısmi güncelleme, kalanlar korunur
+    "streakReminder": false,
+    "reminderTime": "14:30"           // HH:mm — "Bildirim Ayarları" ekranındaki saat
+  },
   "preferences": { "theme": "dark" }  // kısmi güncelleme — language: tr | theme: light/dark/system | fontSize: small/medium/large
 }
 
@@ -182,14 +286,148 @@ Hatalar: `401 "Şifreniz yanlış. Lütfen tekrar deneyin."` (ekrandaki hata met
 ```
 Hatalar: `401 "Old password is incorrect"`, `400 "Yeni şifre eski şifrenle aynı olamaz"`.
 
+### GET /auth/verification-status 🔒
+"E-postanı Doğrula" bekleme ekranının sorduğu durum ucu. ✉️ **YOK** — tam da
+doğrulanmamış kullanıcı için var.
+```jsonc
+// 200 — doğrulanmamışsa da 200 döner, hata değil
+{ "success": true, "data": { "isEmailVerified": false, "email": "yusuf@ornek.com" } }
+```
+Kullanıcı maildeki linke tarayıcıda tıkladıktan sonra uygulamaya döner ve
+ekrandaki butona basar; uygulama bu uçla durumu sorup doğrulanmışsa mevcut
+token'ıyla doğrudan içeri alır — **yeniden giriş istemez.**
+
+`/auth/me` de aynı bilgiyi verirdi (`403` → doğrulanmamış) ama `403` bir hata
+kodudur, başka sebeple gelen 403'ten ayırt edilemez ve yoklama yapan istemci
+sunucu loglarını 4xx uyarılarıyla doldurur.
+
+> Access token 15 dk geçerlidir. Kullanıcı mailde oyalanırsa bu uç `401`
+> döner; istemci önce `/auth/refresh` yapıp isteği tekrarlamalıdır.
+
+### GET /auth/consents
+Yürürlükteki hukuki metin sürümleri. **Oturumsuz da çağrılabilir** (giriş
+ekranı için). `Authorization` başlığı gönderilirse kullanıcının rıza durumu
+ve yeniden onay gerekip gerekmediği de döner.
+```jsonc
+// 200 — oturumsuz
+{
+  "success": true,
+  "data": {
+    "current": { "terms": "1.0", "privacy": "1.0", "kvkk": "1.0" },
+    // Karşılama ekranındaki metin linkleri buradan kurulur
+    "docs": [
+      { "key": "terms",   "title": "Kullanıcı Sözleşmesi",
+        "version": "1.0", "effectiveDate": "2026-08-04", "url": "/legal/terms" },
+      { "key": "privacy", "title": "Gizlilik Politikası", "...": "..." },
+      { "key": "kvkk",    "title": "KVKK Aydınlatma ve Açık Rıza Metni", "...": "..." }
+    ]
+  }
+}
+
+// 200 — oturumlu
+{
+  "success": true,
+  "data": {
+    "current":  { "terms": "1.0", "privacy": "2.0", "kvkk": "1.0" },
+    "docs":     [ /* yukarıdaki gibi */ ],
+    "accepted": { "terms": "1.0", "privacy": "1.0", "kvkk": "1.0",
+                  "acceptedAt": "2026-08-04T09:12:00.000Z" },
+    "outdated": ["privacy"],       // yeniden onaylanması gereken metinler
+    "reconsentRequired": true
+  }
+}
+```
+Uygulama açılışta bunu okumalı; `reconsentRequired: true` ise güncellenen
+metni gösterip aşağıdaki uçla rıza almalıdır.
+
+### PUT /auth/consents 🔒
+Sürüm yükseltmesi sonrası yeniden rıza.
+```jsonc
+// İstek — uygulamanın gösterdiği sürümler
+{ "consents": { "privacy": "2.0" } }
+
+// 200 — kaydedilen rıza
+{ "success": true, "data": { "terms": "1.0", "privacy": "2.0", "kvkk": "1.0", "acceptedAt": "..." } }
+```
+`isEmailVerified` **aranmaz**: doğrulamayı bekleyen kullanıcı da güncellenen
+metne rıza verebilmelidir, aksi halde çıkmaza girerdi.
+
+### GET /legal · GET /legal/:doc — hukuki metinler
+Metinler **backend'den servis edilir**, uygulamaya gömülü değildir: hukuki bir
+düzeltme mağaza onayı beklemeden aynı gün yayına girer.
+
+| Uç | Ne döner |
+|---|---|
+| `GET /legal` | Tarayıcı sayfası — üç metnin listesi |
+| `GET /legal/:doc` | Tarayıcı sayfası — metnin tamamı (`terms`, `privacy`, `kvkk`) |
+| `GET /api/legal` | JSON — metin listesi (başlık, sürüm, yürürlük tarihi, url) |
+| `GET /api/legal/:doc` | JSON — `intro` + `sections[{heading, body}]` |
+
+Hepsi **oturumsuz** çalışır: kullanıcı kayıt olmadan önce okuyabilmeli.
+
+```jsonc
+// GET /api/legal/kvkk → 200
+{
+  "success": true,
+  "data": {
+    "key": "kvkk", "version": "1.0", "effectiveDate": "2026-08-04",
+    "title": "KVKK Aydınlatma ve Açık Rıza Metni",
+    "lang": "tr", "company": "ALPSOY YAZILIM ARGE MÜHENDİSLİK LİMİTED ŞİRKETİ",
+    "intro": "İşbu Aydınlatma Metni, 6698 sayılı ...",
+    "sections": [ { "heading": "1. Veri Sorumlusu", "body": "..." } ],
+    "url": "/legal/kvkk"
+  }
+}
+```
+
+**Mobil tarafta iki seçenek var:** WebView ile `/legal/:doc` açmak (sayfa
+uygulamanın tasarım diliyle yazıldı, koyu tema ve TR/EN destekliyor) veya
+`/api/legal/:doc` JSON'ını kendi ekranında render etmek. JSON'ı seçersen son
+çekilen sürümü **çevrimdışı yedek** olarak sakla.
+
+- Metinlerin dili **Türkçedir**; İngilizce çevirisi yoktur (bağlayıcı sözleşme
+  makineyle çevrilmez). `?lang=en` ile açılan sayfa arayüzü İngilizce yapar,
+  metni Türkçe bırakır ve bunu üstte açıkça söyler.
+- `/legal/*` sayfaları **indekslenebilir** (`robots: index`) — App Store ve
+  Google Play, mağaza kaydında açık erişilebilir bir gizlilik politikası
+  URL'si ister. `https://<domain>/legal/privacy` tam olarak budur.
+  Token taşıyan doğrulama/sıfırlama sayfaları ise `noindex`.
+
+#### KVKK rıza kaydı — nasıl çalışıyor
+Metinlerin **kaynağı `config/legal/texts.js`**; backend ayrıca *kim, ne
+zaman, hangi sürüme* rıza verdiğini saklar. Açık rızanın ispatı veri
+sorumlusundadır ve geçmişe dönük üretilemez — bu yüzden kayıt hesap açılış
+anında (`register` ve `social` uçlarında) yazılır, hesabın rıza kaydı olmadan
+var olduğu bir an bile olmaz.
+
+Saklananlar: üç metnin sürümü, `acceptedAt`, ayrıca ispat gücü için `ip` ve
+`userAgent`. Bunlar da kişisel veridir; hesap silinince `purgeUserData` ile
+birlikte silinirler.
+
+Sürümler metnin kendisinden türetilir (`config/legal/texts.js` → `version`);
+`config/consents.js` bunu okur, elle yazılmaz. **Bir sürümü yükseltmek tüm
+kullanıcılardan yeniden rıza istemek demektir** — metni değiştirip sürümü aynı
+bırakmak ise kullanıcının onaylamadığı bir metne onay vermiş görünmesine yol
+açar, KVKK açısından kanıt değeri kalmaz.
+
+> **Hukuki not:** Tasarımda ayrı bir onay kutusu yok; giriş ekranı "Yeni bir
+> hesap oluşturuyorsanız ... geçerli olacaktır" diyor, yani rıza eylemi kaydın
+> kendisi sayılıyor. KVKK'da açık rıza için olumlu bir irade beyanı tercih
+> edilir; ayrı bir onay kutusu hukuken daha güçlü olurdu. Bu bir ürün/hukuk
+> kararıdır, backend her iki modeli de destekler.
+
 ### POST /auth/forgot-password
 ```jsonc
 // İstek
 { "email": "yusuf@ornek.com" }
 
-// 200 — hesap olsa da olmasa da aynı yanıt (enumeration koruması)
+// 200
 { "success": true, "message": "Password reset email sent" }
 ```
+Hatalar: `404 "Bu e-postayla kayıtlı bir hesap yok"` (enumeration politikası:
+dürüst cevap), `429` (adres bazlı mail kısıtı), `500 "Email gönderilemedi..."`.
+Doğrulanmamış hesap da şifre sıfırlayabilir — maildeki linke tıklamak zaten
+adres sahipliğini kanıtlar.
 
 ### POST /auth/reset-password
 ```jsonc
@@ -818,11 +1056,13 @@ Veri olmayan gün `200` + sıfır sayaçlar ve boş `words` ile döner. Hata: `4
 Otomatik üretim (kullanıcının KENDİ saat diliminde):
 | Saat | Tip | Örnek |
 |---|---|---|
-| 10:00 | `daily_task` | "Bugünün Görevi — Bugün 20 ezberlenecek kelime seni bekliyor!" |
-| 10:00 | `daily_word` | "Günlük Kelime — Bugünün günlük kelimesi; 危ない (abunai) = tehlikeli" (`data.wordId` ile detaya gidilir) |
+| `reminderTime` | `daily_task` | "Bugünün Görevi — Bugün 20 ezberlenecek kelime seni bekliyor!" |
+| `reminderTime` | `daily_word` | "Günlük Kelime — Bugünün günlük kelimesi; 危ない (abunai) = tehlikeli" (`data.wordId` ile detaya gidilir) |
 | 19:00 | `streak_reminder` | "12 Günlük Seri! — Serini devam ettirmeyi unutma." (yalnızca serisi olup o gün çalışmamışsa) |
 | 23:00 | `streak_warning` | "Serini Kaybedeceksin — 1 saat sonra serini kaybedeceksin. Acele et, dersini kaçırma..." |
 | cevap/decay anı | `word_level_down` | "危ない (abunai) kelimesinin seviyesi 3. seviyeye düştü. Tekrar hatırla!" |
+
+`reminderTime` kullanıcı tercihidir (`notificationSettings.reminderTime`, varsayılan `10:00`). Üretim cron'u çeyrek saatte bir çalışır; hatırlatma, seçilen saatten sonraki **2 saat** içinde bir kez gönderilir (cron kaçırılırsa bir sonraki tur yakalar, ama gece yarısına sarkmaz). Aynı gün ikinci kez üretilmez. Hatırlatma saati 19:00/23:00 seçilirse günlük **ve** seri bildirimleri aynı turda üretilir.
 
 Kullanıcının `notificationSettings` tercihleri kapalıysa ilgili tip hiç oluşmaz (`daily_task`/`daily_word` → `dailyReminder`, seri tipleri → `streakReminder`, seviye düşüşü → `wordLevelDown`).
 
