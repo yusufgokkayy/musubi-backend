@@ -595,6 +595,10 @@ const AuthService = {
             throw new AppError('Şifre bu uçtan değiştirilemez; şifre değiştirme akışını kullan', 400);
         }
         if (updates.dailyGoal) user.dailyGoal = updates.dailyGoal;
+        // activeLevel burada BİLEREK yok: seçilen seviyenin AÇIK olması gerekiyor
+        // ve o kontrol ProgressService.setActiveLevel'da. Buradan yazılabilseydi
+        // kullanıcı kilitli N1'i kendine atayıp müfredatı atlardı.
+        // Tek kapı: PUT /api/progress/active-level
         if (updates.fcmToken) user.fcmToken = updates.fcmToken;
         if (updates.timezone) user.timezone = safeTimezone(updates.timezone);
         // Kısmi güncellenir (ör. yalnız reminderTime gelir); geçersiz HH:mm'i

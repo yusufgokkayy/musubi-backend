@@ -3,9 +3,8 @@ const QuizService = require('./quiz.service');
 
 const QuizController = {
     start: catchAsync(async (req, res) => {
-        const { type, jlptLevel } = req.body;
         try {
-            const result = await QuizService.start(req.user.id, { type, jlptLevel });
+            const result = await QuizService.start(req.user.id, { type: req.body?.type });
             res.status(200).json({ success: true, data: result });
         } catch (err) {
             // Cooldown hatasında UI'ın geri sayım gösterebilmesi için tarihi de dön
@@ -18,6 +17,18 @@ const QuizController = {
             }
             throw err;
         }
+    }),
+
+    // "Çıkmak İçin Emin Misiniz? → Çık"
+    abandon: catchAsync(async (req, res) => {
+        const result = await QuizService.abandonAttempt(req.user.id, req.params.id);
+        res.status(200).json({ success: true, data: result });
+    }),
+
+    // "Seviyeni Öğrenelim Mi?" modalındaki "Daha Sonra"
+    defer: catchAsync(async (req, res) => {
+        const result = await QuizService.deferPlacement(req.user.id);
+        res.status(200).json({ success: true, data: result });
     }),
 
     answerQuestion: catchAsync(async (req, res) => {

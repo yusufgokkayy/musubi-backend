@@ -16,8 +16,6 @@ const { normalizeAnswer, gradeTyping, wordAnswerVariants } = require('../../util
 const NEW_WORD_DAILY_LIMIT = parseInt(process.env.NEW_WORD_DAILY_LIMIT) || 10;
 const REVIEW_DAILY_LIMIT = parseInt(process.env.REVIEW_DAILY_LIMIT) || 10;
 
-const JLPT_LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
-
 // 'easy' StudySession sayaçlarında öteden beri doğru sayılıyordu ama burada
 // reddediliyordu; SM-2'nin en yüksek kalitesi olarak eklendi (easeFactor'ü
 // 'correct'ten biraz daha hızlı büyütür, aynı-gün kuralına o da tabidir)
@@ -186,20 +184,23 @@ const selectPoolWords = async (userId, jlptLevel, goal, { excludeReviewIds = [],
 };
 
 const UserWordService = {
-    async getTodayWords(userId, jlptLevel) {
-        // jlptLevel ZORUNLU: DailyWordPool'un unique anahtarı {user,date,jlptLevel}
-        // (bkz. models/DailyWordPool.js). İstemci aynı ekran akışında bazen
-        // jlptLevel'sız bazen'li çağırırsa, backend bunları FARKLI havuz sayıp
-        // ikinci bir doküman açar — "tekrar başlarken üstüne 20lik daha soruyor"
-        // ve home'daki goal'ün havuzları toplarken şişmesi bug'larının kökü buydu.
-        // Sabit/varsayılan bir seviyeye düşmek yerine hata fırlatmak tercih edildi:
-        // sunucuda güvenilir bir "kullanıcının o anki seviyesi" kaydı yok, sessiz
-        // bir varsayım aynı sınıf bug'ı başka bir kılıkta geri getirir.
-        if (!JLPT_LEVELS.includes(jlptLevel)) {
-            throw new AppError('jlptLevel zorunlu ve N5-N1 arasında olmalı', 400);
-        }
-
-        const user = await User.findById(userId).select('dailyGoal timezone');
+    async getTodayWords(userId) {
+        // Seviye SUNUCUDAN gelir (User.activeLevel), istemciden DEĞİL.
+        //
+        // Eskiden zorunlu bir jlptLevel parametresiydi ve sebebi şuydu:
+        // DailyWordPool'un unique anahtarı {user,date,jlptLevel} olduğu için
+        // (bkz. models/DailyWordPool.js) aynı ekran akışında bazen parametreli
+        // bazen parametresiz çağıran bir istemci, backend'e İKİ ayrı havuz
+        // açtırıyordu — "tekrar başlarken üstüne 20lik daha soruyor" ve home'daki
+        // goal'ün havuzları toplarken şişmesi bug'larının kökü buydu. O gün
+        // sunucuda güvenilir bir "kullanıcının o anki seviyesi" kaydı olmadığı
+        // için varsayılana düşmek yerine hata fırlatmak tercih edilmişti.
+        //
+        // activeLevel artık o kaydı sağlıyor: tek kullanıcı için tek seviye, tek
+        // havuz. Aynı sınıf bug'ın geri dönmemesi bu alanın TEK yazıcısına bağlı
+        // (ProgressService.setActiveLevel).
+        const user = await User.findById(userId).select('dailyGoal timezone activeLevel');
+        const jlptLevel = user?.activeLevel || 'N5';
         const today = startOfDayInTz(user?.timezone);
         const goal = user?.dailyGoal || (NEW_WORD_DAILY_LIMIT + REVIEW_DAILY_LIMIT);
 
@@ -512,6 +513,19 @@ const UserWordService = {
                 userWord.masteryLevel = computeMasteryLevel(userWord);
                 const levelDropped = userWord.masteryLevel < previousLevel;
 
+                // Hafıza ekranındaki "Bu hafta +N kelime iyiye geçti" çipinin
+                // kaynağı: kelimenin "sayılan bölgeye" (seviye kilidini açan
+                // eşik) GİRDİĞİ an. 3→4→5 yükselişleri tarihi TAZELEMEZ —
+                // kelime bölgeye ilk girdiği hafta sayılır, her doğru cevapta
+                // yeniden sayılmaz. Bölgeden düşerse iz silinir ki kelime geri
+                // tırmandığında o hafta yeniden sayılabilsin.
+                const COUNTED = ProgressService.MASTERY_COUNTED_MIN;
+                if (userWord.masteryLevel < COUNTED) {
+                    userWord.promotedAt = null;
+                } else if (previousLevel < COUNTED) {
+                    userWord.promotedAt = new Date();
+                }
+
                 if (quality >= 3) {
                     userWord.correctCount += 1;
                     userWord.status = userWord.interval >= 21 ? 'learned' : 'learning';
@@ -593,10 +607,16 @@ const UserWordService = {
             const target = Math.max(1, baseLevel - drops);
 
             if (target < uw.masteryLevel) {
+                // Sayılan bölgenin (Orta/İyi/Ezber) altına düşen kelime o
+                // bölgeden çıkmıştır: promotedAt izi silinir, yoksa kullanıcı
+                // geri kazandığında "bu hafta iyiye geçti" bir daha hiç
+                // sayılmazdı (bkz. models/UserWord.js promotedAt notu).
+                const set = { masteryLevel: target };
+                if (target < ProgressService.MASTERY_COUNTED_MIN) set.promotedAt = null;
                 updates.push({
                     updateOne: {
                         filter: { _id: uw._id },
-                        update: { $set: { masteryLevel: target } }
+                        update: { $set: set }
                     }
                 });
                 const key = String(uw.user);

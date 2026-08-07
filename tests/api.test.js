@@ -123,6 +123,20 @@ before(async () => {
     for (let i = 0; i < 50; i++) {
         words.push({ kanji: `語四${i}`, romaji: `gyon${i}`, meaning: `meaning n4 ${i}`, type: 'isim', jlptLevel: 'N4', isCore: true });
     }
+    // Seviye tespit sınavı TEK denemede beş seviyeden soru soruyor (N3:8, N2:10,
+    // N1:10) — üst seviyelerde de çeldiriciye yetecek havuz olmalı.
+    // Kanji'leri bilerek "語" içermiyor: arama testleri "語" ile sayı sayıyor.
+    // frequencyRank yüksek: müfredat sırası testleri kendi kelimelerini başta
+    // görmeli, bu dolgu kelimeler arkaya düşsün.
+    for (const [level, prefix, romaji] of [['N3', '参', 'sanx'], ['N2', '弐', 'nix'], ['N1', '壱', 'ichix']]) {
+        for (let i = 0; i < 30; i++) {
+            words.push({
+                kanji: `${prefix}${i}`, romaji: `${romaji}${i}`,
+                meaning: `meaning ${level.toLowerCase()} ${i}`,
+                type: 'isim', jlptLevel: level, isCore: true, frequencyRank: 1000 + i
+            });
+        }
+    }
     // Core olmayan kelime: havuza/aramaya girmemeli
     words.push({ kanji: '非核', romaji: 'hikaku', meaning: 'non-core word', type: 'isim', jlptLevel: 'N5', isCore: false });
     await Word.insertMany(words);
@@ -1332,13 +1346,13 @@ describe('Öğrenme döngüsü (SRS)', () => {
     });
 
     it('günlük havuz dailyGoal kadar kelime verir ve gün içinde sabittir', async () => {
-        const first = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const first = await api('GET', '/userwords/today', { token });
         assert.equal(first.status, 200);
         assert.equal(first.json.data.newWords.length, 20);
         assert.equal(first.json.data.reviewWords.length, 0);
         wordId = first.json.data.newWords[0]._id;
 
-        const second = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const second = await api('GET', '/userwords/today', { token });
         assert.deepEqual(
             second.json.data.newWords.map(w => w._id).sort(),
             first.json.data.newWords.map(w => w._id).sort(),
@@ -1347,7 +1361,7 @@ describe('Öğrenme döngüsü (SRS)', () => {
     });
 
     it('core olmayan kelime havuza ve aramaya girmez', async () => {
-        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const today = await api('GET', '/userwords/today', { token });
         assert.ok(!today.json.data.newWords.some(w => w.kanji === '非核'));
 
         const search = await api('GET', '/words/search?q=non-core', { token });
@@ -1410,7 +1424,7 @@ describe('Öğrenme döngüsü (SRS)', () => {
 
     it('easy doğru sayılır ve SM-2\'yi ilerletir (studysession ile tutarlı)', async () => {
         // Sıralama havuz sırasıyla aynı olmayabilir; cevaplanmamış bir kelime seç
-        const w = (await api('GET', '/userwords/today?jlptLevel=N5', { token }))
+        const w = (await api('GET', '/userwords/today', { token }))
             .json.data.newWords.find(x => !x.answeredToday);
         const res = await api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'easy' } });
         assert.equal(res.status, 200);
@@ -1454,7 +1468,7 @@ describe('Öğrenme döngüsü (SRS)', () => {
         // "correct" sayılmıştı (çift tıklama/yavaş bağlantıda erken yeniden
         // deneme): UserWord optimistic concurrency + submitAnswer'daki retry
         // bunu önlemeli — eşzamanlı iki istekten yalnızca biri sayılmalı.
-        const w = (await api('GET', '/userwords/today?jlptLevel=N5', { token }))
+        const w = (await api('GET', '/userwords/today', { token }))
             .json.data.newWords.find(x => !x.answeredToday);
         const sBefore = (await api('GET', '/sessions/today', { token })).json.data;
 
@@ -1475,6 +1489,98 @@ describe('Öğrenme döngüsü (SRS)', () => {
     });
 });
 
+describe('Öğrenme seviyesi (Ayarlar > Öğrenme Seviyeni Değiştir)', () => {
+    let token, userId;
+
+    before(async () => {
+        const user = await createVerifiedUser('aktifseviye@test.com');
+        userId = user._id;
+        token = (await login('aktifseviye@test.com')).accessToken;
+    });
+
+    it('yeni kullanıcı N5\'te başlar; liste rozetleri ve kilit ipucu döner', async () => {
+        const res = await api('GET', '/progress', { token });
+        assert.equal(res.status, 200);
+        assert.equal(res.json.data.activeLevel, 'N5');
+
+        const byLevel = Object.fromEntries(res.json.data.levels.map(l => [l.jlptLevel, l]));
+        assert.equal(byLevel.N5.state, 'active');
+        assert.equal(byLevel.N5.label, 'Başlangıç');
+        assert.equal(byLevel.N5.canSelect, false, 'zaten seçili seviyede "Geç" bağlantısı olmamalı');
+        assert.equal(byLevel.N5.unlockHint, null);
+
+        assert.equal(byLevel.N4.state, 'locked');
+        assert.equal(byLevel.N4.canSelect, false);
+        // Türkçe ek okunuşa göre: N5 "beş" → N5'in, N4 "dört" → N4'ün
+        assert.equal(byLevel.N4.unlockHint, "N5'in %75'i ile açılır");
+        assert.equal(byLevel.N3.unlockHint, "N4'ün %75'i ile açılır");
+    });
+
+    it('kilitli seviyeye geçilemez (403); geçersiz seviye 400', async () => {
+        const locked = await api('PUT', '/progress/active-level', { token, body: { jlptLevel: 'N4' } });
+        assert.equal(locked.status, 403);
+
+        const bad = await api('PUT', '/progress/active-level', { token, body: { jlptLevel: 'N6' } });
+        assert.equal(bad.status, 400);
+
+        const user = await User.findById(userId);
+        assert.equal(user.activeLevel, 'N5', 'reddedilen istek profili DEĞİŞTİRMEMELİ');
+    });
+
+    it('seviye kilidi açılınca activeLevel kendiliğinden taşınmaz; anasayfa "Şimdi Geç" kartını gösterir', async () => {
+        await Progress.findOneAndUpdate(
+            { user: userId, jlptLevel: 'N4' },
+            { isUnlocked: true, unlockedAt: new Date(), unlockedBy: 'study' }
+        );
+
+        const user = await User.findById(userId);
+        assert.equal(user.activeLevel, 'N5', 'kilit açılması tek başına seviye DEĞİŞTİRMEZ');
+
+        const home = await api('GET', '/home/summary', { token });
+        assert.equal(home.json.data.activeLevel, 'N5');
+        assert.equal(home.json.data.activeLevelLabel, 'Başlangıç');
+        assert.deepEqual(home.json.data.advanceableLevel, { jlptLevel: 'N4', label: 'Temel' },
+            'açılmış ama geçilmemiş seviye "Kilit Açıldı" kartını doldurmalı');
+    });
+
+    it('açık seviyeye geçilir ve günlük ders O seviyeden gelir', async () => {
+        const res = await api('PUT', '/progress/active-level', { token, body: { jlptLevel: 'N4' } });
+        assert.equal(res.status, 200);
+        assert.equal(res.json.data.activeLevel, 'N4', 'yanıt güncel listeyi taşımalı (ikinci GET gerekmesin)');
+
+        const byLevel = Object.fromEntries(res.json.data.levels.map(l => [l.jlptLevel, l]));
+        assert.equal(byLevel.N4.state, 'active');
+        assert.equal(byLevel.N5.state, 'available');
+        assert.equal(byLevel.N5.canSelect, true, 'eski seviyeye geri dönülebilmeli');
+
+        // Asıl sözleşme: ders havuzu artık N4'ten çekilir
+        const today = await api('GET', '/userwords/today', { token });
+        assert.equal(today.status, 200);
+        const levels = new Set(today.json.data.newWords.map(w => w.jlptLevel));
+        assert.deepEqual([...levels], ['N4'], 'günlük ders yeni seviyeden gelmeli');
+
+        // Anasayfada geçilecek seviye kalmadı (N3 hâlâ kilitli)
+        const home = await api('GET', '/home/summary', { token });
+        assert.equal(home.json.data.activeLevel, 'N4');
+        assert.equal(home.json.data.advanceableLevel, null);
+    });
+
+    it('geri dönüş ilerlemeyi silmez: N5 havuzu olduğu gibi durur', async () => {
+        const back = await api('PUT', '/progress/active-level', { token, body: { jlptLevel: 'N5' } });
+        assert.equal(back.status, 200);
+
+        const today = await api('GET', '/userwords/today', { token });
+        const levels = new Set(today.json.data.newWords.map(w => w.jlptLevel));
+        assert.deepEqual([...levels], ['N5']);
+
+        // Gün içinde seviye değiştirmek havuzları birbirine karıştırmaz:
+        // DailyWordPool anahtarı {user,date,jlptLevel}, her seviye kendi havuzunda
+        const pools = await mongoose.connection.db.collection('dailywordpools')
+            .countDocuments({ user: userId });
+        assert.equal(pools, 2, 'N4 ve N5 havuzları ayrı ayrı korunmalı');
+    });
+});
+
 describe('Quiz', () => {
     let token, userId;
 
@@ -1484,12 +1590,14 @@ describe('Quiz', () => {
         token = (await login('quiz@test.com')).accessToken;
     });
 
-    // Soru başına cevap akışı: her soru sırayla cevaplanır, son yanıt final result içerir
-    const answerAllFromDb = async (quizId, correct = true, tok = token, startIndex = 0) => {
+    // Belirli seviyelerin sorularını doğru, kalanını yanlış cevaplar — seviye
+    // belirleme kuralını sınamanın tek yolu bu (sorular rastgele üretiliyor).
+    const answerByLevel = async (quizId, correctLevels, tok = token) => {
         const attempt = await QuizAttempt.findById(quizId);
         let last;
-        for (let i = startIndex; i < attempt.questions.length; i++) {
+        for (let i = 0; i < attempt.questions.length; i++) {
             const q = attempt.questions[i];
+            const correct = correctLevels.includes(q.jlptLevel);
             const answer = q.format === 'typing'
                 ? (correct ? q.correctAnswers[0] : 'kesin-yanlis-cevap')
                 : (correct ? q.correctIndex : (q.correctIndex + 1) % 4);
@@ -1498,32 +1606,35 @@ describe('Quiz', () => {
         return last;
     };
 
-    it('placement N5 ile başlar, 10 soru verir, cevap anahtarı sızdırmaz', async () => {
+    it('sınav tek seferde 40 soru, beş seviyeden; cevap anahtarı sızdırmaz', async () => {
         const res = await api('POST', '/quiz/start', { token, body: { type: 'placement' } });
         assert.equal(res.status, 200);
-        assert.equal(res.json.data.jlptLevel, 'N5');
-        assert.equal(res.json.data.totalQuestions, 10, '10 soru × 5 basamak = 50');
+        assert.equal(res.json.data.totalQuestions, 40);
+        assert.equal(res.json.data.secondsPerQuestion, 20);
         assert.ok(!JSON.stringify(res.json).includes('correctIndex'), 'cevap anahtarı sızmamalı');
         assert.ok(!JSON.stringify(res.json).includes('correctAnswers'), 'yazma cevap anahtarı sızmamalı');
 
-        const last = await answerAllFromDb(res.json.data.quizId, true);
-        assert.equal(last.json.data.finished, true);
-        const result = last.json.data.result;
-        assert.equal(result.passed, true);
-        assert.equal(result.unlockedLevel, 'N4');
-        assert.equal(result.nextRung, 'N4');
-        assert.equal(result.summary, undefined, 'merdiven sürerken özet dönmez');
+        // Tasarımdaki dağılım: N5:6, N4:6, N3:8, N2:10, N1:10
+        const perLevel = {};
+        for (const q of res.json.data.questions) {
+            assert.ok(q.jlptLevel, 'her soru rozeti için seviye taşımalı');
+            perLevel[q.jlptLevel] = (perLevel[q.jlptLevel] || 0) + 1;
+        }
+        assert.deepEqual(perLevel, { N5: 6, N4: 6, N3: 8, N2: 10, N1: 10 });
+
+        // Zorluk kademeli artar: sorular N5'ten N1'e sıralı gelir
+        const order = res.json.data.questions.map(q => q.jlptLevel);
+        assert.deepEqual(order, [...order].sort(
+            (a, b) => ['N5', 'N4', 'N3', 'N2', 'N1'].indexOf(a) - ['N5', 'N4', 'N3', 'N2', 'N1'].indexOf(b)
+        ), 'sorular kolaydan zora sıralanmalı');
     });
 
-    it('cevaplar anlık geri bildirim döner; N4\'te kalınca merdiven cezasız biter ve özet döner', async () => {
-        const res = await api('POST', '/quiz/start', { token, body: { type: 'placement' } });
-        assert.equal(res.json.data.jlptLevel, 'N4');
-        const quizId = res.json.data.quizId;
-
-        // İlk soruya yanlış cevap: "Yanlış Cevap!" kartının verisi dönmeli
+    it('anlık geri bildirim döner, aynı soru iki kez cevaplanamaz', async () => {
+        const quizId = (await QuizAttempt.findOne({ user: userId, status: 'in_progress' }))._id;
         const attempt = await QuizAttempt.findById(quizId);
         const q0 = attempt.questions[0];
         const wrongAnswer = q0.format === 'typing' ? 'kesin-yanlis-cevap' : (q0.correctIndex + 1) % 4;
+
         const fb = await api('POST', `/quiz/${quizId}/answer`, { token, body: { index: 0, answer: wrongAnswer } });
         assert.equal(fb.status, 200);
         assert.equal(fb.json.data.correct, false);
@@ -1532,29 +1643,119 @@ describe('Quiz', () => {
         assert.equal(fb.json.data.finished, false);
         assert.equal(fb.json.data.answeredCount, 1);
 
-        // Aynı soru ikinci kez cevaplanamaz, index sınırları denetlenir
         const dup = await api('POST', `/quiz/${quizId}/answer`, { token, body: { index: 0, answer: wrongAnswer } });
         assert.equal(dup.status, 400);
         const badIdx = await api('POST', `/quiz/${quizId}/answer`, { token, body: { index: 99, answer: 0 } });
         assert.equal(badIdx.status, 400);
+    });
 
-        // Kalanları da yanlış cevapla → merdiven biter
-        const last = await answerAllFromDb(quizId, false, token, 1);
+    it('çıkışta sınav geçersiz sayılır, sonraki giriş BAŞTAN başlar', async () => {
+        const quizId = (await QuizAttempt.findOne({ user: userId, status: 'in_progress' }))._id;
+
+        const bye = await api('POST', `/quiz/${quizId}/abandon`, { token });
+        assert.equal(bye.status, 200);
+        assert.equal((await QuizAttempt.findById(quizId)).status, 'abandoned');
+
+        // Terk edilen sınava cevap gönderilemez
+        const late = await api('POST', `/quiz/${quizId}/answer`, { token, body: { index: 1, answer: 0 } });
+        assert.equal(late.status, 400);
+
+        // Terk cooldown YAKMAZ: kullanıcı bir ölçüm almadı
+        const fresh = await api('POST', '/quiz/start', { token, body: { type: 'placement' } });
+        assert.equal(fresh.status, 200);
+        assert.notEqual(String(fresh.json.data.quizId), String(quizId), 'yeni sınav açılmalı');
+        assert.equal(fresh.json.data.answeredCount, 0, 'baştan başlamalı');
+    });
+
+    it('seviye en yüksekten aşağı taranarak belirlenir; altındaki seviyeler de açılır', async () => {
+        const quizId = (await QuizAttempt.findOne({ user: userId, status: 'in_progress' }))._id;
+
+        // N5/N4/N3 doğru, N2/N1 yanlış → N3'ün %100'ü doğru, seviye N3
+        const last = await answerByLevel(quizId, ['N5', 'N4', 'N3']);
         const result = last.json.data.result;
-        assert.equal(result.passed, false);
-        assert.equal(result.placementFinished, true);
-        assert.equal(result.nextAttemptAllowedAt, undefined, 'placement cooldown yakmaz');
 
-        // "Seviyen Belirlendi" ekranı: iki basamağın toplamları (10 doğru + 10 yanlış)
-        const summary = result.summary;
-        assert.equal(summary.determinedLevel, 'N4', 'N5 geçildi, N4\'te kalındı → seviye N4');
-        assert.equal(summary.totalQuestions, 20);
-        assert.equal(summary.correctCount, 10);
-        assert.equal(summary.wrongCount, 10);
-        assert.ok(typeof summary.durationSeconds === 'number' && summary.durationSeconds >= 0);
+        assert.equal(result.determinedLevel, 'N3');
+        assert.equal(result.levelLabel, 'Orta');
+        assert.ok(result.levelDescription?.length, 'sonuç ekranı için açıklama cümlesi dönmeli');
+        assert.equal(result.totalQuestions, 40);
+        assert.equal(result.correctCount, 20, 'N5:6 + N4:6 + N3:8');
+        assert.equal(result.wrongCount, 20);
+        assert.ok(typeof result.durationSeconds === 'number' && result.durationSeconds >= 0);
+        assert.equal(result.passed, undefined, 'geçme/kalma kavramı kalktı');
 
-        const again = await api('POST', '/quiz/start', { token, body: { type: 'placement' } });
-        assert.equal(again.status, 400, 'placement tek seferliktir');
+        // Belirlenen seviyeye KADAR hepsi açılır — N3 bilen N5/N4'ü de bilir
+        assert.deepEqual(result.unlockedLevels.sort(), ['N3', 'N4'], 'N5 zaten açıktı');
+        const unlocked = await Progress.find({ user: userId, isUnlocked: true }).distinct('jlptLevel');
+        assert.deepEqual(unlocked.sort(), ['N3', 'N4', 'N5']);
+
+        // Sınav sonucu doğrudan çalışılan seviye olur (kilit açılışının aksine
+        // "Şimdi Geç" onayı beklenmez; STS'nin işi zaten yerleştirme)
+        assert.equal((await User.findById(userId)).activeLevel, 'N3');
+        const firstLesson = await api('GET', '/userwords/today', { token });
+        const lessonLevels = new Set(firstLesson.json.data.newWords.map(w => w.jlptLevel));
+        assert.deepEqual([...lessonLevels], ['N3'], 'ilk ders belirlenen seviyeden gelmeli');
+    });
+
+    it('hepsi yanlışsa sonuç N5 olur — sınavda "başarısızlık" yoktur', async () => {
+        const user = await createVerifiedUser('sifir@test.com');
+        const t = (await login('sifir@test.com')).accessToken;
+
+        const res = await api('POST', '/quiz/start', { token: t, body: { type: 'placement' } });
+        const last = await answerByLevel(res.json.data.quizId, [], t);
+        const result = last.json.data.result;
+
+        assert.equal(result.determinedLevel, 'N5');
+        assert.equal(result.correctCount, 0);
+        assert.deepEqual(result.unlockedLevels, [], 'N5 zaten açıktı, yeni kilit açılmadı');
+        assert.equal((await User.findById(user._id)).activeLevel, 'N5');
+    });
+
+    it('tekrar giriş 14 gün sonra; kilitler geri KAPANMAZ', async () => {
+        // Az önce N3 belirlenmiş kullanıcı hemen tekrar giremez
+        const soon = await api('POST', '/quiz/start', { token, body: { type: 'placement' } });
+        assert.equal(soon.status, 403);
+        assert.ok(soon.json.nextAttemptAllowedAt, 'UI geri sayımı için tarih dönmeli');
+
+        const status = await api('GET', '/quiz/status', { token });
+        assert.equal(status.json.data.placementAvailable, false);
+        assert.equal(status.json.data.retakeCooldownDays, 14);
+        assert.equal(status.json.data.hasTakenPlacement, true);
+
+        // 15 gün öncesine çek → hak yenilenir
+        await QuizAttempt.updateMany(
+            { user: userId, status: 'completed' },
+            { completedAt: new Date(Date.now() - 15 * 24 * 60 * 60 * 1000) }
+        );
+        const retry = await api('POST', '/quiz/start', { token, body: { type: 'placement' } });
+        assert.equal(retry.status, 200);
+
+        // Bu kez hepsi yanlış → N5 çıkar, AMA N4/N3 kilitleri açık kalmalı
+        await answerByLevel(retry.json.data.quizId, []);
+        const unlocked = await Progress.find({ user: userId, isUnlocked: true }).distinct('jlptLevel');
+        assert.deepEqual(unlocked.sort(), ['N3', 'N4', 'N5'], 'hak edilmiş seviye geri alınamaz');
+        assert.equal((await User.findById(userId)).activeLevel, 'N5', 'activeLevel yeni sonuca taşınır');
+    });
+
+    it('modal bir kez ertelenince bir daha çıkmaz', async () => {
+        await createVerifiedUser('modal@test.com');
+        const t = (await login('modal@test.com')).accessToken;
+
+        const before = await api('GET', '/home/summary', { token: t });
+        assert.equal(before.json.data.placementPrompt, true, 'hiç sınava girmemiş kullanıcıya modal çıkar');
+
+        const defer = await api('POST', '/quiz/placement/defer', { token: t });
+        assert.equal(defer.status, 200);
+
+        const after = await api('GET', '/home/summary', { token: t });
+        assert.equal(after.json.data.placementPrompt, false, '"Daha Sonra" kalıcı olmalı');
+
+        // Erteleme sınavı iptal etmez: Ayarlar'daki satır hâlâ çalışır
+        assert.equal((await api('GET', '/quiz/status', { token: t })).json.data.placementAvailable, true);
+    });
+
+    it('sınava girmiş kullanıcıya modal bir daha çıkmaz', async () => {
+        const home = await api('GET', '/home/summary', { token });
+        assert.equal(home.json.data.placementPrompt, false);
     });
 
     it('yazma sorusu: büyük harf/noktalama/parantez toleranslı puanlanır, boş yanlış sayılır', async () => {
@@ -1564,12 +1765,12 @@ describe('Quiz', () => {
 
         // Deterministik test için deneme doğrudan oluşturulur (start'ta format rastgele)
         const attempt = await QuizAttempt.create({
-            user: user._id, type: 'placement', jlptLevel: 'N5',
+            user: user._id, type: 'placement',
             questions: [
-                { word: word._id, format: 'typing', prompt: { kanji: word.kanji, romaji: word.romaji }, correctAnswers: ['gelecek yıl', 'seneye'] },
-                { word: word._id, format: 'typing', prompt: { kanji: word.kanji, romaji: word.romaji }, correctAnswers: ['tehlikeli'] },
-                { word: word._id, format: 'typing', prompt: { kanji: word.kanji, romaji: word.romaji }, correctAnswers: ['mavi'] },
-                { word: word._id, format: 'meaning', prompt: { kanji: word.kanji }, choices: ['a', 'b', 'c', 'd'], correctIndex: 2 }
+                { word: word._id, jlptLevel: 'N5', format: 'typing', prompt: { kanji: word.kanji, romaji: word.romaji }, correctAnswers: ['gelecek yıl', 'seneye'] },
+                { word: word._id, jlptLevel: 'N5', format: 'typing', prompt: { kanji: word.kanji, romaji: word.romaji }, correctAnswers: ['tehlikeli'] },
+                { word: word._id, jlptLevel: 'N5', format: 'typing', prompt: { kanji: word.kanji, romaji: word.romaji }, correctAnswers: ['mavi'] },
+                { word: word._id, jlptLevel: 'N5', format: 'meaning', prompt: { kanji: word.kanji }, choices: ['a', 'b', 'c', 'd'], correctIndex: 2 }
             ]
         });
 
@@ -1594,30 +1795,17 @@ describe('Quiz', () => {
         assert.equal(feedbacks.at(-1).json.data.result.correctCount, 3);
     });
 
-    it('levelup: 35 soru, kalınca 3 gün cooldown, tekrar deneme 403', async () => {
+    it('seviye atlama sınavı (levelup) kaldırıldı', async () => {
+        // Seviye artık yalnızca ustalıkla (%75) açılıyor ve geçiş kullanıcının
+        // onayına bağlı — ayrı bir atlama sınavı yok.
         const res = await api('POST', '/quiz/start', { token, body: { type: 'levelup', jlptLevel: 'N4' } });
-        assert.equal(res.json.data.totalQuestions, 35);
-
-        const last = await answerAllFromDb(res.json.data.quizId, false);
-        const result = last.json.data.result;
-        assert.equal(result.passed, false);
-        assert.equal(result.failCount, 1);
-        assert.equal(result.cooldownDays, 3);
-
-        const retry = await api('POST', '/quiz/start', { token, body: { type: 'levelup', jlptLevel: 'N4' } });
-        assert.equal(retry.status, 403);
-        assert.ok(retry.json.nextAttemptAllowedAt, 'UI için cooldown bitişi dönmeli');
-    });
-
-    it('kilitli seviyeye levelup 403 döner', async () => {
-        const res = await api('POST', '/quiz/start', { token, body: { type: 'levelup', jlptLevel: 'N2' } });
-        assert.equal(res.status, 403);
+        assert.equal(res.status, 400);
     });
 
     it('quiz_completed event\'leri yazılır', async () => {
         await sleep(100);
         const count = await Event.countDocuments({ user: userId, type: 'quiz_completed' });
-        assert.equal(count, 3);
+        assert.equal(count, 2, 'ilk sınav + 14 gün sonraki tekrar');
     });
 });
 
@@ -1636,8 +1824,8 @@ describe('İçerikli soru tipleri (boşluk doldurma & görselli)', () => {
         const QuizService = require('../modules/quiz/quiz.service');
         // 6 formatlı 40 çekilişte içerik formatlarından en az biri pratikte kesin çıkar
         const questions = [
-            ...await QuizService.generateQuestions('N5', 20, true),
-            ...await QuizService.generateQuestions('N5', 20, true)
+            ...await QuizService.generateQuestions('N5', 20),
+            ...await QuizService.generateQuestions('N5', 20)
         ];
 
         const fillblanks = questions.filter(q => q.format === 'fillblank');
@@ -1656,9 +1844,8 @@ describe('İçerikli soru tipleri (boşluk doldurma & görselli)', () => {
             assert.equal(q.choices.length, 4);
         }
 
-        // levelup üretimi içerik formatlarını kullanmaz (klasik 3 şıklı)
-        const classic = await QuizService.generateQuestions('N5', 20, false);
-        assert.ok(classic.every(q => ['meaning', 'reverse', 'reading'].includes(q.format)));
+        // Üretilen her soru rozeti için kendi seviyesini taşımalı
+        assert.ok(questions.every(q => q.jlptLevel === 'N5'));
     });
 
     it('fillblank/image cevapları API üzerinden puanlanır', async () => {
@@ -1667,10 +1854,10 @@ describe('İçerikli soru tipleri (boşluk doldurma & görselli)', () => {
         const word = await Word.findOne({ jlptLevel: 'N5', isCore: true });
 
         const attempt = await QuizAttempt.create({
-            user: user._id, type: 'placement', jlptLevel: 'N5',
+            user: user._id, type: 'placement',
             questions: [
-                { word: word._id, format: 'fillblank', prompt: { sentence: 'これは____です。' }, choices: ['あ', word.kanji, 'い', 'う'], correctIndex: 1 },
-                { word: word._id, format: 'image', prompt: { imageUrl: 'https://img.test/x.jpg' }, choices: [word.kanji, 'あ', 'い', 'う'], correctIndex: 0 }
+                { word: word._id, jlptLevel: 'N5', format: 'fillblank', prompt: { sentence: 'これは____です。' }, choices: ['あ', word.kanji, 'い', 'う'], correctIndex: 1 },
+                { word: word._id, jlptLevel: 'N5', format: 'image', prompt: { imageUrl: 'https://img.test/x.jpg' }, choices: [word.kanji, 'あ', 'い', 'う'], correctIndex: 0 }
             ]
         });
 
@@ -1691,7 +1878,7 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
     before(async () => {
         await createVerifiedUser('ders@test.com', { dailyGoal: 20 });
         token = (await login('ders@test.com')).accessToken;
-        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const today = await api('GET', '/userwords/today', { token });
         [w0, w1] = today.json.data.newWords;
         await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
     });
@@ -1744,7 +1931,7 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
     });
 
     it('today yanıtı kaldığın yerden devam bilgisi ve isKana verir', async () => {
-        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const today = await api('GET', '/userwords/today', { token });
         const d = today.json.data;
 
         assert.deepEqual(d.progress, { total: 20, answered: 2, remaining: 18 },
@@ -1763,19 +1950,29 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
         assert.equal(detail.json.data.isKana, true, 'kana-only kelimede isKana true');
     });
 
-    it('today jlptLevel zorunludur — yoksa/geçersizse 400 (hayalet ikinci havuz açılmasın)', async () => {
+    it('today seviyeyi activeLevel\'dan alır; query\'deki jlptLevel YOK SAYILIR (hayalet ikinci havuz açılmasın)', async () => {
+        // Eskiden jlptLevel zorunlu bir query parametresiydi ve yoksa 400'dü;
+        // sunucuda güvenilir bir "o anki seviye" kaydı olmadığı içindi. Artık
+        // User.activeLevel var: parametresiz çağrı normal çalışmalı.
         const missing = await api('GET', '/userwords/today', { token });
-        assert.equal(missing.status, 400);
+        assert.equal(missing.status, 200);
 
+        // Uydurma bir seviye artık hata DEĞİL, sessizce yok sayılır — istemci
+        // seviyeyi belirleyemez, tek yazıcı PUT /progress/active-level'dır.
         const invalid = await api('GET', '/userwords/today?jlptLevel=N6', { token });
-        assert.equal(invalid.status, 400);
+        assert.equal(invalid.status, 200);
+
+        // Kritik olan: üç çağrı da AYNI havuzu görmeli (ikinci doküman açılmamalı)
+        const pools = await mongoose.connection.db.collection('dailywordpools')
+            .countDocuments({ user: (await User.findOne({ email: 'ders@test.com' }))._id });
+        assert.equal(pools, 1, 'query ne gelirse gelsin günde tek havuz açılmalı');
     });
 
     it('dailyGoal gün içinde artınca havuz genişler: önce vadesi gelen tekrarlar, sonra yeni kelimeler', async () => {
         const up = await api('PUT', '/auth/update-info', { token, body: { dailyGoal: 25 } });
         assert.equal(up.status, 200);
 
-        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const today = await api('GET', '/userwords/today', { token });
         const d = today.json.data;
         assert.equal(d.progress.total, 25, 'havuz 20→25 genişlemeli');
         // migi (右) bugün ertelendi (empty) ve vadesi geçmiş durumda: genişleme
@@ -1786,7 +1983,7 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
             'vadesi gelmiş kelime top-up kontenjanına önce girer');
 
         // İkinci çağrı tekrar büyütmemeli (idempotent)
-        const again = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const again = await api('GET', '/userwords/today', { token });
         assert.equal(again.json.data.progress.total, 25);
     });
 
@@ -1857,14 +2054,14 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
     });
 
     it('"Şimdilik Geç" ertelemedir: kelime tekrar sorulur, günün ilk gerçek cevabı sayılır', async () => {
-        const before = (await api('GET', '/userwords/today?jlptLevel=N5', { token })).json.data;
+        const before = (await api('GET', '/userwords/today', { token })).json.data;
         const w = before.newWords.find(x => !x.answeredToday);
         const s0 = (await api('GET', '/sessions/today', { token })).json.data;
 
         let res = await api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'empty' } });
         assert.equal(res.json.data.counted, true);
 
-        let today = (await api('GET', '/userwords/today?jlptLevel=N5', { token })).json.data;
+        let today = (await api('GET', '/userwords/today', { token })).json.data;
         let item = today.newWords.find(x => x._id === w._id);
         assert.equal(item.answeredToday, false, 'nihai cevap yok: kelime yeniden sorulmalı');
         assert.equal(item.touchedToday, true, 'ama dokunuldu: ilerleme sayacında görünmeli');
@@ -1888,7 +2085,7 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
         assert.equal(s2.emptyCount, s0.emptyCount, 'empty sayacı geri düşer');
         assert.equal(s2.correctCount, s1.correctCount + 1);
 
-        today = (await api('GET', '/userwords/today?jlptLevel=N5', { token })).json.data;
+        today = (await api('GET', '/userwords/today', { token })).json.data;
         item = today.newWords.find(x => x._id === w._id);
         assert.equal(item.answeredToday, true);
         assert.equal(item.todayResult, 'correct');
@@ -1915,7 +2112,7 @@ describe('Session güvenilirliği (zorunlu session + idempotent bitirme + yeni t
     before(async () => {
         await createVerifiedUser('guvenlik@test.com', { dailyGoal: 20 });
         token = (await login('guvenlik@test.com')).accessToken;
-        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const today = await api('GET', '/userwords/today', { token });
         [w0, w1, w2] = today.json.data.newWords;
         // BİLEREK /sessions/start çağrılmadı: bypass/hacking senaryosunu test ediyoruz.
     });
@@ -1955,7 +2152,7 @@ describe('Session güvenilirliği (zorunlu session + idempotent bitirme + yeni t
         // StudySession.isCompleted'ı today'den önce sıfırlardı (regresyon riski);
         // tetikleyici artık DailyWordPool.roundClosedAt olduğu için etkilenmemeli.
         await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
-        const newRound = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const newRound = await api('GET', '/userwords/today', { token });
         const newIds = new Set([...newRound.json.data.newWords, ...newRound.json.data.reviewWords].map(w => (w.word || w)._id));
 
         // w2 önceki turda hiç cevaplanmamıştı (havuzda kalmıştı) — yine de yeni
@@ -1979,7 +2176,7 @@ describe('Ana ekran (Home)', () => {
         todayStr = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date());
 
         // Havuz + oturum aç, 2 kelime cevapla (1 doğru 1 yanlış)
-        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const today = await api('GET', '/userwords/today', { token });
         const [w1, w2] = today.json.data.newWords;
         await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
         await api('POST', '/userwords/answer', { token, body: { wordId: w1._id, result: 'correct' } });
@@ -2097,7 +2294,7 @@ describe('Ana ekran (Home)', () => {
         assert.equal(res.json.data.dailyGoal, 40, 'tercih değeri ise anında güncellenir');
 
         // Havuz bir sonraki today çağrısında genişler; payda onunla birlikte büyür
-        await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        await api('GET', '/userwords/today', { token });
         res = await api('GET', '/home/summary', { token });
         assert.equal(res.json.data.goal, 30, 'test setinde 30 core N5 var: 20 + kalan 10');
     });
@@ -2113,7 +2310,7 @@ describe('Ders sayacı — "Şimdilik Geç" ilerleme sayılmaz', () => {
     before(async () => {
         await createVerifiedUser('sayac@test.com', { dailyGoal: 20 });
         token = (await login('sayac@test.com')).accessToken;
-        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const today = await api('GET', '/userwords/today', { token });
         words = today.json.data.newWords;
         assert.equal(words.length, 20, 'havuz 20 kelime olmalı');
         await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
@@ -2124,7 +2321,7 @@ describe('Ders sayacı — "Şimdilik Geç" ilerleme sayılmaz', () => {
             await api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'empty' } });
         }
 
-        const d = (await api('GET', '/userwords/today?jlptLevel=N5', { token })).json.data;
+        const d = (await api('GET', '/userwords/today', { token })).json.data;
         assert.equal(d.today.completedWords, 0, 'hiçbirinin nihai cevabı yok');
         assert.equal(d.today.totalWords, 20, 'dokunulan kelime sayısı ise 20');
         assert.equal(d.today.emptyCount, 20);
@@ -2147,7 +2344,7 @@ describe('Ders sayacı — "Şimdilik Geç" ilerleme sayılmaz', () => {
             await api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'correct' } });
         }
 
-        const d = (await api('GET', '/userwords/today?jlptLevel=N5', { token })).json.data;
+        const d = (await api('GET', '/userwords/today', { token })).json.data;
         assert.equal(d.today.completedWords, 20, 'artık gerçekten 20/20');
         assert.equal(d.today.totalWords, 20, 'erteleme yükseltmesi toplamı şişirmez');
         assert.equal(d.today.emptyCount, 0);
@@ -2194,7 +2391,7 @@ describe('Anasayfa — seri şeridi serinin kuralına uyar', () => {
         await createVerifiedUser('serit@test.com');
         const token = (await login('serit@test.com')).accessToken;
 
-        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const today = await api('GET', '/userwords/today', { token });
         const [w1] = today.json.data.newWords;
         await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
         await api('POST', '/userwords/answer', { token, body: { wordId: w1._id, result: 'empty' } });
@@ -2212,7 +2409,7 @@ describe('Anasayfa — seri şeridi serinin kuralına uyar', () => {
         await createVerifiedUser('cip@test.com');
         const token = (await login('cip@test.com')).accessToken;
 
-        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const today = await api('GET', '/userwords/today', { token });
         const words = today.json.data.newWords.slice(0, 9);
         assert.equal(words.length, 9, 'test setinde 9 kelime bulunmalı');
 
@@ -2235,7 +2432,7 @@ describe('Anasayfa — çoklu tur: payda SABİT kalır, pay hedefi aşabilir', (
         token = (await login('coklutur@test.com')).accessToken;
 
         // 1. tur: 5 kelime, hepsini cevapla, oturumu bitir (roundClosedAt set edilir)
-        let today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        let today = await api('GET', '/userwords/today', { token });
         await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
         for (const w of today.json.data.newWords) {
             await api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'correct' } });
@@ -2247,7 +2444,7 @@ describe('Anasayfa — çoklu tur: payda SABİT kalır, pay hedefi aşabilir', (
         assert.equal(summary.json.data.today.totalWords, 5);
 
         // 2. tur: today çağrısı yeni turu açar (roundClosedAt -> null, taze 5 kelime daha)
-        today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        today = await api('GET', '/userwords/today', { token });
         assert.equal(today.json.data.newWords.length, 5, '2. tur da 5 taze kelime getirir');
         assert.equal(today.json.data.goal, 5, 'ürün kararı: yeni tur paydayı büyütmez, sabit kalır');
 
@@ -2270,7 +2467,7 @@ describe('Anasayfa — çoklu tur: payda SABİT kalır, pay hedefi aşabilir', (
 
         // /userwords/today da (yeniden çağrılınca) AYNI sayıları görmeli —
         // üç uç nokta (today/answer/home) tek kaynaktan (StudySession) besleniyor
-        today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        today = await api('GET', '/userwords/today', { token });
         assert.equal(today.json.data.today.totalWords, 6);
         assert.equal(today.json.data.goal, 5);
     });
@@ -2283,7 +2480,7 @@ describe('Seviyeler ekranı', () => {
         await createVerifiedUser('seviye@test.com');
         token = (await login('seviye@test.com')).accessToken;
         await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
-        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const today = await api('GET', '/userwords/today', { token });
         const [w1, w2] = today.json.data.newWords;
         await api('POST', '/userwords/answer', { token, body: { wordId: w1._id, result: 'correct' } });
         await api('POST', '/userwords/answer', { token, body: { wordId: w2._id, result: 'wrong' } });
@@ -2312,6 +2509,185 @@ describe('Seviyeler ekranı', () => {
     });
 });
 
+describe('Hafıza ekranı', () => {
+    let token, userId, n5Words, trackingSinceBackup;
+
+    // Tasarımdaki beş kutunun masteryLevel karşılığı mockup'ın kendi
+    // sayılarından doğrulandı: 76+57+46+106+95 = 380 (seviyenin TÜM kelimeleri)
+    // ve (46+106+95)/380 = %65, karttaki oranla birebir. Yani Orta+İyi+Ezber =
+    // masteryLevel >= 3 = seviye kilidini açan küme.
+    before(async () => {
+        const user = await createVerifiedUser('hafiza@test.com');
+        userId = user._id;
+        token = (await login('hafiza@test.com')).accessToken;
+
+        // "Bu hafta iyiye geçti" çipi, izleme başlangıcından önceki haftalarda
+        // bilerek null döner; testte tarih geriye çekilip sayı doğrulanıyor.
+        trackingSinceBackup = process.env.MEMORY_TRACKING_SINCE;
+        process.env.MEMORY_TRACKING_SINCE = '2020-01-01T00:00:00.000Z';
+
+        // /memory/words?box=new ile AYNI sıralama; listenin başındaki kelimeyi
+        // burada da bilelim
+        n5Words = await Word.find({ jlptLevel: 'N5', isCore: true }).sort({ frequencyRank: 1, _id: 1 });
+
+        // Zayıf 3 (1,1,2) · Orta 1 · İyi 2 · Ezber 1 → sayılan 4 kelime.
+        // nextReviewDate GELECEKTE: decay testi bu kayıtlara dokunmasın.
+        const mk = (word, masteryLevel) => ({
+            user: userId, word: word._id, status: 'learning', masteryLevel,
+            repetitions: masteryLevel, interval: masteryLevel * 3, easeFactor: 2.5,
+            nextReviewDate: new Date(Date.now() + 30 * 86400000)
+        });
+        await UserWord.insertMany([
+            mk(n5Words[0], 1), mk(n5Words[1], 1), mk(n5Words[2], 2),
+            mk(n5Words[3], 3), mk(n5Words[4], 4), mk(n5Words[5], 4), mk(n5Words[6], 5)
+        ]);
+    });
+
+    after(() => {
+        if (trackingSinceBackup === undefined) delete process.env.MEMORY_TRACKING_SINCE;
+        else process.env.MEMORY_TRACKING_SINCE = trackingSinceBackup;
+    });
+
+    it('beş kutu seviyenin tamamını böler, oran kutulardan türetilir', async () => {
+        const res = await api('GET', '/memory', { token });
+        assert.equal(res.status, 200);
+        const d = res.json.data;
+
+        assert.equal(d.jlptLevel, 'N5');
+        assert.equal(d.isActiveLevel, true);
+        assert.deepEqual(d.boxes.map(b => b.key), ['new', 'weak', 'medium', 'good', 'mastered']);
+
+        const count = k => d.boxes.find(b => b.key === k).count;
+        assert.equal(count('weak'), 3, 'Zayıf kutusu masteryLevel 1 ve 2\'yi birlikte tutar');
+        assert.equal(count('medium'), 1);
+        assert.equal(count('good'), 2);
+        assert.equal(count('mastered'), 1);
+        assert.equal(count('new'), d.totalWords - 7, 'Yeni = hiç dokunulmamış kelimeler');
+
+        // Kutuların toplamı seviyenin tamamıdır — mockup'taki 380 sayısının kuralı
+        assert.equal(d.boxes.reduce((s, b) => s + b.count, 0), d.totalWords);
+
+        // %65 / %75 çubuğu: pay yalnızca countsTowardUnlock kutularından gelir
+        assert.deepEqual(
+            d.boxes.filter(b => b.countsTowardUnlock).map(b => b.key),
+            ['medium', 'good', 'mastered']
+        );
+        assert.equal(d.completionThreshold, 75);
+        assert.equal(d.completionRate, Math.round((4 / d.totalWords) * 100));
+        assert.equal(d.remainingPercent, Math.max(0, 75 - d.completionRate));
+
+        assert.deepEqual(d.nextLevel, { jlptLevel: 'N4', label: 'Temel', isUnlocked: false });
+        assert.equal(d.unlockHint, 'Orta, İyi ve Ezber kutularının toplamı %75\'i geçince N4 açılır.');
+        assert.equal(d.defaultBox, 'weak');
+    });
+
+    it('seviye kartındaki oran GET /progress ile aynı sayıyı verir', async () => {
+        // Aynı eşik iki ekranda iki farklı sayı gösteremez
+        await ProgressService.checkAndUnlockNextLevel(userId, 'N5');
+        const [mem, prog] = await Promise.all([
+            api('GET', '/memory', { token }),
+            api('GET', '/progress', { token })
+        ]);
+        const n5 = prog.json.data.levels.find(l => l.jlptLevel === 'N5');
+        assert.equal(mem.json.data.completionRate, n5.completionRate);
+    });
+
+    it('Yeni kutusu hiç dokunulmamış kelimeleri müfredat sırasında listeler', async () => {
+        const res = await api('GET', '/memory/words?box=new&limit=5', { token });
+        assert.equal(res.status, 200);
+        const d = res.json.data;
+
+        assert.equal(d.label, 'Yeni');
+        assert.equal(d.jlptLevel, 'N5');
+        assert.equal(d.items.length, 5);
+        // İlk 7 kelimenin kaydı var; liste 8.'den başlamalı (frequencyRank sırası)
+        assert.equal(d.items[0].word.kanji, n5Words[7].kanji);
+        assert.equal(d.items[0].masteryLevel, null, 'kayıt yok, seviye de yok');
+
+        // Listenin toplamı kutunun sayacıyla aynı olmalı: ekranda "76 Yeni"
+        // yazıp listeye girince 60 kelime çıkması bu satırla imkânsız
+        const mem = await api('GET', '/memory', { token });
+        assert.equal(d.total, mem.json.data.boxes.find(b => b.key === 'new').count);
+
+        const all = await api('GET', '/memory/words?box=new&limit=100', { token });
+        assert.ok(all.json.data.items.every(i => i.box === 'new'));
+        assert.ok(all.json.data.items.every(i => i.word.jlptLevel === 'N5' && i.word.isCore));
+    });
+
+    it('Zayıf kutusu 1. ve 2. seviyeleri birlikte döndürür', async () => {
+        const res = await api('GET', '/memory/words?box=weak', { token });
+        assert.equal(res.status, 200);
+        assert.equal(res.json.data.total, 3);
+        assert.ok(res.json.data.items.every(i => [1, 2].includes(i.masteryLevel)));
+        assert.ok(res.json.data.items[0].word.kanji, 'kelime dokümanı gömülü gelmeli');
+    });
+
+    it('geçersiz kutu 400 döner', async () => {
+        const res = await api('GET', '/memory/words?box=ezberlendi', { token });
+        assert.equal(res.status, 400);
+        assert.match(res.json.message, /box:/);
+    });
+
+    it('haftalık çip yalnızca sayılan bölgeye YENİ girenleri sayar', async () => {
+        const before = await api('GET', '/memory', { token });
+        assert.equal(before.json.data.weeklyImproved, 0, 'promotedAt yazılmamış kayıtlar sayılmaz');
+
+        await StudySessionService.startSession(userId, 'N5');
+
+        // 2 → 3: sayılan bölgeye GİRİŞ, çipe eklenir
+        await UserWord.create({
+            user: userId, word: n5Words[10]._id, status: 'learning',
+            masteryLevel: 2, repetitions: 1, interval: 1, easeFactor: 2.5,
+            nextReviewDate: new Date(Date.now() - 86400000)
+        });
+        const giren = await UserWordService.submitAnswer(userId, n5Words[10]._id, 'correct');
+        assert.equal(giren.masteryLevel, 3);
+
+        // 3 → 4: zaten bölgedeydi, çip ARTMAZ (yoksa her doğru cevap sayardı)
+        await UserWord.create({
+            user: userId, word: n5Words[11]._id, status: 'learning',
+            masteryLevel: 3, repetitions: 2, interval: 6, easeFactor: 2.5,
+            nextReviewDate: new Date(Date.now() - 86400000)
+        });
+        const zaten = await UserWordService.submitAnswer(userId, n5Words[11]._id, 'correct');
+        assert.ok(zaten.masteryLevel >= 4);
+
+        const after = await api('GET', '/memory', { token });
+        assert.equal(after.json.data.weeklyImproved, 1);
+    });
+
+    it('bölgeden düşen kelimenin izi silinir (cevap ve decay yolunda)', async () => {
+        // Cevap yolu: 3 → yanlış → 1. Kelime bugün zaten nihai cevabını aldı,
+        // aynı gün ikinci cevap NÖTRDÜR — dünkü cevap gibi davransın diye
+        // lastReviewDate geriye çekiliyor.
+        await UserWord.updateOne(
+            { user: userId, word: n5Words[10]._id },
+            { lastReviewDate: new Date(Date.now() - 2 * 86400000) }
+        );
+        await UserWordService.submitAnswer(userId, n5Words[10]._id, 'wrong');
+
+        const dusenCevap = await UserWord.findOne({ user: userId, word: n5Words[10]._id });
+        assert.equal(dusenCevap.masteryLevel, 1);
+        assert.equal(dusenCevap.promotedAt, null, 'yanlış cevap kelimeyi bölgeden çıkardı');
+
+        const sonra = await api('GET', '/memory', { token });
+        assert.equal(sonra.json.data.weeklyImproved, 0, 'düşen kelime çipte sayılmaz');
+
+        // Decay yolu: bölgedeyken uzun süre dokunulmayan kelime 3'ün altına düşer
+        await UserWord.create({
+            user: userId, word: n5Words[12]._id, status: 'learning',
+            masteryLevel: 3, repetitions: 2, interval: 6, easeFactor: 2.5,
+            promotedAt: new Date(),
+            nextReviewDate: new Date(Date.now() - 30 * 86400000) // ratio 5 → hedef 1
+        });
+        await UserWordService.applyMasteryDecay();
+
+        const dusen = await UserWord.findOne({ user: userId, word: n5Words[12]._id });
+        assert.equal(dusen.masteryLevel, 1);
+        assert.equal(dusen.promotedAt, null, 'bölgeden çıkan kelime çipten de düşmeli');
+    });
+});
+
 describe('Kelime havuzu sıralaması (müfredat/frequencyRank)', () => {
     let token;
 
@@ -2322,19 +2698,21 @@ describe('Kelime havuzu sıralaması (müfredat/frequencyRank)', () => {
             { kanji: '医者', romaji: 'isha', meaning: 'doctor', type: 'isim', jlptLevel: 'N3', isCore: true, frequencyRank: 10 },
             { kanji: '看護師', romaji: 'kangoshi', meaning: 'nurse', type: 'isim', jlptLevel: 'N3', isCore: true, frequencyRank: 20 }
         ]);
-        await createVerifiedUser('siralama@test.com');
+        // Ders seviyesi artık query'den değil profilden okunur
+        await createVerifiedUser('siralama@test.com', { activeLevel: 'N3' });
         token = (await login('siralama@test.com')).accessToken;
     });
 
     it('yeni kelimeler frequencyRank artan sırada gelir (rastgele DEĞİL — ön koşul kelime önce)', async () => {
-        const res = await api('GET', '/userwords/today?jlptLevel=N3', { token });
+        const res = await api('GET', '/userwords/today', { token });
         assert.equal(res.status, 200);
-        const kanjis = res.json.data.newWords.map(w => w.kanji);
+        // Havuzun geri kalanı sınav için eklenen yüksek rank'li dolgu kelimeler
+        const kanjis = res.json.data.newWords.slice(0, 3).map(w => w.kanji);
         assert.deepEqual(kanjis, ['医者', '看護師', '外科医'], 'doktor → hemşire → cerrah sırası korunmalı');
 
         // Aynı gün tekrar çağrıldığında (havuz zaten var) sıra yine korunur
-        const again = await api('GET', '/userwords/today?jlptLevel=N3', { token });
-        assert.deepEqual(again.json.data.newWords.map(w => w.kanji), ['医者', '看護師', '外科医']);
+        const again = await api('GET', '/userwords/today', { token });
+        assert.deepEqual(again.json.data.newWords.slice(0, 3).map(w => w.kanji), ['医者', '看護師', '外科医']);
     });
 });
 
@@ -2785,7 +3163,7 @@ describe('Hesap silme (KVKK)', () => {
         const tokens = await login('kvkk@test.com');
 
         // Biraz veri üret
-        await api('GET', '/userwords/today?jlptLevel=N5', { token: tokens.accessToken });
+        await api('GET', '/userwords/today', { token: tokens.accessToken });
 
         const del = await api('DELETE', '/auth/delete-account', {
             token: tokens.accessToken,

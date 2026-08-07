@@ -6,6 +6,15 @@ const QuizQuestionSchema = new mongoose.Schema({
         ref: 'Word',
         required: true
     },
+    // Sorunun çekildiği seviye. Sınav artık TEK denemede beş seviyeden soru
+    // sorduğu için seviye deneme başına değil SORU başına anlamlı: soru
+    // ekranındaki "N4" rozeti buradan çizilir ve seviye belirleme hesabı
+    // (seviye bazlı doğruluk oranı) bu alanla gruplanır.
+    jlptLevel: {
+        type: String,
+        enum: ['N5', 'N4', 'N3', 'N2', 'N1'],
+        required: true
+    },
     // meaning: kelime göster anlam seçtir | reverse: anlam göster kelime seçtir |
     // reading: kanji göster okunuş seçtir | typing: kelime göster anlamını YAZDIR (şıksız) |
     // fillblank: örnek cümlede boşluğa gelecek kelimeyi seçtir | image: görsele uyan kelimeyi seçtir
@@ -48,21 +57,28 @@ const QuizAttemptSchema = new mongoose.Schema({
         required: true,
         index: true
     },
-    // placement: ilk giriş seviye belirleme merdiveni | levelup: seviye atlama sınavı
+    // Şimdilik tek tür: placement (Seviye Tespit Sınavı). Seviye atlama sınavı
+    // (levelup) kaldırıldı — seviye artık yalnızca ustalıkla açılıyor (%75) ve
+    // geçiş kullanıcının onayına bağlı. Alan enum olarak duruyor ki ileride
+    // başka bir sınav türü gelirse şema kırılmasın.
     type: {
         type: String,
-        enum: ['placement', 'levelup'],
-        required: true
-    },
-    jlptLevel: {
-        type: String,
-        enum: ['N5', 'N4', 'N3', 'N2', 'N1'],
+        enum: ['placement'],
         required: true
     },
     status: {
         type: String,
-        enum: ['in_progress', 'completed', 'expired'],
+        // abandoned: kullanıcı sınavı yarıda bırakıp çıktı (tasarım: "Çık →
+        // sınav geçersiz"). expired: 30 dk içinde bitirilmedi — ağ kopması gibi
+        // durumlar için, kullanıcı iradesi değil.
+        enum: ['in_progress', 'completed', 'expired', 'abandoned'],
         default: 'in_progress'
+    },
+    // Sınav sonucu: "Seviyen Belirlendi" ekranındaki seviye. Sınav bitince
+    // kullanıcının activeLevel'ı da buraya taşınır (quiz.service.js).
+    determinedLevel: {
+        type: String,
+        enum: ['N5', 'N4', 'N3', 'N2', 'N1']
     },
     questions: {
         type: [QuizQuestionSchema],
@@ -71,21 +87,9 @@ const QuizAttemptSchema = new mongoose.Schema({
     score: {
         type: Number
     },
-    // Doğru cevap sayısı — placement sonuç özeti basamak toplamlarını bundan hesaplar
+    // Doğru cevap sayısı — sonuç ekranındaki "7 Doğru / 23 Yanlış" çubuğu
     correctCount: {
         type: Number
-    },
-    passed: {
-        type: Boolean
-    },
-    // O seviye için art arda kaçıncı başarısız levelup denemesi
-    failCount: {
-        type: Number,
-        default: 0
-    },
-    // Başarısız levelup sonrası bir sonraki denemenin serbest kaldığı an
-    nextAttemptAllowedAt: {
-        type: Date
     },
     completedAt: {
         type: Date
@@ -96,6 +100,9 @@ const QuizAttemptSchema = new mongoose.Schema({
     }
 });
 
-QuizAttemptSchema.index({ user: 1, type: 1, jlptLevel: 1, createdAt: -1 });
+// Cooldown ve "sınava girdi mi" sorguları hep (kullanıcı, tür, en yeni)
+// üzerinden gidiyor; jlptLevel artık deneme seviyesinde olmadığı için indexten
+// de çıktı.
+QuizAttemptSchema.index({ user: 1, type: 1, createdAt: -1 });
 
 module.exports = mongoose.model('QuizAttempt', QuizAttemptSchema);

@@ -56,6 +56,18 @@ const UserWordSchema = new mongoose.Schema({
         max: 5,
         default: 1
     },
+    // Kelimenin "sayılan bölgeye" (masteryLevel >= 3 — seviye kilidini açan
+    // eşiğin TA KENDİSİ) en son girdiği an. Hafıza ekranındaki "Bu hafta +23
+    // kelime iyiye geçti" çipinin tek kaynağı. Seviye 3'ün altına düşerse
+    // null'lanır ki kelime geri tırmandığında o hafta yeniden sayılsın.
+    // Event log'dan türetilmez: yazımlar fire-and-forget'tir, güvenilir kaynak
+    // değildir (bkz. yukarıdaki lastResult notu). Geçmiş kayıtlar BİLEREK
+    // doldurulmadı — doldurulsaydı özelliğin ilk haftası devasa sahte bir sayı
+    // gösterirdi; alan yalnızca bugünden sonraki geçişleri biriktirir.
+    promotedAt: {
+        type: Date,
+        default: null
+    },
     createdAt: {
         type: Date,
         default: Date.now
@@ -70,5 +82,6 @@ const UserWordSchema = new mongoose.Schema({
 
 UserWordSchema.index({ user: 1, word: 1 }, { unique: true });
 UserWordSchema.index({ user: 1, masteryLevel: 1 });
+UserWordSchema.index({ user: 1, promotedAt: 1 });
 
 module.exports = mongoose.model('UserWord', UserWordSchema);

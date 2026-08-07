@@ -116,6 +116,7 @@ app.use('/api/words', requireVerifiedUser, require('./modules/word/word.routes')
 app.use('/api/userwords', requireVerifiedUser, require('./modules/userword/userword.routes'));
 app.use('/api/sessions', requireVerifiedUser, require('./modules/studysession/studysession.routes'));
 app.use('/api/progress', requireVerifiedUser, require('./modules/progress/progress.routes'));
+app.use('/api/memory', requireVerifiedUser, require('./modules/memory/memory.routes'));
 app.use('/api/streak', requireVerifiedUser, require('./modules/streak/streak.routes'));
 app.use('/api/home', requireVerifiedUser, require('./modules/home/home.routes'));
 app.use('/api/notifications', requireVerifiedUser, require('./modules/notification/notification.routes'));

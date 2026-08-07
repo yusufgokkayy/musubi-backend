@@ -8,6 +8,8 @@ const Event = require('../../models/Event');
 const DailyWordPool = require('../../models/DailyWordPool');
 const Notification = require('../../models/Notification');
 const AppError = require('../../utils/AppError');
+const ProgressService = require('../progress/progress.service');
+const QuizService = require('../quiz/quiz.service');
 const {
     startOfDayInTz, startOfDateInTz, addDays,
     localDateStr, localHourInTz, weekDatesInTz
@@ -45,7 +47,8 @@ const dayStudied = (session) =>
 
 const HomeService = {
     async getSummary(userId) {
-        const user = await User.findById(userId).select('timezone name dailyGoal');
+        const user = await User.findById(userId)
+            .select('timezone name dailyGoal activeLevel placementDeferredAt');
         const tz = user?.timezone;
 
         // Tek bir "şimdi" sabitlenir: her yardımcı kendi new Date()'ini okusaydı
@@ -146,9 +149,31 @@ const HomeService = {
             isFuture: date > todayStr
         }));
 
+        // Başlığın altındaki seviye bandı ve "Kilit Açıldı → Şimdi Geç" kartı.
+        // advanceableLevel, aktif seviyenin BİR SONRAKİSİ açıldıysa doludur;
+        // kart yalnızca o zaman çizilir. Kilit açılınca activeLevel kendiliğinden
+        // taşınmaz — geçiş kullanıcının onayına bağlı, "Şimdi Geç" butonu
+        // PUT /progress/active-level çağırır.
+        const activeLevel = user?.activeLevel || 'N5';
+        const nextLevel = ProgressService.LEVELS[ProgressService.LEVELS.indexOf(activeLevel) + 1];
+        const nextUnlocked = nextLevel &&
+            progress.some(p => p.jlptLevel === nextLevel && p.isUnlocked);
+
+        // "Seviyeni Öğrenelim Mi?" modalı. Ayrı bir /quiz/status isteği
+        // gerekmesin diye burada: modal anasayfa açılışında çıkıyor.
+        const placementPrompt = await QuizService.shouldPromptPlacement(userId, user);
+
         return {
             name: user?.name || '',        // "Merhaba Emirhan" başlığı
             greeting: greetingFor(localHourInTz(tz, now)), // ismin üstündeki Japonca satır
+            activeLevel,
+            activeLevelLabel: ProgressService.LEVEL_LABELS[activeLevel], // "N4 • Temel" bandı
+            advanceableLevel: nextUnlocked
+                ? { jlptLevel: nextLevel, label: ProgressService.LEVEL_LABELS[nextLevel] }
+                : null,
+            // true ise "Seviyeni Öğrenelim Mi?" modalı açılır. "Daha Sonra"
+            // POST /quiz/placement/defer çağırır ve bayrak kalıcı olarak söner.
+            placementPrompt,
             // Kullanıcı avatarı henüz YÜKLENEMİYOR (upload uçları admin'e
             // kapalı, sosyal girişte de fotoğraf saklanmıyor) — alan sözleşmede
             // duruyor ki yükleme geldiğinde istemci başlığı yeniden kurmasın.

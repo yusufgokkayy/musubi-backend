@@ -2,9 +2,10 @@ const catchAsync = require('../../utils/catchAsync');
 const UserWordService = require('./userword.service');
 
 const UserWordController = {
+    // Seviye BİLEREK query'den okunmaz: günlük dersin seviyesi kullanıcının
+    // Ayarlar'dan seçtiği User.activeLevel'dır (bkz. userword.service.js).
     getTodayWords: catchAsync(async (req, res) => {
-        const { jlptLevel } = req.query;
-        const data = await UserWordService.getTodayWords(req.user.id, jlptLevel);
+        const data = await UserWordService.getTodayWords(req.user.id);
         res.status(200).json({ success: true, data: data });
     }),
 
