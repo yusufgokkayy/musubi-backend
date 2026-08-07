@@ -10,6 +10,11 @@ const ProgressController = {
     getDistribution: catchAsync(async (req, res) => {
         const result = await ProgressService.getLevelDistribution(req.user.id, req.params.jlptLevel);
         res.status(200).json({ success: true, data: result });
+    }),
+
+    setActiveLevel: catchAsync(async (req, res) => {
+        const result = await ProgressService.setActiveLevel(req.user.id, req.body.jlptLevel);
+        res.status(200).json({ success: true, data: result });
     })
 };
 

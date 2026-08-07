@@ -180,10 +180,14 @@ DB'de ~7900 kelime bulunur ama aktif oyun **3000 çekirdek kelime** üzerinde oy
 
 Bir sonraki JLPT seviyesinin kilidi **iki kapıdan** açılır:
 
-- **Çalışma kapısı:** seviyenin çekirdek kelimelerinin **%80'i** `masteryLevel ≥ 3`'e ulaşınca otomatik açılır (her cevapta kontrol edilir).
+- **Çalışma kapısı:** seviyenin çekirdek kelimelerinin **%75'i** `masteryLevel ≥ 3`'e ulaşınca otomatik açılır (her cevapta kontrol edilir).
 - **Sınav kapısı:** seviye atlama quiz'i geçilirse anında açılır (aşağıda).
 
 `GET /api/progress` seviye listesini, `GET /api/progress/:jlptLevel/distribution` o seviyedeki kelimelerin 1–5 ustalık dağılımını döner (Seviyeler ekranındaki grafik için).
+
+**Hafıza sekmesi** aynı dağılımın etiketlenmiş hâlidir: Yeni (hiç dokunulmamış) · Zayıf (1–2) · Orta (3) · İyi (4) · Ezber (5). Son üç kutu tam olarak kilidi açan kümedir (`masteryLevel ≥ 3`), yani beş kutunun toplamı seviyenin kelime sayısına, sayılan üçünün oranı da `completionRate`'e eşittir — eşik tek yerde (`ProgressService.MASTERY_COUNTED_MIN`) tanımlıdır. `GET /api/memory` ekranın tamamını, `GET /api/memory/words?box=…` seçili kutunun listesini döner.
+
+"Bu hafta +N kelime iyiye geçti" çipi `UserWord.promotedAt` üzerinden sayılır: kelimenin sayılan bölgeye **girdiği** an. Bölge içi yükselişler (3→4→5) tekrar saymaz, bölgeden düşünce (yanlış cevap ya da decay) iz silinir. Veri geriye dönük üretilemediği için izleme başlangıcından önceki haftalarda alan `null` döner ve çip çizilmez.
 
 ### Quiz sistemi
 
@@ -338,6 +342,13 @@ Ekranları diliyle aynı, açık/koyu tema ve TR/EN destekli, dış kaynaksız.
 |---|---|---|
 | GET | `/` 🔒✉️ | Seviye listesi: kilit durumu, %, kelime sayısı |
 | GET | `/:jlptLevel/distribution` 🔒✉️ | 1–5 ustalık dağılımı + `notStarted` |
+| PUT | `/active-level` 🔒✉️ | Günlük dersin çekildiği seviyeyi değiştir (açık seviyeler arası) |
+
+### Hafıza — `/memory`
+| Metot | Yol | Açıklama |
+|---|---|---|
+| GET | `/` 🔒✉️ | Seviye kartı + beş kutu + "bu hafta iyiye geçen" sayısı |
+| GET | `/words?box=weak` 🔒✉️ | Seçili kutunun kelime listesi (sayfalı) |
 
 ### Quiz — `/quiz`
 | Metot | Yol | Açıklama |

@@ -89,6 +89,29 @@ const UserSchema = new mongoose.Schema({
         min: 5,
         max: 50
     },
+    // Ayarlar > "Öğrenme Seviyeni Değiştir" ile seçilen, günlük dersin çekildiği
+    // seviye. Kullanıcı başına TEK seçim olduğu için Progress'te (seviye başına
+    // bir doküman) değil burada durur.
+    //
+    // Sunucudaki tek doğru kaynaktır: GET /userwords/today seviyeyi ARTIK
+    // istemciden almaz. İki kaynak olsaydı (ayarlarda N4, istemci elindeki eski
+    // değerle N5 isterken) kullanıcı seçtiğinden başka seviyenin dersini görürdü.
+    //
+    // Yalnızca PROGRESS'TE AÇIK bir seviyeye ayarlanabilir; kuralı
+    // ProgressService.setActiveLevel uygular. Seviye kilidi açılınca BURASI
+    // kendiliğinden değişmez — tasarımda geçiş "Şimdi Geç" onayına bağlı.
+    activeLevel: {
+        type: String,
+        enum: ['N5', 'N4', 'N3', 'N2', 'N1'],
+        default: 'N5'
+    },
+    // "Seviyeni Öğrenelim Mi?" modalındaki "Daha Sonra" damgası. Bu alan
+    // olmadan modal her anasayfa açılışında yeniden çıkıyordu: sınav bitene
+    // kadar "girilebilir" bayrağı hep true kalıyor, erteleme hiçbir yerde
+    // tutulmuyordu. Kullanıcı sınava Ayarlar'dan istediği zaman girebilir.
+    placementDeferredAt: {
+        type: Date
+    },
     // Alanlar "Bildirim Ayarları" ekranındaki kontrollerle BİREBİR eşleşir;
     // eşleme notification.service.js'teki SETTING_MAP'te tutulur.
     notificationSettings: {

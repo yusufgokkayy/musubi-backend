@@ -10,6 +10,32 @@ Mobil entegrasyon için tam sözleşme. Tüm yollar `/api` önekiyle başlar, t�
 
 ---
 
+## Ayarlar ekranı — satır/uç eşlemesi
+
+Tasarımdaki her satırın hangi uca bağlandığı. Dil, tema ve kanji font boyutu
+sunucuda **saklanır** (cihazlar arası senkron olsun diye) ama uygulanması
+istemcinin işidir — sunucu bu tercihlere göre farklı içerik döndürmez.
+
+| Ayarlar satırı | Uç |
+|---|---|
+| Şifreyi Değiştir | `POST /auth/verify-password` → `PUT /auth/change-password` |
+| Bildirim Ayarları (4 anahtar + saat) | `PUT /auth/update-info` › `notificationSettings` |
+| Dil Ayarları · Tema Değiştir · Kanji Font Boyutu | `PUT /auth/update-info` › `preferences` |
+| Günlük Kelime Hedefi (5/10/20/40) | `PUT /auth/update-info` › `dailyGoal` |
+| Öğrenme Seviyeni Değiştir | `GET /progress` → `PUT /progress/active-level` |
+| Seviye Tespit Sınavına Gir | `POST /quiz/start` › `type: "placement"` |
+| Hakkında (sözleşme/gizlilik/KVKK) | `GET /legal` · `GET /legal/:doc` |
+| Çıkış Yap | `POST /auth/logout` |
+
+Bildirim ekranındaki dört satır **bağımsız** bayraklardır, hiçbiri diğerini
+kapatmaz: "Günlük Kelimeler" → `dailyWord`, "Seri Koruma Uyarısı" →
+`streakReminder`, "Pratik Anımsatıcısı" → `dailyReminder` + `reminderTime`,
+"Tekrar Gereken Kelimeler" → `wordLevelDown`. Detay ekranındaki "Anımsatıcıyı
+Kapat" bağlantısı yalnızca `dailyReminder`'ı false yapar; `reminderTime` saati
+`dailyWord` için zamanlama kaynağı olmaya devam eder.
+
+---
+
 ## Auth — `/auth`
 
 ### POST /auth/check-email
@@ -246,6 +272,7 @@ Push token'ını siler. Kullanıcı bildirim iznini işletim sisteminden kapatt�
     "role": "user",
     "isEmailVerified": true,
     "dailyGoal": 20,
+    "activeLevel": "N5",       // günlük dersin çekildiği seviye — PUT /progress/active-level ile değişir
     "notificationSettings": { "dailyReminder": true, "dailyWord": true, "reminderTime": "10:00", "streakReminder": true, "wordLevelDown": true },
     "consents": { "terms": "1.0", "privacy": "1.0", "kvkk": "1.0", "acceptedAt": "2026-08-04T09:12:00.000Z" },
     "preferences": { "language": "tr", "theme": "light", "fontSize": "medium" },
@@ -278,7 +305,7 @@ Push token'ını siler. Kullanıcı bildirim iznini işletim sisteminden kapatt�
 // 200 — güncellenmiş kullanıcı (GET /auth/me ile aynı biçim)
 { "success": true, "data": { /* ... */ } }
 ```
-Hatalar: `400 "Bu e-posta adresi zaten kullanımda"`, `400` enum validasyonu (geçersiz theme/fontSize), `500 "Doğrulama maili gönderilemedi, e-posta değiştirilmedi"`. `isPremium` bu endpoint'ten **değiştirilemez** (gönderilirse yok sayılır). `password` da **değiştirilemez** — gönderilirse `400 "Şifre bu uçtan değiştirilemez..."`: şifre değişiminin tek kapısı `change-password` (eski şifre doğrulamalı) ve `reset-password` (mail token'lı); ikisi de oturum rotasyonu yapar.
+Hatalar: `400 "Bu e-posta adresi zaten kullanımda"`, `400` enum validasyonu (geçersiz theme/fontSize), `500 "Doğrulama maili gönderilemedi, e-posta değiştirilmedi"`. `isPremium` bu endpoint'ten **değiştirilemez** (gönderilirse yok sayılır). `password` da **değiştirilemez** — gönderilirse `400 "Şifre bu uçtan değiştirilemez..."`: şifre değişiminin tek kapısı `change-password` (eski şifre doğrulamalı) ve `reset-password` (mail token'lı); ikisi de oturum rotasyonu yapar. `activeLevel` de **değiştirilemez** (yok sayılır): seçilen seviyenin açık olması gerekir, o kontrol `PUT /progress/active-level`'dadır.
 
 ### POST /auth/verify-password 🔒✉️
 Ayarlardaki adım adım şifre değiştirme akışının ilk ekranı ("Şifre Girin" alt sayfası): mevcut şifre doğrulanmadan yeni şifre ekranına geçilmez.
@@ -621,12 +648,16 @@ Gövde `Word` alanlarıdır; mobil uygulamanın kullanması gerekmez.
 
 ## Günlük çalışma — `/userwords`
 
-### GET /userwords/today?jlptLevel=N5 🔒✉️
-**`jlptLevel` ZORUNLUDUR** (N5-N1, yoksa/geçersizse 400). Havuzun kimliği
-`{user, gün, jlptLevel}` üçlüsüdür — aynı ekran akışı içinde bazen `jlptLevel`
-gönderip bazen göndermemek FARKLI bir havuz saydırır, ikinci bir tane açtırır
-(çift kelime seti, ilerleme çemberinin paydası şişer). Bu uç noktayı çağıran
-her ekran/akış noktası **aynı** `jlptLevel` değerini göndermeli.
+### GET /userwords/today 🔒✉️
+**Parametre almaz.** Dersin seviyesi kullanıcının profilindeki `activeLevel`'dır
+(Ayarlar > "Öğrenme Seviyeni Değiştir" → `PUT /progress/active-level`).
+
+> **Değişiklik:** bu uç eskiden zorunlu bir `jlptLevel` query parametresi
+> isterdi. Artık **gönderilirse yok sayılır** (hata değil). Havuzun kimliği
+> `{user, gün, jlptLevel}` üçlüsü olduğu için istemcinin seviyeyi belirlemesi,
+> aynı akışta farklı değerler gönderildiğinde ikinci bir havuz açtırıyordu
+> (çift kelime seti, ilerleme çemberinin paydasının şişmesi). Seviyenin tek
+> yazıcısı artık sunucuda: kullanıcı başına tek `activeLevel`, güne tek havuz.
 
 Günün havuzunu döner; gün içinde (kullanıcının saat diliminde) tekrar çağrılırsa **aynı liste** döner.
 Tek istisna: `dailyGoal` gün içinde **artarsa** havuz bir sonraki çağrıda fark
@@ -882,21 +913,76 @@ Hata: `404 "No active session found"`.
 ## İlerleme — `/progress`
 
 ### GET /progress 🔒✉️
+Ayarlar > **"Öğrenme Seviyen"** ekranının tamamı. Sıra N1→N5'tir (tasarımdaki
+liste sırası: kilitli üstte, tamamlanan altta).
 ```jsonc
-// 200 — Seviyeler ekranının liste verisi
+// 200
 {
   "success": true,
   "data": {
     "completionThreshold": 75,   // "Bir sonraki seviyeye geçmek için listeyi %75 oranında tamamlayın" kutusu
+    "activeLevel": "N4",         // günlük dersin çekildiği seviye
     "levels": [
-      { "jlptLevel": "N5", "isUnlocked": true,  "completionRate": 42, "totalWords": 300 },
-      { "jlptLevel": "N4", "isUnlocked": false, "completionRate": 0,  "totalWords": 400 }
-      // ... N3, N2, N1
+      {
+        "jlptLevel": "N3",
+        "label": "Orta",         // satır başlığı: "N3 • Orta"
+        "isUnlocked": false,
+        "completionRate": 0,
+        "totalWords": 500,
+        "isActive": false,
+        "state": "locked",       // locked | available | active | completed
+        "canSelect": false,      // satırdaki "Geç" bağlantısı çizilir mi
+        "unlockHint": "N4'ün %75'i ile açılır"   // yalnızca locked'da dolu
+      },
+      {
+        "jlptLevel": "N4", "label": "Temel", "isUnlocked": true,
+        "completionRate": 42, "totalWords": 400,
+        "isActive": true, "state": "active", "canSelect": false, "unlockHint": null
+      },
+      {
+        "jlptLevel": "N5", "label": "Başlangıç", "isUnlocked": true,
+        "completionRate": 88, "totalWords": 300,
+        "isActive": false, "state": "completed", "canSelect": true, "unlockHint": null
+      }
     ]
   }
 }
 ```
-Not: seviye kilidi, tamamlanma oranı `completionThreshold`'a ulaşınca çalışmayla ya da seviye atlama sınavıyla açılır.
+`state` ile `canSelect` ayrı şeylerdir: **açık ve şu an seçili olmayan her
+seviye seçilebilir**, tamamlananlar dahil — kullanıcı eski seviyesine dönebilir.
+`completed` ile `active` de ayrıktır: %75'i geçmiş seviyede çalışmaya devam eden
+kullanıcı "Tamamlandı" değil "Şu anki seviyen" görmelidir.
+
+Seviye **kilidini** açmanın iki yolu var: çalışarak tamamlanma oranını
+`completionThreshold`'a (%75) ulaştırmak, ya da Seviye Tespit Sınavı'nda o
+seviyenin çıkması. Ayrı bir "seviye atlama sınavı" **yoktur** (kaldırıldı).
+
+Kilidin açılması `activeLevel`'ı **kendiliğinden taşımaz** — geçiş kullanıcının
+onayına bağlıdır (anasayfadaki "Şimdi Geç" butonu, aşağıdaki uca gider). Tek
+istisna STS: sınav sonucu doğrudan `activeLevel` olur.
+
+### PUT /progress/active-level 🔒✉️
+Ayarlar > "Öğrenme Seviyeni Değiştir" onayı ve anasayfadaki "Şimdi Geç" butonu.
+```jsonc
+// istek
+{ "jlptLevel": "N4" }
+```
+Yanıt, `GET /progress` ile **birebir aynı gövdedir** (güncellenmiş hâliyle) —
+"Seviyen Güncellendi!" ekranından listeye dönerken ikinci bir istek gerekmesin.
+
+Hatalar: `400 "jlptLevel N5-N1 arasında olmalı"` · `403 "Bu seviye henüz kilitli"`.
+
+İlerleme **hiçbir şekilde silinmez**: geçiş yalnızca günlük dersin hangi havuzdan
+çekileceğini değiştirir. Gün ortasında seviye değiştiren kullanıcının eski
+havuzu da durur (havuz anahtarı `{user, gün, jlptLevel}`), geri döndüğünde
+kaldığı yerden devam eder. Seri (streak) seviyeden bağımsızdır, bozulmaz.
+
+Bu alan `PUT /auth/update-info` ile **değiştirilemez**; kilit kontrolünün tek
+kapısı burasıdır.
+
+**İstisna — Seviye Tespit Sınavı:** placement bittiğinde `activeLevel` belirlenen
+seviyeye (`summary.determinedLevel`) sunucu tarafından taşınır, ayrıca onay
+istenmez. Sınavın amacı zaten kullanıcıyı doğru seviyeye yerleştirmektir.
 
 ### GET /progress/:jlptLevel/distribution 🔒✉️
 ```jsonc
@@ -913,59 +999,218 @@ Not: seviye kilidi, tamamlanma oranı `completionThreshold`'a ulaşınca çalı�
 ```
 Hata: `400 "Invalid level"`.
 
+Bu uç **ham** dağılımdır (mastery 1-5 + `notStarted`). Hafıza sekmesinin beş
+kutusu bunun etiketlenmiş hâlidir → `GET /memory`.
+
 ---
 
-## Quiz — `/quiz`
+## Hafıza — `/memory`
 
-### GET /quiz/status 🔒✉️
+Alt sekmedeki **Hafıza** ekranı: seviye kartı + beş kutu dağılımı + seçili
+kutunun kelime listesi. Kapsam varsayılan olarak kullanıcının **aktif
+seviyesidir**; iki uç da opsiyonel `?jlptLevel=N4` ile başka bir seviyeye
+bakabilir.
+
+| Ekrandaki blok | Uç |
+|---|---|
+| Seviye kartı (N5 · Başlangıç · "%65 / %75") | `GET /memory` |
+| Renk şeridi + beş kutu + "Bu hafta +23 …" çipi | `GET /memory` |
+| "Zayıf Kutusundakiler" listesi ve "Tümünü Gör" | `GET /memory/words?box=weak` |
+| Kelimeye dokununca açılan detay | `GET /words/:id` |
+
+**Kutu ↔ `masteryLevel` eşlemesi** (sunucuda tutulur, istemci kendi sözlüğünü
+taşımaz — yanıttaki `masteryLevels` alanı bunu zaten söyler):
+
+| Kutu | `key` | Kaynak | Kilide sayılır mı |
+|---|---|---|---|
+| Yeni | `new` | UserWord kaydı **hiç yok** | ✗ |
+| Zayıf | `weak` | masteryLevel 1–2 | ✗ |
+| Orta | `medium` | masteryLevel 3 | ✓ |
+| İyi | `good` | masteryLevel 4 | ✓ |
+| Ezber | `mastered` | masteryLevel 5 | ✓ |
+
+Beş kutunun toplamı **seviyenin tüm core kelimelerine eşittir** (`totalWords`).
+Kilide sayılan üç kutunun oranı da `GET /progress`'teki `completionRate` ile
+aynı sayıdır — ikisi de aynı eşiği (`masteryLevel >= 3`) kullanır, ayrışamaz.
+
+"Şimdilik Geç" ile ertelenen kelimenin kaydı **açılmıştır** (masteryLevel 1),
+yani Yeni'de değil **Zayıf**'ta görünür.
+
+### GET /memory 🔒✉️
 ```jsonc
 // 200
 {
   "success": true,
   "data": {
-    "placementAvailable": true,      // seviye belirleme sınavına girebilir mi — "Seviyeni Öğrenelim Mi?" modalı bununla gösterilir ("Daha Sonra" client'ta saklanır, bu alan true kaldıkça Ayarlar'dan tekrar girilebilir)
-    "levels": {
-      "N5": {
-        "unlocked": true,
-        "nextLevelUnlocked": false,
-        "canAttempt": true,          // levelup sınav butonu aktif mi
-        "failCount": 1,
-        "nextAttemptAllowedAt": null // cooldown'daysa ISO tarih
-      }
-      // ... N4, N3, N2 (N1 son seviye, levelup'ı yok)
-    }
+    "jlptLevel": "N5",
+    "label": "Başlangıç",         // kart başlığı: "N5 · Başlangıç Seviyesi"
+    "isActiveLevel": true,        // ?jlptLevel ile başka seviyeye bakılıyorsa false
+    "totalWords": 380,
+    "completionThreshold": 75,
+    "completionRate": 65,         // çubuktaki "%65 / %75"in payı
+    "remainingPercent": 10,       // "N4'e geçmene %10 kaldı"
+    "nextLevel": { "jlptLevel": "N4", "label": "Temel", "isUnlocked": false },
+    "unlockHint": "Orta, İyi ve Ezber kutularının toplamı %75'i geçince N4 açılır.",
+    "boxes": [
+      { "key": "new",      "label": "Yeni",  "count": 76,  "masteryLevels": [],     "countsTowardUnlock": false },
+      { "key": "weak",     "label": "Zayıf", "count": 57,  "masteryLevels": [1,2],  "countsTowardUnlock": false },
+      { "key": "medium",   "label": "Orta",  "count": 46,  "masteryLevels": [3],    "countsTowardUnlock": true },
+      { "key": "good",     "label": "İyi",   "count": 106, "masteryLevels": [4],    "countsTowardUnlock": true },
+      { "key": "mastered", "label": "Ezber", "count": 95,  "masteryLevels": [5],    "countsTowardUnlock": true }
+    ],
+    "defaultBox": "weak",         // açılışta seçili gelen kutu
+    "weeklyImproved": 23          // "↗ Bu hafta +23 kelime iyiye geçti"
   }
 }
 ```
+Hata: `400 "Invalid level"`.
+
+`weeklyImproved` = bu hafta masteryLevel'ı **2'den 3'e geçen** (yani kilide
+sayılan bölgeye giren) kelime sayısı. Kurallar:
+- Hafta sınırı anasayfadaki seri şeridiyle **aynıdır** (Pzt→Paz, kullanıcının
+  saat diliminde).
+- Bölge içindeki yükselişler (3→4→5) sayıyı **artırmaz** — kelime bölgeye ilk
+  girdiği hafta bir kez sayılır.
+- Kelime bölgenin altına düşerse (yanlış cevap ya da mastery decay) izi silinir,
+  geri tırmandığında yeniden sayılır.
+- **`null` dönebilir:** bu veri geriye dönük üretilemediği için (özellik
+  öncesindeki yükselişler hiçbir yere yazılmadı) izleme başlangıcından önceki
+  haftalarda alan `null`'dır. **`null` ise çip hiç çizilmemelidir** — "+0"
+  göstermek yanlış olur.
+
+`nextLevel` N1'de `null`'dır (`remainingPercent` de öyle). Sonraki seviyenin
+kilidi zaten açıksa `isUnlocked: true`, `remainingPercent: 0` ve `unlockHint`
+"N4 kilidi açıldı." olur; geçişin kendisi anasayfadaki "Şimdi Geç" →
+`PUT /progress/active-level` akışıdır, bu uç **hiçbir şey değiştirmez**.
+
+### GET /memory/words?box=weak&page=1&limit=20 🔒✉️
+"Zayıf Kutusundakiler" listesi ve "Tümünü Gör". `box` zorunludur; `jlptLevel`,
+`page`, `limit` opsiyonel (`limit` en fazla 100).
+```jsonc
+// 200
+{
+  "success": true,
+  "data": {
+    "box": "weak",
+    "label": "Zayıf",             // "Zayıf Kutusundakiler" başlığı
+    "jlptLevel": "N5",
+    "items": [
+      {
+        "word": { /* tam Word dokümanı — Kütüphane satırıyla aynı biçim */ },
+        "box": "weak",
+        "masteryLevel": 2,
+        "nextReviewDate": "2026-08-09T00:00:00.000Z",
+        "lastReviewDate": "2026-08-07T09:12:00.000Z",
+        "lastResult": "wrong"
+      }
+    ],
+    "total": 57,
+    "page": 1,
+    "totalPages": 3
+  }
+}
+```
+Hatalar: `400 "box: new, weak, medium, good, mastered olmalı"` · `400 "Invalid level"`.
+
+**Sıralama:**
+- `box=new` → `frequencyRank` artan (**müfredat sırası**): listenin başındaki
+  kelime, günlük derste sıradaki yeni kelimedir. Bu kutuda `masteryLevel`,
+  `nextReviewDate`, `lastReviewDate`, `lastResult` **`null`**'dır — kayıt yok.
+- Diğer kutular → vadesi en yakın önce, eşitlikte en düşük seviye
+  (`nextReviewDate` ↑, `masteryLevel` ↑). Günlük havuzun tekrar sıralamasıyla
+  **aynı kuraldır**: listenin başındaki kelime yarınki derste ilk gelecek olandır.
+
+`total`, kutunun `GET /memory` yanıtındaki `count` değeriyle **aynıdır** —
+ekranda "76 Yeni" yazıp listeye girince başka bir sayı çıkmaz.
+
+---
+
+## Seviye Tespit Sınavı — `/quiz`
+
+Tek seferde **40 soruluk** karma sınav. Beş seviyeden soru gelir (N5:6, N4:6,
+N3:8, N2:10, N1:10), sorular kolaydan zora sıralıdır ve her soru kendi seviye
+rozetini taşır. **Geçme/kalma yoktur** — sınavın çıktısı bir seviyedir.
+
+> **Değişiklik (07.08.2026):** Sınav eskiden "merdiven"di — 10'ar soruluk beş
+> ayrı basamak, basamak başına %70 eşiği, `nextRung` ile devam. Tamamen kalktı.
+> **Seviye atlama sınavı (`levelup`) de kaldırıldı**: seviye artık yalnızca
+> çalışarak (%75 ustalık) açılıyor ve geçiş kullanıcının onayına bağlı
+> (bkz. `PUT /progress/active-level`).
+
+**Seviye nasıl belirlenir.** En yüksek seviyeden aşağı taranır: bir seviyenin
+sorularının **%60'ını** doğru yapan kullanıcı o seviyededir. Hiçbiri tutmazsa
+N5. Yukarıdan taranmasının sebebi, N3'ü bilen birinin N5/N4 sorularını da
+bilmesi — aşağıdan tarasaydık ilk eşiği geçtiği yerde durup seviyeyi düşük
+gösterirdik. Tek bir şanslı N1 doğrusu seviyeyi şişiremez, ölçüt o seviyenin
+oranıdır.
+
+**Sonuç ne yapar.** Belirlenen seviyeye KADAR olan tüm seviyelerin kilidi açılır
+ve kullanıcının `activeLevel`'ı oraya taşınır (STS'nin işi zaten yerleştirme
+olduğu için "Şimdi Geç" onayı istenmez). Tekrar girilen sınav **kilitleri geri
+kapatmaz** — hak edilmiş ilerleme bir sınav sonucuyla geri alınmaz.
+
+### GET /quiz/status 🔒✉️
+Sınav önü ekranının (Ayarlar > "Seviye Tespit Sınavına Gir") tamamı.
+```jsonc
+// 200
+{
+  "success": true,
+  "data": {
+    "placementAvailable": true,           // Başla butonu aktif mi
+    "nextAttemptAllowedAt": null,         // cooldown'daysa ISO tarih (geri sayım için)
+    "hasTakenPlacement": false,
+    "retakeCooldownDays": 14,
+    "totalQuestions": 40,
+    "secondsPerQuestion": 20,
+    // Sınav önü ekranındaki liste, N1'den N5'e
+    "distribution": [
+      { "jlptLevel": "N1", "label": "Uzman",     "questionCount": 10 },
+      { "jlptLevel": "N2", "label": "İleri",     "questionCount": 10 },
+      { "jlptLevel": "N3", "label": "Orta",      "questionCount": 8  },
+      { "jlptLevel": "N4", "label": "Temel",     "questionCount": 6  },
+      { "jlptLevel": "N5", "label": "Başlangıç", "questionCount": 6  }
+    ],
+    "inProgressQuizId": null              // yarım sınav varsa id'si
+  }
+}
+```
+Ayarlardaki satır **koşulsuz görünür**: sınav tekrar girilebilir olduğu için
+gizlenmesi/pasifleşmesi gereken bir durum yok, cooldown'da yalnızca geri sayım
+gösterilir.
 
 ### POST /quiz/start 🔒✉️
 ```jsonc
-// İstek — placement (jlptLevel gönderilmez, merdiven N5'ten başlar)
-{ "type": "placement" }
-// veya levelup
-{ "type": "levelup", "jlptLevel": "N5" }
+// İstek — gövde opsiyonel (type varsayılanı "placement")
+{ }
 
 // 200
 {
   "success": true,
   "data": {
     "quizId": "665f5e...",
-    "type": "levelup",
-    "jlptLevel": "N5",
-    "passThreshold": 85,             // placement'ta 70
-    "expiresAt": "2026-07-10T10:30:00.000Z",   // 30 dk — süresinde bitirilmezse expired
-    "totalQuestions": 35,            // placement'ta 10 (5 basamak × 10 = 50 soru)
+    "type": "placement",
+    "expiresAt": "2026-08-07T10:30:00.000Z",  // 30 dk — süresinde bitirilmezse expired
+    "secondsPerQuestion": 20,
+    "totalQuestions": 40,
+    "answeredCount": 0,                       // yarım sınav sürüyorsa >0
     "questions": [
       {
         "index": 0,
+        "jlptLevel": "N5",                    // soru başlığındaki rozet
         "format": "meaning",
         "prompt": { "kanji": "駅", "romaji": "eki", "audioUrl": "https://..." },
-        "choices": ["istasyon", "tren", "araba", "ben"]  // doğru cevap işaretli DEĞİL (sunucuda skorlanır)
+        "choices": ["istasyon", "tren", "araba", "ben"],  // doğru cevap işaretli DEĞİL
+        "answered": false
       }
     ]
   }
 }
 ```
+
+**Soru başına 20 saniyeyi sunucu DENETLEMEZ.** Sayacı istemci tutar; süre
+dolunca boş cevap gönderir (boş = yanlış). Sunucu tarafı denetim ağ
+gecikmesinde haksız "süren doldu" üretirdi ve burada hile motivasyonu yok —
+kullanıcı yüksek seviye çıkarsa kendine zor ders getirmiş olur.
 
 Soru formatları ve `prompt` biçimleri:
 | format | Ekran | prompt | choices |
@@ -977,18 +1222,29 @@ Soru formatları ve `prompt` biçimleri:
 | `fillblank` | "Boşluğa uygun kelimeyi yerleştir" | `{ sentence: "東京____で会いましょう。" }` (ses yok) | 4 kelime |
 | `image` | "Doğru şıkkı işaretleyiniz" (görsel) | `{ imageUrl }` (ses yok) | 4 kelime |
 
-`typing`/`fillblank`/`image` yalnızca placement karışımına girer; levelup klasik 3 şıklı formatla kalır. `fillblank` ve `image`, yalnızca örnek cümlesi/görseli olan kelimelerde üretilir — içerik DB'ye girdikçe karışımda kendiliğinden görünmeye başlarlar, kod değişikliği gerekmez. `audioUrl` varsa "Dinle" butonu gösterilebilir ("Yavaş" client'ta oynatma hızıyla yapılır).
-Hatalar: `400 "Invalid quiz type..."`, `403 "Bu seviye henüz kilitli"`, `400 "Sonraki seviye zaten açık"`, `400 "Seviye belirleme sınavı tamamlanmış"`, ve cooldown:
+`fillblank` ve `image` yalnızca örnek cümlesi/görseli olan kelimelerde
+üretilir — içerik DB'ye girdikçe karışımda kendiliğinden görünmeye başlarlar,
+kod değişikliği gerekmez. `audioUrl` varsa "Dinle" butonu gösterilebilir
+("Yavaş" client'ta oynatma hızıyla yapılır).
+
+Süresi dolmamış yarım bir sınav varsa **yenisi açılmaz, o döner** (`answeredCount`
+ile nerede kalındığı bellidir). Aynı anda iki açık sınav, hangisinin cevabının
+sayılacağını belirsizleştirirdi.
+
+Hatalar: `400 "Invalid quiz type, use: placement"` ve cooldown:
 ```jsonc
-// 403 — cooldown; UI geri sayım gösterebilir
-{ "success": false, "message": "Sınav hakkın henüz yenilenmedi", "nextAttemptAllowedAt": "2026-07-13T09:00:00.000Z" }
+// 403 — UI geri sayım gösterebilir
+{ "success": false, "message": "Seviye tespit sınavına 14 günde bir girebilirsin",
+  "nextAttemptAllowedAt": "2026-08-21T09:00:00.000Z" }
 ```
 
 ### POST /quiz/:id/answer 🔒✉️
-Her soru cevaplanır cevaplanmaz çağrılır; anlık "Doğru! / Yanlış Cevap!" kartının verisi döner. Son soru cevaplanınca sınav otomatik sonuçlanır ve yanıta `result` eklenir.
+Her soru cevaplanır cevaplanmaz çağrılır; anlık "Doğru! / Yanlış Cevap!"
+kartının verisi döner. Son soru cevaplanınca sınav otomatik sonuçlanır ve
+yanıta `result` eklenir.
 ```jsonc
-// İstek — şıklı soruda seçilen indeks (0-3), typing sorusunda yazılan METİN;
-// boş bırakılan ("Şimdilik Geç") için null veya "" gönderilir (yanlış sayılır)
+// İstek — şıklı soruda seçilen indeks (0-3), typing sorusunda yazılan METİN.
+// "Şimdilik Geç" ve süre dolması için null veya "" gönderilir (yanlış sayılır).
 { "index": 4, "answer": 2 }        // veya { "index": 4, "answer": "istasyon" }
 
 // 200 — ara soru
@@ -999,7 +1255,7 @@ Her soru cevaplanır cevaplanmaz çağrılır; anlık "Doğru! / Yanlış Cevap!
     "word": { "kanji": "駅", "meaning": "istasyon" },  // kartın "駅 — istasyon" satırı
     "correctIndex": 2,             // şıklı soruda; typing'de yerine "correctAnswer": "istasyon"
     "answeredCount": 5,
-    "totalQuestions": 10,
+    "totalQuestions": 40,
     "finished": false
   }
 }
@@ -1009,38 +1265,69 @@ Her soru cevaplanır cevaplanmaz çağrılır; anlık "Doğru! / Yanlış Cevap!
   "success": true,
   "data": {
     "correct": false, "word": { /*...*/ }, "correctIndex": 1,
-    "answeredCount": 10, "totalQuestions": 10, "finished": true,
+    "answeredCount": 40, "totalQuestions": 40, "finished": true,
+
+    // "Seviyen Belirlendi" ekranının tamamı
     "result": {
-      "score": 80,                  // yüzde
-      "passed": true,
-      "passThreshold": 70,
-      "correctCount": 8,
-      "totalQuestions": 10,
-      "unlockedLevel": "N4",        // yalnızca geçince ve yeni seviye açılınca
-
-      // yalnızca levelup + kalınca:
-      "failCount": 1,
-      "cooldownDays": 3,
-      "nextAttemptAllowedAt": "2026-07-16T09:00:00.000Z",
-
-      // yalnızca placement:
-      "nextRung": "N4",             // geçildiyse sonraki basamak; client "Sınavınız Oluşturuluyor" gösterip yeni /quiz/start atar
-      "placementFinished": false,   // true ise merdiven bitti
-
-      // yalnızca placement bitince — "Seviyen Belirlendi" ekranının tüm verisi:
-      "summary": {
-        "determinedLevel": "N4",    // en yüksek kilidi açılan seviye
-        "totalQuestions": 50,       // tüm basamakların toplamı
-        "correctCount": 41,
-        "wrongCount": 9,            // boş bırakılanlar dahil
-        "durationSeconds": 277
-      }
+      "determinedLevel": "N4",
+      "levelLabel": "Temel",
+      "levelDescription": "Günlük konuşmaları ve temel kalıpları anlayabilecek düzeydesin.",
+      "totalQuestions": 40,
+      "correctCount": 24,
+      "wrongCount": 16,             // boş bırakılanlar dahil
+      "score": 60,                  // yüzde
+      "durationSeconds": 277,       // sonuç kartındaki "4:37"
+      "unlockedLevels": ["N4"],     // bu sınavla YENİ açılanlar (zaten açık olanlar yok)
+      // "Neden N4 çıktım?" — ekranda gösterilmiyor, istemci isterse açar
+      "byLevel": [
+        { "jlptLevel": "N5", "total": 6,  "correct": 6 },
+        { "jlptLevel": "N4", "total": 6,  "correct": 5 },
+        { "jlptLevel": "N3", "total": 8,  "correct": 4 },
+        { "jlptLevel": "N2", "total": 10, "correct": 5 },
+        { "jlptLevel": "N1", "total": 10, "correct": 4 }
+      ]
     }
   }
 }
 ```
-Typing cevapları sunucuda toleranslı puanlanır: büyük/küçük harf, noktalama, fazla boşluk ve parantez içleri yok sayılır; anlamın virgülle ayrılmış her varyantı tek başına kabul edilir.
-Hatalar: `404 "Quiz not found"`, `400 "Bu quiz zaten sonuçlanmış"`, `400 "Quiz süresi doldu, yeniden başlat"` (30 dk), `400 "index 0-9 arası olmalı"`, `400 "Bu soru zaten cevaplandı"`.
+`passed`, `passThreshold`, `nextRung`, `placementFinished`, `summary`,
+`failCount`, `cooldownDays` alanları **artık dönmüyor** — merdiven ve
+geçme/kalma kavramlarıyla birlikte kalktılar.
+
+Typing cevapları sunucuda toleranslı puanlanır: büyük/küçük harf, noktalama,
+fazla boşluk ve parantez içleri yok sayılır; anlamın virgülle ayrılmış her
+varyantı tek başına kabul edilir.
+
+Hatalar: `404 "Quiz not found"`, `400 "Bu quiz zaten sonuçlanmış"` (terk edilmiş
+sınav da bunu döner), `400 "Quiz süresi doldu, yeniden başlat"` (30 dk),
+`400 "index 0-39 arası olmalı"`, `400 "Bu soru zaten cevaplandı"`.
+
+### POST /quiz/:id/abandon 🔒✉️
+Sınav ekranından çıkış: "Çıkmak İçin Emin Misiniz? → **Çık**".
+```jsonc
+// 200
+{ "success": true, "data": { "abandoned": true } }
+```
+Yarım sınav geçersiz sayılır (`status: "abandoned"`), sonraki giriş **baştan**
+başlar. **Cooldown yakmaz** — kullanıcı bir ölçüm almadı, 14 gün bir sonuç için
+bekletiliyor, terk için değil.
+
+Kullanıcı çıkarken bu ucu çağırmazsa (uygulama kapandı, ağ gitti) sınav 30
+dakika sonra kendiliğinden `expired` olur.
+
+Hatalar: `404 "Quiz not found"`, `400 "Bu quiz zaten sonuçlanmış"`.
+
+### POST /quiz/placement/defer 🔒✉️
+Anasayfadaki "Seviyeni Öğrenelim Mi?" modalında **"Daha Sonra"**.
+```jsonc
+// 200
+{ "success": true, "data": { "deferred": true } }
+```
+Modal bir daha açılmaz (`GET /home/summary` → `placementPrompt: false`). Sınavı
+iptal etmez: Ayarlar'daki satırdan istediği zaman girebilir.
+
+Bu uç olmadan modal her anasayfa açılışında yeniden çıkıyordu — erteleme
+istemcide saklanıyordu ve cihaz değişince/yeniden kurulumda geri geliyordu.
 
 ---
 
@@ -1081,6 +1368,20 @@ Anasayfanın tek istekte tüm verisi. **Hikâye şeridi buna dahil değildir** �
     "avatarUrl": null,              // başlıktaki avatar — ŞU AN HER HESAPTA null
                                     // (avatar yükleme henüz yok). Boşsa baş harf çiz.
     "unreadNotifications": 3,       // zil ikonunun rozeti (0 ise rozet yok)
+
+    // Başlığın altındaki seviye bandı: "N4 • Temel Seviyesi"
+    "activeLevel": "N4",
+    "activeLevelLabel": "Temel",
+    // "🔓 Kilit Açıldı / N4 • Temel Seviyesi Hazır / [Şimdi Geç]" kartı.
+    // Yalnızca aktif seviyenin BİR SONRAKİSİ açıldıysa dolu, aksi halde null —
+    // kart da yalnızca doluyken çizilir. Buton PUT /progress/active-level çağırır;
+    // kilit açılması activeLevel'ı kendiliğinden taşımaz, geçiş onaya bağlıdır.
+    "advanceableLevel": { "jlptLevel": "N4", "label": "Temel" },
+    // "Seviyeni Öğrenelim Mi?" modalı açılsın mı. Yalnızca hiç sınava girmemiş
+    // VE ertelememiş kullanıcıda true. "Daha Sonra" → POST /quiz/placement/defer,
+    // bayrak kalıcı olarak söner (erteleme eskiden istemcide tutuluyordu ve
+    // modal her anasayfa açılışında geri geliyordu).
+    "placementPrompt": false,
 
     "goal": 20,                     // ilerleme çemberinin PAYDASI: bugünün havuz
                                     // boyutu (havuz yoksa dailyGoal)
