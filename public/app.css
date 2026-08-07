@@ -344,6 +344,26 @@ select.select {
 .choice.on .mark { background: var(--brand); border-color: var(--brand); }
 .choice.on .mark svg { opacity: 1; }
 
+/* Onboarding saat seçici (Hatırlatma Bildirimi) */
+.timepick { display: flex; align-items: center; justify-content: center; gap: 8px; margin: 18px 0 20px; }
+.timepick .col { flex: 1; max-width: 142px; display: flex; flex-direction: column; align-items: center; gap: 10px; }
+.timepick .cell {
+  width: 100%; height: 168px; display: grid; place-items: center;
+  background: var(--surface); border-radius: var(--r-lg);
+  font-size: 58px; font-weight: 800; letter-spacing: -.03em; color: var(--brand);
+  font-variant-numeric: tabular-nums;
+}
+.timepick .colon { font-size: 42px; font-weight: 800; color: var(--brand); }
+.timepick .arrow {
+  background: none; border: 0; cursor: pointer; padding: 8px 26px;
+  display: grid; place-items: center; border-radius: var(--r-sm);
+  transition: background .16s var(--ease);
+}
+.timepick .arrow:hover { background: var(--surface); }
+.timepick .arrow svg { width: 26px; height: 15px; fill: none; stroke: var(--ink); stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; }
+
+.footer .skip { display: block; margin: 0 auto 16px; }
+
 /* Anahtar */
 .switch-row { display: flex; align-items: center; gap: 14px; padding: 15px 16px; }
 .switch-row + .switch-row { box-shadow: inset 0 1px 0 var(--line); }

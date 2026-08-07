@@ -5,7 +5,7 @@ const dotenv = require('dotenv');
 const cors = require('cors');
 const helmet = require('helmet');
 const errorHandler = require('./middlewares/errorHandler');
-const { generalLimiter } = require('./middlewares/rateLimiter');
+const { generalLimiter, simulatorApiLimiter } = require('./middlewares/rateLimiter');
 
 dotenv.config({ path: './.env' }); // kök dizindeki .env (örnek için .env.example)
 
@@ -71,6 +71,52 @@ app.use('/admin', express.static('admin', {
     setHeaders: (res) => res.set('X-Robots-Tag', 'noindex')
 }));
 
+// Mobil simülatör, canlı ortam için. Yukarıdaki public/ mount'u dev'de KÖKTEN
+// ve korumasız servis eder; burası ondan bağımsızdır ve NODE_ENV'e DEĞİL,
+// SIMULATOR_ENABLED bayrağına bakar. Böylece:
+//   - canlıda test yüzeyi açmak/kapatmak deploy değil, tek değişken işidir,
+//   - "test için NODE_ENV=production'dan çıkma" gibi çok daha tehlikeli bir
+//     çözüme (ayrıntılı hata gövdeleri, gevşek CORS, kapalı trust proxy)
+//     başvurmak gerekmez.
+// Ayrı yolda (/sim) durur: kök, mail linklerinin ve /health'in yeri.
+// Sayfanın kendisi PAROLASIZDIR: amaç "linki alan denesin". Koruma iki yerde:
+// bayrak (kapatınca yüzey hiç kurulmaz) ve /api'nin kendi auth'u.
+if (process.env.SIMULATOR_ENABLED === 'true') {
+    // CSP'yi bu yola özel gevşetiyoruz: kelime sesi/görseli dış kaynaktan
+    // gelebiliyor (Word.audioUrl/imageUrl serbest URL). Global helmet() önce
+    // çalıştığı için buradaki başlık onu YALNIZCA /sim altında ezer.
+    const simulatorCsp = helmet({
+        contentSecurityPolicy: {
+            useDefaults: true,
+            directives: {
+                'img-src': ["'self'", 'data:', 'https:'],
+                'media-src': ["'self'", 'https:']
+            }
+        }
+    });
+
+    app.use('/sim',
+        simulatorCsp,
+        // index.html varlıklarını GÖRELİ çağırıyor ("./app.css"). Sondaki eğik
+        // çizgi olmadan bunlar /app.css'e çözülür ve canlıda 404 döner (dev'de
+        // simülatör kökten servis edildiği için sorun görünmez). Bu yüzden
+        // /sim → /sim/ yönlendirmesi statikten ÖNCE yapılır.
+        (req, res, next) => (req.path === '/' && !req.originalUrl.startsWith('/sim/')
+            ? res.redirect(302, '/sim/')
+            : next()),
+        // no-store: simülatör sık değişiyor; önbellekten gelen eski app.js
+        // düzeltilmiş bug'ları "hâlâ var" gibi gösterip yanlış teşhise yol açıyor
+        express.static('public', {
+            etag: false,
+            lastModified: false,
+            setHeaders: (res) => {
+                res.set('Cache-Control', 'no-store');
+                res.set('X-Robots-Tag', 'noindex');
+            }
+        })
+    );
+}
+
 // Deploy platformlarının canlılık kontrolü — auth ve rate limit dışında
 app.get('/health', (req, res) => res.status(200).json({ status: 'ok' }));
 
@@ -86,7 +132,20 @@ app.use(cors(
 
 app.use(express.json({ limit: '100kb' }));
 
-app.use('/api', generalLimiter);
+// Simülatör her isteğine `X-Musubi-Client: simulator` koyar (public/app.js).
+// Bu başlık kimlik DEĞİL etikettir — taklit edilebilir, hiçbir yetki vermez;
+// tek işi trafiği loglarda ve rate limit kovalarında ayırt edilebilir kılmak.
+// Gerçek istemci de ileride kendi etiketini gönderirse ("flutter" vb.) hangi
+// trafiğin nereden geldiği tek başlıkla görünür olur.
+app.use('/api', (req, res, next) =>
+    (req.get('x-musubi-client') === 'simulator' ? simulatorApiLimiter : generalLimiter)(req, res, next));
+
+// Universal Links / App Links doğrulama dosyaları (/.well-known/…). Aynı mail
+// linkleri uygulama kuruluysa uygulamada, değilse aşağıdaki landing
+// sayfalarında açılsın diye. generalLimiter'ın DIŞINDA: bu dosyaları iOS'un
+// CDN'i ve Android'in kurulum doğrulaması çeker, 429 yiyen eşleşme sessizce
+// düşer ve deep link hiç çalışmaz.
+app.use(require('./modules/auth/auth.applinks.routes'));
 
 // E-posta linklerinin indiği tarayıcı sayfaları (HTML, /api dışında):
 // GET /verify-email/:token ve GET /reset-password/:token

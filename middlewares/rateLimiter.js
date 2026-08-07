@@ -39,4 +39,22 @@ const uploadLimiter = rateLimit({
     message: { success: false, message: 'Çok fazla yükleme denemesi, lütfen daha sonra tekrar deneyin' }
 });
 
-module.exports = { generalLimiter, authLimiter, uploadLimiter };
+// Simülatörden (public/) gelen istekler AYRI kovada sayılır — bkz. app.js.
+// Amaç kısıtlamak değil, YALITMAK: test eden biri ile gerçek kullanıcı aynı
+// çıkış IP'sinin (ofis, üniversite, mobil NAT) arkasındaysa, testin harcadığı
+// bütçe gerçek kullanıcıyı 429'a düşürmemeli.
+//
+// ⚠️ Bu bir güvenlik sınırı DEĞİLDİR: kova, istemcinin gönderdiği başlığa göre
+// seçilir ve başlık taklit edilebilir. Yani başlığı bilen biri aynı IP'den iki
+// bütçe kullanabilir. Kabul edilebilir: burada korunan şey kotanın adilliği,
+// verinin kendisi değil (o /api'nin auth'unda).
+const simulatorApiLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 300,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: skipInTest,
+    message: { success: false, message: 'Çok fazla istek, lütfen daha sonra tekrar deneyin' }
+});
+
+module.exports = { generalLimiter, authLimiter, uploadLimiter, simulatorApiLimiter };

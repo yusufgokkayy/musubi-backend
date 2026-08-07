@@ -3,9 +3,15 @@
 // Mail istemcilerinin link tarayıcıları (Gmail prefetch, Outlook SafeLinks)
 // GET linklerini kullanıcı tıklamadan takip edebilir; bu yüzden bu sayfalar
 // YAN ETKİSİZDİR. Doğrulama/sıfırlama, kullanıcının sayfada tetiklediği
-// POST /api/auth/... çağrısıyla TAMAMEN WEB'DE yapılır (ürün kararı: deep link
-// yok). Kullanıcı sonrasında uygulamaya kendisi döner; uygulama
-// /auth/verification-status ile durumu öğrenir.
+// POST /api/auth/... çağrısıyla TAMAMEN WEB'DE yapılır. Kullanıcı sonrasında
+// uygulamaya kendisi döner; uygulama /auth/verification-status ile durumu
+// öğrenir.
+//
+// Bu sayfalar akışın TABANIDIR, alternatifi değil: aynı https linki uygulama
+// kuruluysa Universal Links / App Links ile uygulamada açılabilir (bkz.
+// auth.applinks.routes.js), ama masaüstünden açılan mail, uygulaması olmayan
+// cihaz ve doğrulaması düşmüş kurulum buraya iner. Custom scheme (musubi://)
+// hâlâ YOK — o şemayı kaydeden başka bir uygulama token'ı kapabilirdi.
 //
 // Tasarım: uygulamanın Giriş Ekranları tasarımıyla aynı dil — renkler Figma'dan
 // örneklendi (#bc002d marka, #f2ccd5 ikon dairesi, #1d9e75 başarı). Açık/koyu
