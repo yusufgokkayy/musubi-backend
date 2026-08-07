@@ -4,9 +4,9 @@ const WordService = require('./word.service');
 
 const WordController = {
     getAllWords: catchAsync(async (req, res) => {
-        const { jlptLevel, type, page, limit, includeAll } = req.query;
+        const { jlptLevel, type, q, page, limit, includeAll } = req.query;
         const result = await WordService.getAllWords({
-            jlptLevel, type, page, limit,
+            jlptLevel, type, q, page, limit,
             includeAll: includeAll === 'true'
         });
         res.status(200).json({ success: true, data: result });

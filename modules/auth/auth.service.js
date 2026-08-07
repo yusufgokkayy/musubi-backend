@@ -430,13 +430,48 @@ const AuthService = {
         return { accessToken };
     },
 
-    // refreshToken verilirse sadece o cihazın oturumu, verilmezse tüm oturumlar kapanır
+    // refreshToken verilirse sadece o cihazın oturumu, verilmezse tüm oturumlar kapanır.
+    //
+    // userId null OLABİLİR: bu uç protect değil optionalAuth arkasında duruyor.
+    // Access token 15 dakikada ölüyor ve protect'liyken süresi dolmuş token'la
+    // gelen çıkış isteği 401 alıyordu — yani oturumu kapatmak isteyen kullanıcı
+    // tam da kapatamıyor, DeviceSession ile refresh token'ı ayakta kalıyordu.
+    // Refresh token'a sahip olmak o cihaza sahip olmanın kanıtıdır; kimlik
+    // bilinmese de o oturum güvenle silinebilir.
     async logout(userId, refreshToken) {
         if (refreshToken) {
-            await DeviceSession.deleteOne({ user: userId, tokenHash: hashToken(refreshToken) });
-        } else {
-            await DeviceSession.deleteMany({ user: userId });
+            const filter = { tokenHash: hashToken(refreshToken) };
+            if (userId) filter.user = userId;
+            // findOneAndDelete: kimlik yalnızca refresh token'dan biliniyorsa
+            // push token'ını temizlemek için kullanıcıyı silinen kayıttan öğreniriz
+            const session = await DeviceSession.findOneAndDelete(filter);
+            await AuthService.clearFcmToken(session?.user || userId);
+            return;
         }
+
+        if (userId) {
+            await DeviceSession.deleteMany({ user: userId });
+            await AuthService.clearFcmToken(userId);
+            return;
+        }
+
+        // Ne geçerli access token ne de refresh token var: kapatılacak oturum
+        // belirlenemiyor. Sessizce 200 dönmek kullanıcıda "çıkış yaptım"
+        // yanılgısı yaratır, oysa oturum ayakta kalır.
+        throw new AppError('No refresh token', 401);
+    },
+
+    // Cihazın push kaydını düşürür. Ortak kullanılan bir telefonda çıkış yapan
+    // kullanıcının token'ı hesabında kalırsa, bildirimler bir sonraki kişinin
+    // eline gitmeye devam ediyordu.
+    //
+    // Kullanıcı başına TEK token tutulduğu için çıkışta koşulsuz temizlenir:
+    // ikinci bir cihaz varsa onun push'u da susar, ama yanlış kişiye bildirim
+    // göndermektense bildirim göndermemek doğru taraftır. (Çoklu cihaz desteği
+    // ayrı bir iş; geldiğinde token cihaz bazında silinecek.)
+    async clearFcmToken(userId) {
+        if (!userId) return;
+        await User.updateOne({ _id: userId }, { $unset: { fcmToken: 1 } });
     },
 
     async forgotPassword(email) {

@@ -53,6 +53,17 @@ const WordSchema = new mongoose.Schema({
     example: {
         type: String
     },
+    // example'ın furiganalı sürümü: 東京[とうきょう]**駅[えき]**で会[あ]いましょう。
+    // Kanjinin okunuşu köşeli parantezde kendinden ÖNCEKİ karaktere aittir;
+    // ** ... ** cümledeki hedef kelimeyi işaretler (tasarımdaki kırmızı vurgu).
+    //
+    // Neden example'ın yanında ayrı bir alan: boşluk doldurma sorusu example
+    // üzerinde replaceAll(kanji, '____') yapıyor — furiganalı metinde bu
+    // 駅[えき] → ____[えき] üretir ve sorunun cevabını okunuşuyla sızdırırdı.
+    // Bu yüzden example işaretlemesiz hâliyle korunur, furigana buraya yazılır.
+    exampleFurigana: {
+        type: String
+    },
     // example'ın Türkçe çevirisi.
     exampleTr: {
         type: String

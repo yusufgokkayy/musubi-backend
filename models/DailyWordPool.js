@@ -44,4 +44,15 @@ const DailyWordPoolSchema = new mongoose.Schema({
 // Kullanıcı aynı gün farklı JLPT seviyeleri için ayrı havuz oluşturabilir
 DailyWordPoolSchema.index({ user: 1, date: 1, jlptLevel: 1 }, { unique: true });
 
+// Bir havuzun o günkü boyutu — yalnızca GÜNCEL turun gerçek dizi uzunluğu.
+// targetGoal BİLEREK kullanılmaz: havuz kıtlıktan hedefin altında kurulmuş
+// olabilir, "kaç kelime var" sorusunun cevabı her zaman gerçek içerik olmalı.
+//
+// Burada durur çünkü iki tüketicisi var: anasayfa ilerleme çemberinin paydası
+// (home.service.js) ve "Bugünün Görevi" hatırlatmasının kalan iş hesabı
+// (notification.service.js). İki yerde kopyalanırsa biri güncellenip diğeri
+// unutulur ve çember ile bildirim farklı sayılar söylemeye başlar.
+DailyWordPoolSchema.statics.goalTotal = (pool) =>
+    pool.newWordIds.length + pool.reviewWordIds.length;
+
 module.exports = mongoose.model('DailyWordPool', DailyWordPoolSchema);

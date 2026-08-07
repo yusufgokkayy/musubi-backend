@@ -64,11 +64,21 @@ const AuthController = {
     }),
 
     logout: catchAsync(async (req, res) => {
-        // refreshToken verilirse sadece bu cihaz, verilmezse tüm cihazlar
-        await AuthService.logout(req.user.id, req.body?.refreshToken);
+        // refreshToken verilirse sadece bu cihaz, verilmezse tüm cihazlar.
+        // req.user optionalAuth'tan gelir ve süresi dolmuş access token'da
+        // BULUNMAZ — o durumda kimlik refreshToken'dan türetilir.
+        await AuthService.logout(req.user?.id, req.body?.refreshToken);
         res.status(200)
             .cookie('access_token', '', { httpOnly: true, expires: new Date(0) })
             .json({ success: true, message: 'Logged out' });
+    }),
+
+    // Kullanıcı bildirim iznini işletim sisteminden kapattığında çağrılır:
+    // sunucudaki token ölü kalmasın. update-info token'ı YAZAR ama boş değeri
+    // yok saydığı için silme yolu yoktu.
+    clearFcmToken: catchAsync(async (req, res) => {
+        await AuthService.clearFcmToken(req.user.id);
+        res.status(200).json({ success: true, message: 'Push token temizlendi' });
     }),
 
     refresh: catchAsync(async (req, res) => {

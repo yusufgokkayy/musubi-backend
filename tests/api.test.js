@@ -18,6 +18,10 @@ let UserWordService, NotificationService, ProgressService, StreakService, StudyS
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
+// Bir instant'ın varsayılan saat dilimindeki takvim günü ("YYYY-MM-DD")
+const localDay = (value) =>
+    new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Istanbul' }).format(new Date(value));
+
 // Bazı ortamlarda linux dağıtımı algılanamıyor; ubuntu binary'sine düş
 async function startMemoryServer() {
     try {
@@ -310,7 +314,13 @@ describe('Auth', () => {
         assert.equal(fresh.notificationSettings.reminderTime, '21:15');
         assert.equal(fresh.notificationSettings.streakReminder, false, 'önceki değişiklik korunmalı');
         assert.equal(fresh.notificationSettings.dailyReminder, true, 'dokunulmayan varsayılan korunmalı');
+        assert.equal(fresh.notificationSettings.dailyWord, true);
         assert.equal(fresh.notificationSettings.wordLevelDown, true);
+
+        // Ayarlar ekranı anahtarların açık/kapalı halini /auth/me'den okuyor:
+        // dailyWord yanıtta görünmezse yeni satır boş açılırdı
+        const me = await api('GET', '/auth/me', { token });
+        assert.equal(me.json.data.notificationSettings.dailyWord, true);
     });
 
     it('hesap bazlı giriş kilidi: 5 hatalı denemeden sonra kilitlenir, doğru şifre bile geçmez', async () => {
@@ -655,6 +665,85 @@ describe('Auth', () => {
         assert.equal(bad.status, 401);
     });
 
+    // Access token 15 dakikada ölüyor. Uç protect altındayken süresi dolmuş
+    // token'la gelen çıkış isteği 401 alıyordu: kullanıcı "çıkış yaptım"
+    // sanıyor, oysa DeviceSession ve refresh token ayakta kalıyordu.
+    it('süresi dolmuş access token çıkışı engellemez, o cihazın oturumu düşer', async () => {
+        const jwt = require('jsonwebtoken');
+        const user = await createVerifiedUser('cikis@test.com');
+        const tokens = await login('cikis@test.com');
+        const expired = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '-1s' });
+
+        const korumali = await api('GET', '/auth/me', { token: expired });
+        assert.equal(korumali.status, 401, 'token gerçekten süresi dolmuş olmalı');
+
+        const out = await api('POST', '/auth/logout', {
+            token: expired,
+            body: { refreshToken: tokens.refreshToken }
+        });
+        assert.equal(out.status, 200);
+
+        const sonra = await api('POST', '/auth/refresh', { body: { refreshToken: tokens.refreshToken } });
+        assert.equal(sonra.status, 401, 'oturum gerçekten kapanmalı');
+    });
+
+    it('access token hiç olmadan da refreshToken ile çıkılır; ikisi de yoksa 401', async () => {
+        await createVerifiedUser('cikis2@test.com');
+        const tokens = await login('cikis2@test.com');
+
+        const out = await api('POST', '/auth/logout', { body: { refreshToken: tokens.refreshToken } });
+        assert.equal(out.status, 200);
+        assert.equal(
+            await DeviceSession.countDocuments({ user: tokens.data.id }), 0,
+            'oturum kaydı silinmeli'
+        );
+
+        // Kapatılacak oturum belirlenemiyorsa sessizce 200 dönmek yanıltıcı olur
+        const bos = await api('POST', '/auth/logout', { body: {} });
+        assert.equal(bos.status, 401);
+    });
+
+    // Ortak kullanılan bir telefonda çıkış yapan kullanıcının push token'ı
+    // hesabında kalırsa bildirimler bir sonraki kişinin eline gider.
+    it('çıkış push token\'ını da düşürür; DELETE /auth/fcm-token elle temizler', async () => {
+        const user = await createVerifiedUser('push@test.com');
+        const tokens = await login('push@test.com');
+        const storedToken = async () =>
+            (await User.findById(user._id).select('+fcmToken')).fcmToken;
+
+        await api('PUT', '/auth/update-info', {
+            token: tokens.accessToken, body: { fcmToken: 'cihaz-token-1' }
+        });
+        assert.equal(await storedToken(), 'cihaz-token-1');
+
+        // OS'ten bildirim izni kapatılınca istemci bunu çağırır
+        const del = await api('DELETE', '/auth/fcm-token', { token: tokens.accessToken });
+        assert.equal(del.status, 200);
+        assert.equal(await storedToken(), undefined, 'token silinmeli');
+
+        await api('PUT', '/auth/update-info', {
+            token: tokens.accessToken, body: { fcmToken: 'cihaz-token-2' }
+        });
+        await api('POST', '/auth/logout', {
+            token: tokens.accessToken, body: { refreshToken: tokens.refreshToken }
+        });
+        assert.equal(await storedToken(), undefined, 'çıkışta da temizlenmeli');
+    });
+
+    it('geçerli access token + gövdesiz çıkış TÜM cihazları düşürür', async () => {
+        await createVerifiedUser('cikis3@test.com');
+        const devA = await login('cikis3@test.com');
+        const devB = await login('cikis3@test.com');
+
+        const out = await api('POST', '/auth/logout', { token: devA.accessToken });
+        assert.equal(out.status, 200);
+
+        for (const dev of [devA, devB]) {
+            const r = await api('POST', '/auth/refresh', { body: { refreshToken: dev.refreshToken } });
+            assert.equal(r.status, 401, 'her iki cihazın oturumu da kapanmalı');
+        }
+    });
+
     it('şifre değişimi tüm eski oturumları düşürür, taze çift döner', async () => {
         const devA = await login('auth@test.com');
         const devB = await login('auth@test.com');
@@ -955,6 +1044,20 @@ describe('E-posta akışları', () => {
         const malformed = await pageGet('/verify-email/' + encodeURIComponent('<script>alert(1)</script>'));
         assert.ok(malformed.text.includes('Bağlantı Geçersiz'), 'bozuk biçimli token DB\'ye sorulmadan reddedilir');
         assert.ok(!malformed.text.includes('<script>alert'), 'token sayfaya kaçışsız gömülmemeli');
+    });
+
+    // Başarı dalı chip'i ve butonu .hidden ile gizliyor. Bu iki eleman
+    // .mail-chip / .stack sınıflarını taşıyor ve o kurallar BASE_CSS'ten SONRA
+    // ekleniyor — aynı özgüllükte olduğu için düz `display:none` eziliyordu:
+    // doğrulama başarılı olduğu hâlde buton ekranda kalıp sonsuza dek dönüyordu.
+    it('landing: .hidden sayfaya özel display kurallarını yener', async () => {
+        await api('POST', '/auth/register', registerBody('gizleme@test.com'));
+        const page = await pageGet(`/verify-email/${lastVerificationToken()}`);
+
+        assert.ok(page.text.includes('.hidden{display:none!important}'),
+            '.hidden !important olmadan .stack/.mail-chip tarafından eziliyor');
+        assert.ok(/\.stack\{[^}]*display:flex/.test(page.text),
+            'ezen kural hâlâ burada — kalkarsa bu testin koruduğu şey de değişmiş demektir');
     });
 
     it('POST /auth/verify-email: deviceName yoksa oturum/token üretmez, varsa taze çift döner', async () => {
@@ -1285,7 +1388,7 @@ describe('Öğrenme döngüsü (SRS)', () => {
         res = await api('POST', '/userwords/answer', { token, body: { wordId, result: 'correct' } });
         assert.equal(res.json.data.masteryLevel, 3, 'ertesi günkü doğru → 2. tekrar → interval 6 → seviye 3');
 
-        // Ertesi günkü yanlış gerçek unutma sinyalidir: sıfırlar + bildirim
+        // Ertesi günkü yanlış gerçek unutma sinyalidir: seviyeyi sıfırlar
         await UserWord.updateOne(
             { user: userId, word: wordId },
             { $set: { lastReviewDate: new Date(Date.now() - 24 * 60 * 60 * 1000) } }
@@ -1295,8 +1398,14 @@ describe('Öğrenme döngüsü (SRS)', () => {
         assert.equal(res.json.data.levelDropped, true);
         assert.equal(res.json.data.previousLevel, 3);
 
+        // Düşüş BİLDİRİM ÜRETMEZ: kullanıcı cevabı verirken zaten uygulamanın
+        // içinde ve bilgi yukarıdaki yanıtta dönüyor. Eskiden her yanlış cevap
+        // ayrı bir push atıyordu (20 kelimelik seansta 8 yanlış = 8 push).
         const notifs = await api('GET', '/notifications', { token });
-        assert.ok(notifs.json.data.notifications.some(n => n.type === 'word_level_down'));
+        assert.ok(
+            !notifs.json.data.notifications.some(n => n.type === 'word_level_down'),
+            'cevap anında word_level_down üretilmemeli — tek üretici gece decay özeti'
+        );
     });
 
     it('easy doğru sayılır ve SM-2\'yi ilerletir (studysession ile tutarlı)', async () => {
@@ -1681,14 +1790,32 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
         assert.equal(again.json.data.progress.total, 25);
     });
 
+    it('ertelenmiş kelime dururken ders TAMAMLANAMAZ', async () => {
+        // migi (右) "Şimdilik Geç" ile ertelenmişti ve hâlâ gerçek cevap
+        // bekliyor. Tur burada kapatılsaydı kelime günün havuzundan düşer,
+        // kullanıcı cevaplamadığı hâlde "Tamamlandı" ekranını görürdü.
+        const res = await api('PUT', '/sessions/complete', { token });
+        assert.equal(res.status, 409);
+        assert.equal(res.json.details.pendingWords, 1, 'kalan sayısı istemciye dönmeli');
+
+        const summary = await api('GET', '/home/summary', { token });
+        assert.equal(summary.json.data.today.isCompleted, false, 'oturum kapanmamış olmalı');
+    });
+
     it('sessions/complete hazır accuracy yüzdesi döner', async () => {
+        // Ertelenen kelimenin gerçek cevabı: emptyCount düşer, totalWords
+        // DEĞİŞMEZ (kelime zaten dokunulmuş sayılıyordu)
+        const migi = await Word.findOne({ kanji: '右' });
+        await api('POST', '/userwords/answer', { token, body: { wordId: migi._id, result: 'correct' } });
+
         const res = await api('PUT', '/sessions/complete', { token });
         assert.equal(res.status, 200);
         const d = res.json.data;
-        // w0 correct, w1 wrong, miru/shita/itsumo correct, ue wrong, migi empty → 4/7
+        // w0 correct, w1 wrong, miru/shita/itsumo correct, ue wrong, migi correct → 5/7
         assert.equal(d.totalWords, 7);
-        assert.equal(d.correctCount, 4);
-        assert.equal(d.accuracy, 57);
+        assert.equal(d.correctCount, 5);
+        assert.equal(d.emptyCount, 0);
+        assert.equal(d.accuracy, 71);
         assert.equal(d.isCompleted, true);
     });
 
@@ -1876,6 +2003,64 @@ describe('Ana ekran (Home)', () => {
         assert.ok(typeof d.tomorrowReviews === 'number', '"Yarın N Kart Bekliyor" bandı için');
     });
 
+    it('başlık bloğu: Japonca selamlama, avatar alanı ve zil rozeti', async () => {
+        const d = (await api('GET', '/home/summary', { token })).json.data;
+
+        assert.ok(
+            ['おはようございます', 'こんにちは', 'こんばんは'].includes(d.greeting),
+            'ismin üstündeki satır kullanıcının saat dilimine göre seçilir'
+        );
+        assert.ok('avatarUrl' in d, 'yükleme gelene kadar da sözleşmede durmalı');
+        assert.equal(d.avatarUrl, null, 'avatar yükleme yolu henüz yok');
+
+        assert.equal(d.unreadNotifications, 0);
+        await api('POST', '/notifications/test', { token, body: {} });
+        const sonra = (await api('GET', '/home/summary', { token })).json.data;
+        assert.equal(sonra.unreadNotifications, 1, 'zil ikonunun rozeti');
+    });
+
+    it('hata kartı: başlıktaki sayının altında kelime çipleri döner', async () => {
+        const d = (await api('GET', '/home/summary', { token })).json.data;
+
+        assert.equal(d.todayMistakes.length, 1, 'ikinci bir istek gerekmemeli');
+        assert.equal(d.todayMistakes.length, d.todayMistakeCount,
+            'çipler başlıktaki sayıyla AYNI kümeden gelmeli');
+        const [cip] = d.todayMistakes;
+        assert.ok(cip.id && cip.kanji && cip.romaji, 'çipte yazan yazı ve kimlik');
+        assert.ok(['N5', 'N4', 'N3', 'N2', 'N1'].includes(cip.jlptLevel));
+    });
+
+    it('seri şeridi: Pazartesi→Pazar yedi gün, bugün çalışılmış işaretli', async () => {
+        const d = (await api('GET', '/home/summary', { token })).json.data;
+        const week = d.streak.week;
+
+        assert.equal(week.length, 7);
+        assert.deepEqual(week.map(g => g.weekday), [1, 2, 3, 4, 5, 6, 7], 'Pzt=1 … Paz=7');
+
+        // Diziyi tarih sırası tutar; ilk gün Pazartesi olmalı
+        assert.equal(new Date(week[0].date + 'T00:00:00Z').getUTCDay(), 1);
+        assert.deepEqual([...week].sort((a, b) => a.date.localeCompare(b.date)).map(g => g.date),
+            week.map(g => g.date), 'günler kronolojik sırada');
+
+        const bugun = week.find(g => g.isToday);
+        assert.ok(bugun, 'bugün her zaman haftanın içinde');
+        assert.equal(bugun.date, todayStr);
+        assert.equal(bugun.studied, true, 'before() içinde gerçek cevap verildi');
+        assert.equal(bugun.isFuture, false);
+
+        // Alev ile tiklerin aynı gerçeği anlatması şart. Kıyas SADECE bugün
+        // üzerinden yapılabilir: seri haftaları aşar (Çarşamba günü 12 günlük
+        // seride hafta içinde 3 tik olur), tik sayısı ile seri sayacı
+        // birbirine EŞİT DEĞİLDİR.
+        assert.ok(d.streak.current >= 1, 'bugün çalışıldıysa seri en az 1');
+        assert.equal(localDay(d.streak.lastStudyDate), todayStr,
+            'bugünün tiki ile serinin son çalışma günü aynı günü göstermeli');
+
+        assert.ok(week.filter(g => g.date > todayStr).every(g => g.isFuture && !g.studied),
+            'gelecek günler kesikli daire olarak çizilir');
+        assert.ok(week.filter(g => g.date < todayStr).every(g => !g.isFuture));
+    });
+
     it('gün detayı: sayılar + o gün çalışılan kelimeler sonuçlarıyla döner', async () => {
         const res = await api('GET', `/home/day/${todayStr}`, { token });
         assert.equal(res.status, 200);
@@ -1915,6 +2100,130 @@ describe('Ana ekran (Home)', () => {
         await api('GET', '/userwords/today?jlptLevel=N5', { token });
         res = await api('GET', '/home/summary', { token });
         assert.equal(res.json.data.goal, 30, 'test setinde 30 core N5 var: 20 + kalan 10');
+    });
+});
+
+describe('Ders sayacı — "Şimdilik Geç" ilerleme sayılmaz', () => {
+    // 06.08.2026'da bildirilen hata: 20 kelimenin hepsi ertelenince başlık
+    // "20/20 Tamamlandı" diyor ama ders bitmiyor, kuyruğu baştan soruyordu.
+    // Sebep: pay (totalWords) kelimeye DOKUNULUNCA artıyordu, ders ise ancak
+    // her kelimenin NİHAİ cevabı olunca bitiyor — iki farklı "bitti" tanımı.
+    let token, words;
+
+    before(async () => {
+        await createVerifiedUser('sayac@test.com', { dailyGoal: 20 });
+        token = (await login('sayac@test.com')).accessToken;
+        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        words = today.json.data.newWords;
+        assert.equal(words.length, 20, 'havuz 20 kelime olmalı');
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
+    });
+
+    it('hepsi ertelenince sayaç 0/20 kalır (20/20 DEĞİL) ve ders bitmez', async () => {
+        for (const w of words) {
+            await api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'empty' } });
+        }
+
+        const d = (await api('GET', '/userwords/today?jlptLevel=N5', { token })).json.data;
+        assert.equal(d.today.completedWords, 0, 'hiçbirinin nihai cevabı yok');
+        assert.equal(d.today.totalWords, 20, 'dokunulan kelime sayısı ise 20');
+        assert.equal(d.today.emptyCount, 20);
+
+        // Ders ekranının kuyruğu: nihai cevabı olmayan kelimeler
+        const kalan = d.newWords.filter(w => !w.answeredToday).length;
+        assert.equal(kalan, 20, 'yirmisi de yeniden sorulmalı');
+
+        // Anasayfa çemberi ile ders başlığı AYNI payı kullanmalı
+        const s = (await api('GET', '/home/summary', { token })).json.data;
+        assert.equal(s.today.completedWords, 0, 'çember de %0 göstermeli');
+
+        const bitir = await api('PUT', '/sessions/complete', { token });
+        assert.equal(bitir.status, 409, 'ertelenmiş 20 kelime varken bitirilemez');
+        assert.equal(bitir.json.details.pendingWords, 20);
+    });
+
+    it('ertelenenler gerçekten cevaplanınca 20/20 olur ve ders biter', async () => {
+        for (const w of words) {
+            await api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'correct' } });
+        }
+
+        const d = (await api('GET', '/userwords/today?jlptLevel=N5', { token })).json.data;
+        assert.equal(d.today.completedWords, 20, 'artık gerçekten 20/20');
+        assert.equal(d.today.totalWords, 20, 'erteleme yükseltmesi toplamı şişirmez');
+        assert.equal(d.today.emptyCount, 0);
+        assert.equal(d.newWords.filter(w => !w.answeredToday).length, 0, 'kuyruk boş');
+
+        const bitir = await api('PUT', '/sessions/complete', { token });
+        assert.equal(bitir.status, 200);
+        assert.equal(bitir.json.data.isCompleted, true);
+    });
+});
+
+describe('Anasayfa — hafta hesabı yaz saati geçişinde kaymaz', () => {
+    // Şeridin 7 günü gerçek instant'lara 24 saat eklenerek üretilseydi, geçiş
+    // haftasında bir gün (23/25 saat) atlanır ya da tekrarlanırdı.
+    const { weekDatesInTz } = require('../utils/date.util');
+
+    it('geçişin OLDUĞU hafta yedi ayrı gün döner ve Pazartesi başlar', () => {
+        // Avrupa'da yaz saati 29.03.2026 Pazar; o günü içeren hafta
+        const week = weekDatesInTz('Europe/Berlin', new Date('2026-03-25T12:00:00Z'));
+        assert.deepEqual(week, [
+            '2026-03-23', '2026-03-24', '2026-03-25', '2026-03-26',
+            '2026-03-27', '2026-03-28', '2026-03-29'
+        ]);
+    });
+
+    it('geçişten hemen sonraki gün yeni haftaya sayılır', () => {
+        // Berlin'de 30.03 saat 02:30 (UTC+2) — Pazartesi, yeni hafta
+        const week = weekDatesInTz('Europe/Berlin', new Date('2026-03-30T00:30:00Z'));
+        assert.equal(week[0], '2026-03-30');
+        assert.equal(week[6], '2026-04-05');
+    });
+
+    it('kullanıcının saat dilimi haftayı belirler, sunucununki değil', () => {
+        // Bu an Istanbul'da Pazartesi 00:30 (yeni hafta başladı),
+        // Los Angeles'ta ise hâlâ Pazar 14:30 (önceki hafta sürüyor)
+        const at = new Date('2026-08-02T21:30:00Z');
+        assert.equal(weekDatesInTz('Europe/Istanbul', at)[0], '2026-08-03');
+        assert.equal(weekDatesInTz('America/Los_Angeles', at)[0], '2026-07-27');
+    });
+});
+
+describe('Anasayfa — seri şeridi serinin kuralına uyar', () => {
+    it('"Şimdilik Geç" günü çalışılmış saymaz (alev yanmıyorsa tik de yok)', async () => {
+        await createVerifiedUser('serit@test.com');
+        const token = (await login('serit@test.com')).accessToken;
+
+        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const [w1] = today.json.data.newWords;
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
+        await api('POST', '/userwords/answer', { token, body: { wordId: w1._id, result: 'empty' } });
+
+        const d = (await api('GET', '/home/summary', { token })).json.data;
+        const bugun = d.streak.week.find(g => g.isToday);
+
+        assert.equal(d.streak.current, 0, 'boş geçmek seriyi başlatmaz');
+        assert.equal(d.today.totalWords, 1, 'oturum sayacına ise yazılır');
+        assert.equal(bugun.studied, false,
+            'totalWords>0 diye tik basılsaydı şerit "12 gün" derken hafta boş görünürdü');
+    });
+
+    it('hata çipleri önizlemedir: sayı tamamı verir, liste sınırlanır', async () => {
+        await createVerifiedUser('cip@test.com');
+        const token = (await login('cip@test.com')).accessToken;
+
+        const today = await api('GET', '/userwords/today?jlptLevel=N5', { token });
+        const words = today.json.data.newWords.slice(0, 9);
+        assert.equal(words.length, 9, 'test setinde 9 kelime bulunmalı');
+
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
+        for (const w of words) {
+            await api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'wrong' } });
+        }
+
+        const d = (await api('GET', '/home/summary', { token })).json.data;
+        assert.equal(d.todayMistakeCount, 9, 'başlıktaki sayı TAMAMIDIR');
+        assert.equal(d.todayMistakes.length, 8, 'çipler ilk 8 ile sınırlı');
     });
 });
 
@@ -2026,6 +2335,118 @@ describe('Kelime havuzu sıralaması (müfredat/frequencyRank)', () => {
         // Aynı gün tekrar çağrıldığında (havuz zaten var) sıra yine korunur
         const again = await api('GET', '/userwords/today?jlptLevel=N3', { token });
         assert.deepEqual(again.json.data.newWords.map(w => w.kanji), ['医者', '看護師', '外科医']);
+    });
+});
+
+describe('Kütüphane (liste, arama, sayfalama)', () => {
+    let token;
+
+    before(async () => {
+        await Word.insertMany([
+            {
+                kanji: '電車', kana: 'でんしゃ', romaji: 'densha', meaning: 'train', meaningTr: 'tren',
+                type: 'isim', jlptLevel: 'N5', isCore: true, frequencyRank: 501,
+                example: '毎朝**電車**で学校へ行きます。',
+                exampleFurigana: '毎朝[まいあさ]**電車[でんしゃ]**で学校[がっこう]へ行[い]きます。'
+            },
+            {
+                kanji: '駅', kana: 'えき', romaji: 'eki', meaning: 'station', meaningTr: 'istasyon',
+                type: 'isim', jlptLevel: 'N5', isCore: true, frequencyRank: 502
+            },
+            {
+                kanji: '危険', kana: 'きけん', romaji: 'kiken', meaning: 'danger', meaningTr: 'tehlike',
+                type: 'isim', jlptLevel: 'N4', isCore: true, frequencyRank: 503
+            },
+            // "tren" araması için tuzak: anlamı birebir "tren" DEĞİL ama İngilizce
+            // anlamındaki "trend" kelimesi "tren" içeriyor. frequencyRank=1 ile
+            // 電車'nın (501) çok önünde — yalnızca müfredat sırasına bakan bir
+            // sıralama bu tesadüfi eşleşmeyi ilk sıraya koyardı.
+            {
+                kanji: '傾向', kana: 'けいこう', romaji: 'keikou', meaning: 'trend, tendency',
+                meaningTr: 'eğilim', type: 'isim', jlptLevel: 'N2', isCore: true, frequencyRank: 1
+            },
+            // Anlamı virgülle ayrılmış liste: parçadan arama bunun üzerinde sınanır
+            {
+                kanji: '停車場', kana: 'ていしゃじょう', romaji: 'teishajou', meaning: 'railway station',
+                meaningTr: 'istasyon, durak yeri', type: 'isim', jlptLevel: 'N1', isCore: true, frequencyRank: 900
+            }
+        ]);
+        await createVerifiedUser('kutuphane@test.com');
+        token = (await login('kutuphane@test.com')).accessToken;
+    });
+
+    it('sayfalama kararlıdır: sayfalar arasında kelime tekrar etmez veya kaybolmaz', async () => {
+        const total = (await api('GET', '/words?limit=1', { token })).json.data.total;
+
+        const gorulen = [];
+        const sayfaSayisi = Math.ceil(total / 20);
+        for (let p = 1; p <= sayfaSayisi; p++) {
+            const res = await api('GET', `/words?page=${p}&limit=20`, { token });
+            assert.equal(res.status, 200);
+            gorulen.push(...res.json.data.words.map(w => w._id));
+        }
+
+        assert.equal(gorulen.length, total, 'tüm sayfaların toplamı total ile eşleşmeli');
+        assert.equal(new Set(gorulen).size, total, 'aynı kelime iki sayfada birden çıkmamalı');
+    });
+
+    it('Türkçe anlamdan arar (kullanıcı gördüğü kelimeyi yazar)', async () => {
+        // 危険'in İngilizce anlamı "danger" — "tehlike" YALNIZCA meaningTr'de
+        // geçiyor, yani sonuç Türkçe alanın arandığını kanıtlar
+        const res = await api('GET', '/words?q=tehlike', { token });
+        assert.equal(res.status, 200);
+        assert.deepEqual(res.json.data.words.map(w => w.kanji), ['危険']);
+    });
+
+    it('kanadan arar', async () => {
+        const res = await api('GET', '/words?q=でんしゃ', { token });
+        assert.deepEqual(res.json.data.words.map(w => w.kanji), ['電車']);
+    });
+
+    it('arama sayfalıdır: total döner ve seviye filtresiyle birleşir', async () => {
+        const hepsi = await api('GET', '/words?q=語五', { token });
+        assert.equal(hepsi.json.data.total, 30, 'arama kesilmeden gerçek toplamı bildirmeli');
+        assert.equal(hepsi.json.data.words.length, 20, 'ilk sayfa limit kadar döner');
+
+        const n4 = await api('GET', '/words?q=語&jlptLevel=N4', { token });
+        assert.equal(n4.json.data.total, 50);
+        assert.ok(n4.json.data.words.every(w => w.jlptLevel === 'N4'));
+    });
+
+    it('core olmayan kelime aramaya girmez', async () => {
+        const res = await api('GET', '/words?q=非核', { token });
+        assert.equal(res.json.data.total, 0);
+    });
+
+    it('tam eşleşme, kelime ortasında geçen sonuçların ÖNÜNE gelir', async () => {
+        const res = await api('GET', '/words?q=tren', { token });
+        assert.equal(res.json.data.words[0].kanji, '電車', 'anlamı birebir "tren" olan kelime ilk sırada olmalı');
+        assert.ok(res.json.data.words.some(w => w.kanji === '傾向'), 'kısmi eşleşme yine de listede kalmalı');
+    });
+
+    it('virgülle ayrılmış anlamlarda parçadan da bulur', async () => {
+        const res = await api('GET', '/words?q=durak', { token });
+        assert.deepEqual(res.json.data.words.map(w => w.kanji), ['停車場']);
+    });
+
+    it('seviye içinde müfredat sırasını korur', async () => {
+        const res = await api('GET', '/words?q=語三', { token });
+        assert.equal(res.json.data.total, 0, 'olmayan kelime boş döner');
+
+        const n3 = await api('GET', '/words?jlptLevel=N3&limit=3', { token });
+        assert.deepEqual(n3.json.data.words.map(w => w.kanji), ['医者', '看護師', '外科医']);
+    });
+
+    it('detayda her iki anlam da döner — dili istemci seçer', async () => {
+        const liste = await api('GET', '/words?q=densha', { token });
+        const id = liste.json.data.words[0]._id;
+
+        const res = await api('GET', `/words/${id}`, { token });
+        assert.equal(res.status, 200);
+        assert.equal(res.json.data.meaning, 'train');
+        assert.equal(res.json.data.meaningTr, 'tren');
+        assert.equal(res.json.data.exampleFurigana, '毎朝[まいあさ]**電車[でんしゃ]**で学校[がっこう]へ行[い]きます。');
+        assert.equal(res.json.data.example, '毎朝**電車**で学校へ行きます。', 'example işaretlemesiz kalmalı');
     });
 });
 
@@ -2175,12 +2596,14 @@ describe('Bildirim üretimi (cron)', () => {
         assert.match(warning.body, /1 saat sonra/);
     });
 
-    it('bugün çalışana seri bildirimi gitmez; tercihi kapalıya günlükler gitmez', async () => {
+    it('bugün çalışana seri bildirimi gitmez; tüm tercihler kapalıysa hiçbiri oluşmaz', async () => {
         const calisan = await createVerifiedUser('calisan@test.com');
         await Streak.updateOne({ user: calisan._id }, { currentStreak: 5, lastStudyDate: new Date() });
 
         const kapali = await createVerifiedUser('kapali@test.com', {
-            notificationSettings: { dailyReminder: false, streakReminder: true, wordLevelDown: true }
+            notificationSettings: {
+                dailyReminder: false, dailyWord: false, streakReminder: true, wordLevelDown: true
+            }
         });
 
         await NotificationService.generateDailyNotifications(atIstanbulHour(19));
@@ -2192,8 +2615,84 @@ describe('Bildirim üretimi (cron)', () => {
         );
         assert.equal(
             await Notification.countDocuments({ user: kapali._id, type: { $in: ['daily_task', 'daily_word'] } }),
-            0, 'dailyReminder kapalıysa günlük bildirimler oluşmaz'
+            0, 'ikisi de kapalıysa günlük bildirimler oluşmaz'
         );
+    });
+
+    // Tasarımda "Günlük Kelimeler" (あ) ve "Pratik Anımsatıcısı" (takvim+saat)
+    // AYRI satırlar; ikisi de dailyReminder'a bağlıyken birini kapatan
+    // kullanıcının diğeri de susuyordu.
+    it('Günlük Kelimeler ile Pratik Anımsatıcısı birbirinden bağımsız kapanır', async () => {
+        const sadeceKelime = await createVerifiedUser('sadecekelime@test.com', {
+            notificationSettings: { dailyReminder: false }
+        });
+        const sadeceGorev = await createVerifiedUser('sadecegorev@test.com', {
+            notificationSettings: { dailyWord: false }
+        });
+
+        await NotificationService.generateDailyNotifications(atIstanbulHour(10));
+
+        assert.equal(await Notification.countDocuments({ user: sadeceKelime._id, type: 'daily_task' }), 0);
+        assert.equal(await Notification.countDocuments({ user: sadeceKelime._id, type: 'daily_word' }), 1,
+            'anımsatıcı kapalı olsa da günlük kelime hatırlatma saatinde gider');
+
+        assert.equal(await Notification.countDocuments({ user: sadeceGorev._id, type: 'daily_word' }), 0);
+        assert.equal(await Notification.countDocuments({ user: sadeceGorev._id, type: 'daily_task' }), 1);
+    });
+
+    // Cron 15 dakikada bir ve pencere ertesi güne sarmıyor: gece yarısından
+    // önceki SON tur 23:45. Bu tur kalan dakikaları üstlenmezse 23:46-23:59
+    // arası seçilen hatırlatma saati hiç çalışmıyordu.
+    it('gün sonuna ayarlanan hatırlatma saati (23:50) son turda üretilir', async () => {
+        const gece = await createVerifiedUser('gece@test.com', {
+            notificationSettings: { reminderTime: '23:50' }
+        });
+
+        // Gün içindeki turlar erken ateşlemez
+        await NotificationService.generateDailyNotifications(atIstanbulHour(20));
+        assert.equal(await Notification.countDocuments({ user: gece._id, type: 'daily_task' }), 0);
+
+        // Günün son turu (23:45) — 23:50'yi üstlenir
+        const sonTur = new Date();
+        sonTur.setUTCHours(23 - 3, 45, 0, 0);
+        await NotificationService.generateDailyNotifications(sonTur);
+        assert.equal(
+            await Notification.countDocuments({ user: gece._id, type: 'daily_task' }), 1,
+            'gün sonuna ayarlanan hatırlatma kaybolmamalı'
+        );
+    });
+
+    it('hedefini bitiren kullanıcı hatırlatılmaz; kısmi ilerlemede kalan sayı yazılır', async () => {
+        const StudySession = mongoose.model('StudySession');
+        const DailyWordPool = mongoose.model('DailyWordPool');
+        const gunBasi = new Date();
+        gunBasi.setUTCHours(-3, 0, 0, 0); // Europe/Istanbul gün başlangıcı
+
+        const kuranHavuz = async (user, adet) => DailyWordPool.create({
+            user: user._id, date: gunBasi, jlptLevel: 'N5',
+            newWordIds: (await Word.find({ jlptLevel: 'N5' }).limit(adet)).map(w => w._id),
+            reviewWordIds: []
+        });
+
+        const biten = await createVerifiedUser('biten@test.com', { dailyGoal: 20 });
+        await kuranHavuz(biten, 10);
+        await StudySession.create({ user: biten._id, date: gunBasi, totalWords: 10 });
+
+        const yarim = await createVerifiedUser('yarim@test.com', { dailyGoal: 20 });
+        await kuranHavuz(yarim, 10);
+        await StudySession.create({ user: yarim._id, date: gunBasi, totalWords: 4 });
+
+        await NotificationService.generateDailyNotifications(atIstanbulHour(10));
+
+        assert.equal(
+            await Notification.countDocuments({ user: biten._id, type: 'daily_task' }), 0,
+            'günün işini bitirene "seni bekliyor" denmez'
+        );
+
+        const kalan = await Notification.findOne({ user: yarim._id, type: 'daily_task' });
+        assert.ok(kalan, 'iş kaldıysa hatırlatma gitmeli');
+        assert.match(kalan.body, /Bugün 6 ezberlenecek/, 'gövde hedefi değil KALANI yazmalı');
+        assert.equal(kalan.data.remaining, 6);
     });
 });
 
@@ -2242,6 +2741,35 @@ describe('Mastery decay', () => {
         const notifs = await Notification.find({ user: userId, type: 'word_level_down', 'data.source': 'decay' });
         assert.equal(notifs.length, 1);
         assert.equal(notifs[0].data.count, 2);
+        assert.equal(notifs[0].title, 'Kelimeler tazelenmek istiyor 🌱');
+    });
+
+    // Tasarımdaki "Kelimenin Seviyesi Düştü" kartı: tek kelime düşmüşse onu
+    // adıyla söyle. Decay kademeli düşürdüğü için seviye gerçekten 1'den farklı
+    // olabilir — cevap yolu repetitions'ı sıfırladığından hep "1" yazardı.
+    it('tek kelime düşerse bildirim onu adıyla ve yeni seviyesiyle söyler', async () => {
+        const tek = await createVerifiedUser('tekdusus@test.com');
+        await Streak.updateOne({ user: tek._id }, { lastStudyDate: new Date(Date.now() - 60 * 86400000) });
+
+        const w = await Word.findOne({ jlptLevel: 'N4', isCore: true });
+        await UserWord.create({
+            user: tek._id, word: w._id, status: 'learning',
+            masteryLevel: 4, repetitions: 3, interval: 10, easeFactor: 2.5,
+            correctCount: 3, wrongCount: 0,
+            nextReviewDate: new Date(Date.now() - 25 * 86400000) // ratio 2.5 → hedef 3
+        });
+
+        await UserWordService.applyMasteryDecay();
+
+        const notif = await Notification.findOne({ user: tek._id, type: 'word_level_down' });
+        assert.equal(notif.title, 'Kelimenin Seviyesi Düştü');
+        assert.ok(
+            notif.body.includes(`${w.kanji} (${w.romaji}) kelimesinin seviyesi 3. seviyeye düştü`),
+            `beklenmeyen gövde: ${notif.body}`
+        );
+        assert.match(notif.body, /Uygulamaya gir tekrar hatırla!/);
+        assert.equal(notif.data.newLevel, 3);
+        assert.equal(String(notif.data.wordId), String(w._id));
     });
 
     it('doğru cevap seviyeyi SM-2\'den anında geri yükseltir', async () => {
@@ -2442,8 +2970,10 @@ describe('Görsel yükleme', () => {
         assert.match(res.json.message, /çözümlenemedi/);
     });
 
-    it('5 MB üstü dosya ve tanınmayan preset reddedilir', async () => {
-        const buyuk = Buffer.alloc(6 * 1024 * 1024, 0x00);
+    it('boyut sınırını aşan dosya ve tanınmayan preset reddedilir', async () => {
+        // Sınır sabitten okunur: değeri değişince test yalancı yeşile dönmesin
+        const { MAX_UPLOAD_BYTES } = require('../middlewares/upload.middleware');
+        const buyuk = Buffer.alloc(MAX_UPLOAD_BYTES + 1024, 0x00);
         const res = await postImage(buyuk, { token: adminToken });
         assert.equal(res.status, 400);
         assert.match(res.json.message, /çok büyük/);

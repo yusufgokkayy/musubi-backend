@@ -89,17 +89,30 @@ const UserSchema = new mongoose.Schema({
         min: 5,
         max: 50
     },
+    // Alanlar "Bildirim Ayarları" ekranındaki kontrollerle BİREBİR eşleşir;
+    // eşleme notification.service.js'teki SETTING_MAP'te tutulur.
     notificationSettings: {
+        // "Pratik Anımsatıcısı" + detay ekranındaki "Anımsatıcıyı Kapat"
+        // (takvim+saat ikonu) → daily_task
         dailyReminder: { type: Boolean, default: true },
+        // "Günlük Kelimeler" (あ ikonu) → daily_word.
+        // dailyReminder'dan AYRI: tasarımda iki ayrı kontrol var ve ikisi de
+        // tek bayrağa bağlıyken "Günlük Kelimeler"i kapatan kullanıcının
+        // pratik anımsatıcısı da susuyordu.
+        dailyWord: { type: Boolean, default: true },
         // Onboarding'deki "Hatırlatma Bildirimi" saat seçicisi ve ayarlardaki
         // karşılığı. Kullanıcının KENDİ saat diliminde HH:mm; bildirim üreten
         // cron bu saati geçmiş kullanıcılara günün hatırlatmasını gönderir.
+        // İKİ tip için de zamanlama kaynağıdır: dailyReminder kapalı ama
+        // dailyWord açıksa günlük kelime yine bu saatte gider.
         reminderTime: {
             type: String,
             default: '10:00',
             match: [/^([01]\d|2[0-3]):[0-5]\d$/, 'Hatırlatma saati HH:mm biçiminde olmalı']
         },
+        // "Seri Koruma Uyarısı" (alev ikonu) → streak_reminder + streak_warning
         streakReminder: { type: Boolean, default: true },
+        // "Tekrar Gereken Kelimeler" (↘ ikonu) → word_level_down
         wordLevelDown: { type: Boolean, default: true }
     },
     // Ayarlar ekranındaki cihazlar arası senkron tercihler (Dil/Tema/Font Boyutu)

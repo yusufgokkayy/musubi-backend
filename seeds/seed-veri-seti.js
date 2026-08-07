@@ -10,6 +10,7 @@ const fs = require('fs');
 const path = require('path');
 const wanakana = require('wanakana');
 const Word = require('../models/Word');
+const { mergeFurigana } = require('./furigana-merge');
 
 dotenv.config();
 
@@ -20,6 +21,13 @@ const LEVEL_FILES = {
     N2: 'musubi_n2.json',
     N1: 'musubi_n1.json'
 };
+
+// Örnek cümlenin okunuşları ayrı dosyada duruyor; hedef kelime vurgusu ise
+// yalnızca furigansız dosyada var. İkisi seed sırasında birleştirilir —
+// bkz. seeds/furigana-merge.js
+const furiganaFile = (filename) => filename.replace('.json', '_furigana.json');
+
+const readJson = (filePath) => JSON.parse(fs.readFileSync(filePath, 'utf-8'));
 
 async function seed() {
     await mongoose.connect(process.env.MONGO_URI);
@@ -33,7 +41,18 @@ async function seed() {
             continue;
         }
 
-        const entries = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        const entries = readJson(filePath);
+
+        // Furiganalı dosya iki sette de aynı sırada ve aynı cümleleri taşır;
+        // yine de kelime bazında eşleştiriyoruz ki sıra bozulursa sessizce
+        // yanlış cümleye okunuş yazmayalım.
+        const furiganaPath = path.join(__dirname, '../veri-seti', furiganaFile(filename));
+        const furiganaByKey = new Map();
+        if (fs.existsSync(furiganaPath)) {
+            readJson(furiganaPath).forEach(e => furiganaByKey.set(`${e.order}|${e.word}`, e.exampleJp));
+        } else {
+            console.log(`${furiganaFile(filename)} bulunamadı, furigana atlanıyor`);
+        }
 
         const words = entries.map(e => ({
             kanji: e.word,
@@ -46,6 +65,7 @@ async function seed() {
             type: e.type,
             jlptLevel: level,
             example: e.exampleJp,
+            exampleFurigana: mergeFurigana(e.exampleJp, furiganaByKey.get(`${e.order}|${e.word}`)),
             exampleTr: e.exampleTr,
             // Müfredat sırası: seviye içi 'order' (küçük = önce öğretilir)
             frequencyRank: e.order,

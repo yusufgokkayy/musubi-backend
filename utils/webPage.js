@@ -71,7 +71,12 @@ h1{font-size:21px;line-height:1.3;font-weight:700;margin-bottom:9px;letter-spaci
   background:none;border:0;font:inherit;font-size:13px;color:var(--muted);
   text-decoration:underline;text-underline-offset:3px;cursor:pointer;padding:4px 8px;
 }
-.hidden{display:none}
+/* !important ŞART: bu kural BASE_CSS'in içinde, sayfaya özel CSS ise ondan
+   SONRA ekleniyor (bkz. sendPage). Aynı özgüllükteki .stack (display:flex) ve
+   .mail-chip (display:inline-block) sonra geldiği için düz display:none
+   eziliyordu — doğrulama başarılı olduğu hâlde buton ekranda kalıp sonsuza
+   kadar dönüyordu. */
+.hidden{display:none!important}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 `;
 

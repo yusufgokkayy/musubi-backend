@@ -10,8 +10,13 @@ router.post('/check-email',     authLimiter, AuthController.checkEmail);
 router.post('/register',        authLimiter, AuthController.register);
 router.post('/login',           authLimiter, AuthController.login);
 router.post('/social',          authLimiter, AuthController.socialLogin);
-router.post('/logout',          protect, AuthController.logout);
+// optionalAuth BİLEREK: süresi dolmuş access token'la gelen çıkış isteği
+// protect altında 401 alıyordu ve oturum kapanamıyordu (bkz. AuthService.logout)
+router.post('/logout',          optionalAuth, AuthController.logout);
 router.post('/refresh', AuthController.refresh);
+// Push token'ını siler. isEmailVerified BİLEREK yok: e-posta değişip doğrulama
+// düşse bile kullanıcı bildirim kaydını kaldırabilmeli.
+router.delete('/fcm-token',     protect, AuthController.clearFcmToken);
 router.get('/me',               protect, isEmailVerified, AuthController.getMe);
 // Doğrulama bekleme ekranının sorduğu durum ucu — isEmailVerified YOK,
 // çünkü tam da doğrulanmamış kullanıcı için var

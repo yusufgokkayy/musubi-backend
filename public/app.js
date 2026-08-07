@@ -137,10 +137,14 @@ function spinner() { return `<div class="screen-pad"><div class="spinner"></div>
 // pending>0 ise halka iki tona ayrılır: koyu kırmızı (gerçek cevap) + amber
 // (hâlâ "Şimdilik Geç" ile ertelenmiş) — Ders ekranındaki çubukla aynı mantık,
 // kullanıcı isteği: Anasayfa'daki yuvarlak da aynı ayrımı göstersin.
-function ringSvg(value, total, size = 168, stroke = 14, pending = 0) {
+// completed = NİHAİ cevaplı kelime sayısı (backend'in today.completedWords'ü),
+// pending = ertelenmiş kelime sayısı; ikisi ayrı yay olarak çizilir.
+// Eskiden buraya dokunulan toplam (totalWords) geçiliyor ve pending burada
+// çıkarılıyordu — çember doğru çiziliyordu ama ortadaki sayı aynı değeri
+// çıkarmadığı için "20/20 Tamamlandı" derken ders bitmiyordu.
+function ringSvg(completed, total, size = 168, stroke = 14, pending = 0) {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r;
-  const finalValue = Math.max(0, value - pending);
-  const finalFrac = total > 0 ? Math.min(1, finalValue / total) : 0;
+  const finalFrac = total > 0 ? Math.min(1, Math.max(0, completed) / total) : 0;
   const pendingFrac = total > 0 ? Math.min(1 - finalFrac, Math.max(0, pending) / total) : 0;
   const finalLen = c * finalFrac;
   const pendingLen = c * pendingFrac;
@@ -568,8 +572,8 @@ async function showHome() {
         <h1>Merhaba ${esc(d.name)} 👋</h1>
         <div class="bell" data-nav="notifications">🔔<span class="dot" hidden></span></div>
       </div>
-      <div class="ring-wrap"><div class="ring">${ringSvg(d.today.totalWords, d.goal, 168, 14, d.today.emptyCount)}
-        <div class="num"><b>${d.today.totalWords}/${d.goal}</b><span>Tamamlandı</span></div></div></div>
+      <div class="ring-wrap"><div class="ring">${ringSvg(d.today.completedWords, d.goal, 168, 14, d.today.emptyCount)}
+        <div class="num"><b>${d.today.completedWords}/${d.goal}</b><span>Tamamlandı</span></div></div></div>
       ${d.today.emptyCount > 0 ? `<div class="center muted" style="font-size:12.5px;margin:-8px 0 14px">🟡 ${d.today.emptyCount} kelime ertelendi — tekrar sorulacak</div>` : ''}
       <button class="btn btn-primary" id="btn-start-lesson">Bugünkü Kelimelerine Geç</button>
       ${d.tomorrowReviews > 0 ? `<div class="pending-banner">📅 Yarın ${d.tomorrowReviews} kart seni bekliyor</div>` : ''}
@@ -661,7 +665,7 @@ async function loadLessonWords(jlptLevel) {
   state.lesson.idx = 0;
   // Anasayfa (/home/summary) ile AYNI kaynak: backend'in döndürdüğü goal/today
   // doğrudan kullanılır, yerel toplama YAPILMAZ — bkz. submitLessonAnswer.
-  state.lesson.doneToday = d.today.totalWords;
+  state.lesson.doneToday = d.today.completedWords;
   state.lesson.totalToday = d.goal;
   state.lesson.pendingToday = d.today.emptyCount;
   state.lesson.phase = queue.length ? 'question' : 'already-done';
@@ -690,7 +694,9 @@ function renderLessonScreen() {
 function lessonTopbar() {
   const L = state.lesson;
   const total = L.totalToday || 1;
-  const finalCount = Math.max(0, L.doneToday - L.pendingToday);
+  // doneToday zaten NİHAİ cevap sayısıdır (backend'in completedWords'ü);
+  // ertelenenler ayrı bir bant olarak çizilir
+  const finalCount = L.doneToday;
   // Kullanıcı günlük hedefi aşabilir (birden fazla tur) — payda SABİT kalır,
   // bar %100'de kilitlenir ama üstteki "X/Y" metni gerçek sayıyı gösterir.
   const finalPct = Math.min(100, (finalCount / total) * 100);
@@ -777,7 +783,7 @@ async function submitLessonAnswer(payload) {
   // Yerel toplama YAPILMAZ: her yanıt kendi goal/today'ini taşır (Anasayfa'yla
   // aynı kaynak) — istemci sadece bunu görüntüler. Çift sayma, gir-çık'ta
   // sıçrama/düşme gibi bütün bir bug sınıfı böylece yapısal olarak kapanır.
-  L.doneToday = d.today.totalWords;
+  L.doneToday = d.today.completedWords;
   L.totalToday = d.goal;
   L.pendingToday = d.today.emptyCount;
   if (d.result === 'correct' || d.result === 'easy') L.correctStreak++; else L.correctStreak = 0;
@@ -835,7 +841,7 @@ async function verifyQueueEmptyThenFinish() {
   const queue = [];
   d.reviewWords.forEach(uw => { if (!uw.answeredToday) queue.push({ wordId: uw.word._id, word: uw.word, isReview: true }); });
   d.newWords.forEach(w => { if (!w.answeredToday) queue.push({ wordId: w._id, word: w, isReview: false }); });
-  L.doneToday = d.today.totalWords;
+  L.doneToday = d.today.completedWords;
   L.totalToday = d.goal;
   L.pendingToday = d.today.emptyCount;
 
@@ -866,6 +872,13 @@ async function finishLessonSession() {
   $('#screen').innerHTML = spinner();
   const res = await api('PUT', '/sessions/complete');
   if (stale(myToken)) return;
+  // 409 = backend'de hâlâ ertelenmiş kelime var. Normal akışta buraya
+  // düşülmez (kuyruk zaten doğrulanıyor), ama düşülürse kullanıcıyı ana
+  // sayfaya atmak yerine kalan kelimelerle derse geri dönmek doğrusu.
+  if (res.status === 409) {
+    toast(res.json.message, 'err');
+    return verifyQueueEmptyThenFinish();
+  }
   if (!guard(res)) return reset('home');
   const sumRes = await api('GET', '/home/summary');
   if (stale(myToken)) return;
