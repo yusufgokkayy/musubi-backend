@@ -510,7 +510,8 @@ her zaman oturum açılıp taze çift döner. Yeni istemciler POST kullanmalı.
 
 ### Tarayıcı sayfaları (API dışı)
 E-postalardaki linkler `/api`'ye değil şu HTML sayfalarına gider ve akış
-**tamamen web'de tamamlanır** (ürün kararı: deep link yok):
+**web'de tamamlanabilir** (uygulama kuruluysa deep link devreye girer, bkz.
+bir alttaki bölüm):
 
 - `GET /verify-email/:token` — "E-postamı Doğrula" butonu
   (`POST /api/auth/verify-email` çağırır, oturum açılmaz).
@@ -524,6 +525,39 @@ Uygulama akışı: register sonrası istemci "e-postanı doğrula" bekleme ekran
 gösterir; kullanıcı webde doğrulayıp uygulamaya dönünce istemci `GET /auth/me`'yi
 yeniden dener (403 → 200'e döner) — register'da verilen token çifti bu yüzden
 vardır. Yeni bağlantı için `POST /auth/resend-verification-email`.
+
+### Deep link — Universal Links / App Links
+Mail linkleri `https://` **kalır**; custom scheme (`musubi://`) bilerek yoktur,
+çünkü aynı şemayı kaydeden başka bir uygulama linki kapıp token'ı çalabilir.
+Aynı link:
+
+- **uygulama kuruluysa** → uygulamada açılır (uygulama kendi ekranını gösterip
+  `POST /api/auth/reset-password` ya da `/verify-email`'e gider; `deviceName`
+  gönderirse kullanıcı o cihazda oturum açmış olur),
+- **kurulu değilse** → yukarıdaki web sayfasına iner.
+
+Yani **web tek kaynaktır, deep link yalnızca hızlandırıcıdır**: masaüstünden
+açılan mail, uygulaması olmayan cihaz ve doğrulaması düşmüş kurulum web'e düşer.
+
+Backend'in payı, işletim sistemine alan adı–uygulama eşlemesini bildiren iki
+dosya (`modules/auth/auth.applinks.routes.js`):
+
+| Uç | İçerik |
+| --- | --- |
+| `GET /.well-known/apple-app-site-association` | `applinks.details` — hem `paths` (eski iOS) hem `components` (iOS 13+); uzantısız yol, `application/json`, yönlendirme yok |
+| `GET /.well-known/assetlinks.json` | `delegate_permission/common.handle_all_urls` + paket adı + SHA-256 parmak izleri |
+
+Yalnızca `/verify-email/*` ve `/reset-password/*` iddia edilir — tüm site
+iddia edilseydi admin paneli ve hukuki metin sayfaları da uygulamaya düşerdi.
+Android'de yol kısıtı bu dosyada değil, uygulamanın manifest'indeki
+intent-filter'da yapılır.
+
+Kimlikler ortam değişkeninden gelir: `IOS_APP_IDS` (`<TeamID>.<bundleID>`,
+virgülle), `ANDROID_PACKAGE`, `ANDROID_CERT_FINGERPRINTS` (virgülle — Play App
+Signing imzası geliştirme imzasından farklıdır, ikisi de yazılmalı).
+**Tanımsızken uçlar 404 döner** ve her link web'e iner; yarım/yanlış dosya
+yayımlamak 404'ten kötüdür, çünkü iOS'un CDN'i ve Android'in kurulum anındaki
+doğrulaması içeriği önbelleğe alır.
 
 ### POST /auth/resend-verification-email
 ```jsonc

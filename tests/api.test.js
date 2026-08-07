@@ -91,6 +91,8 @@ before(async () => {
     // kurduğu için bu satır require'dan ÖNCE olmak zorunda
     uploadDir = path.join(os.tmpdir(), `musubi-uploads-${process.pid}-${Date.now()}`);
     process.env.UPLOAD_DIR = uploadDir;
+    // Simülatör mount'u da require anında kurulur (bkz. app.js SIMULATOR_ENABLED)
+    process.env.SIMULATOR_ENABLED = 'true';
 
     const app = require('../app'); // kökteki .env'i yükler (varsa)
     process.env.JWT_SECRET = process.env.JWT_SECRET || 'test-jwt-secret';
@@ -1132,6 +1134,77 @@ describe('E-posta akışları', () => {
         // Kullanılmış token ile landing artık hata sayfası basar
         const usedPage = await pageGet(`/reset-password/${resetToken}`);
         assert.ok(usedPage.text.includes('Bağlantı Geçersiz'));
+    });
+
+    // Deep link: aynı https linki uygulama kuruluysa uygulamada açılsın diye
+    // işletim sistemine sunulan eşleşme dosyaları
+    const wellKnownGet = async (path) => {
+        const res = await fetch(BASE.replace(/\/api$/, '') + path, { redirect: 'manual' });
+        return { status: res.status, type: res.headers.get('content-type') || '', text: await res.text() };
+    };
+
+    it('well-known: uygulama kimlikleri tanımlıyken Universal Links / App Links dosyaları yayımlanır', async () => {
+        process.env.IOS_APP_IDS = 'ABCDE12345.com.test.musubi, ABCDE12345.com.test.musubi.dev';
+        process.env.ANDROID_PACKAGE = 'com.test.musubi';
+        process.env.ANDROID_CERT_FINGERPRINTS = 'AA:BB, CC:DD';
+        try {
+            // Apple: uzantısız yol, application/json, YÖNLENDİRME YOK
+            const aasa = await wellKnownGet('/.well-known/apple-app-site-association');
+            assert.equal(aasa.status, 200, 'Apple yönlendirme kabul etmez, doğrudan 200 dönmeli');
+            assert.match(aasa.type, /application\/json/);
+            const { applinks } = JSON.parse(aasa.text);
+            assert.equal(applinks.details.length, 2, 'her app ID için ayrı kayıt');
+            // iOS 13+ `components`, eskiler `paths` okur — tek dosya ikisini de taşır
+            assert.deepEqual(applinks.details[0].paths, ['/verify-email/*', '/reset-password/*']);
+            assert.deepEqual(applinks.details[0].components, [{ '/': '/verify-email/*' }, { '/': '/reset-password/*' }]);
+            assert.equal(applinks.details[0].appID, 'ABCDE12345.com.test.musubi');
+
+            const android = await wellKnownGet('/.well-known/assetlinks.json');
+            assert.equal(android.status, 200);
+            assert.match(android.type, /application\/json/);
+            const [link] = JSON.parse(android.text);
+            assert.deepEqual(link.relation, ['delegate_permission/common.handle_all_urls']);
+            assert.equal(link.target.package_name, 'com.test.musubi');
+            // Play App Signing imzası geliştirme imzasından farklı: ikisi de listelenmeli
+            assert.deepEqual(link.target.sha256_cert_fingerprints, ['AA:BB', 'CC:DD']);
+
+            // İddia edilen yollar mail linkleriyle aynı olmalı; biri değişip
+            // diğeri kalırsa link uygulamada AÇILMAZ, sessizce web'e düşer
+            await createVerifiedUser('deeplink@test.com');
+            await api('POST', '/auth/forgot-password', { body: { email: 'deeplink@test.com' } });
+            const mailLink = sendEmail.outbox.at(-1).html.match(/href="(https?:\/\/[^"]*\/reset-password\/[0-9a-f]{40}[^"]*)"/);
+            assert.ok(mailLink, 'sıfırlama maili tam URL taşımalı');
+            const mailUrl = new URL(mailLink[1]);
+            // Link ?lang= ile geliyor; desen YOL üzerinden eşleştiği için
+            // sorgu dizesi eşleşmeyi bozmaz (hem iOS components hem Android
+            // intent-filter yol öneki bakar)
+            assert.ok(mailUrl.search, 'linkte sorgu dizesi var — desen buna rağmen tutmalı');
+            const claimed = applinks.details[0].paths.map(p => p.replace(/\*$/, ''));
+            assert.ok(claimed.some(prefix => mailUrl.pathname.startsWith(prefix)), 'maildeki yol iddia edilen desene uymalı');
+
+            // Tüm site iddia EDİLMEZ: admin paneli ve hukuki metinler tarayıcıda kalmalı
+            assert.ok(!claimed.some(prefix => '/admin/'.startsWith(prefix) || '/legal/terms'.startsWith(prefix)));
+        } finally {
+            delete process.env.IOS_APP_IDS;
+            delete process.env.ANDROID_PACKAGE;
+            delete process.env.ANDROID_CERT_FINGERPRINTS;
+        }
+    });
+
+    it('well-known: kimlikler tanımsızken 404 — yarım eşleşme dosyası yayımlanmaz', async () => {
+        // Yanlış/boş dosya 404'ten KÖTÜDÜR: iOS CDN'i ve Android'in kurulum
+        // doğrulaması içeriği önbelleğe alır, 404 ise sadece "eşleşme yok"tur
+        // ve link mevcut web sayfasına iner — akış kırılmaz
+        assert.equal((await wellKnownGet('/.well-known/apple-app-site-association')).status, 404);
+        assert.equal((await wellKnownGet('/.well-known/assetlinks.json')).status, 404);
+
+        process.env.ANDROID_PACKAGE = 'com.test.musubi';
+        try {
+            assert.equal((await wellKnownGet('/.well-known/assetlinks.json')).status, 404,
+                'paket adı var ama parmak izi yoksa dosya yayımlanmamalı');
+        } finally {
+            delete process.env.ANDROID_PACKAGE;
+        }
     });
 
     it('e-posta değişikliği doğrulamayı sıfırlar, yeni adrese mail gider', async () => {
@@ -3181,6 +3254,45 @@ describe('Hesap silme (KVKK)', () => {
             Event.countDocuments({ user: user._id })
         ]);
         assert.deepEqual(leftovers, [0, 0, 0, 0, 0, 0]);
+    });
+});
+
+describe('Mobil simülatör (canlıda /sim)', () => {
+    const ORIGIN = () => BASE.replace(/\/api$/, '');
+    const simGet = (path) => fetch(ORIGIN() + path, { redirect: 'manual' });
+
+    it('linki alan açar; sayfa arama motoruna kapalıdır', async () => {
+        const res = await simGet('/sim/');
+        assert.equal(res.status, 200);
+        // Koruma parolada değil: yüzey SIMULATOR_ENABLED ile kapanır, veri ise
+        // /api'nin kendi auth'uyla korunur. Kalan tek şart indekslenmemesi.
+        assert.equal(res.headers.get('x-robots-tag'), 'noindex');
+        assert.match(await res.text(), /Mobil Simülatör/);
+    });
+
+    it('/sim sondaki eğik çizgiye yönlendirir — göreli varlıklar 404 olmasın', async () => {
+        const res = await simGet('/sim');
+        assert.equal(res.status, 302);
+        assert.equal(res.headers.get('location'), '/sim/');
+
+        // Yönlendirmenin ASIL sebebi: index.html "./app.js" diyor
+        assert.equal((await simGet('/sim/app.js')).status, 200);
+    });
+
+    it('simülatör her API isteğine istemci etiketi koyar', async () => {
+        const client = await fs.readFile(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+        // Etiket gitmezse istekler genel kovada sayılır ve simülatör trafiği
+        // gerçek kullanıcıların bütçesini yemeye başlar (sessiz bozulma)
+        assert.match(client, /'X-Musubi-Client': 'simulator'/);
+        // Token yenileme api() sarmalayıcısını ATLIYOR; etiketi ayrıca taşımalı
+        assert.equal((client.match(/'X-Musubi-Client': 'simulator'/g) || []).length, 2);
+    });
+
+    it('istemci etiketi hiçbir kapı açmaz — yetki değil, etikettir', async () => {
+        const res = await fetch(BASE + '/auth/me', {
+            headers: { 'X-Musubi-Client': 'simulator' }
+        });
+        assert.equal(res.status, 401);
     });
 });
 

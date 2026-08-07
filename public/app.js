@@ -39,6 +39,8 @@ const state = {
 const I = {
   chevL: '<svg viewBox="0 0 10 18"><path d="M8.5 1 1.5 9l7 8"/></svg>',
   chevR: '<svg viewBox="0 0 8 14"><path d="M1 1l6 6-6 6"/></svg>',
+  chevU: '<svg viewBox="0 0 18 10"><path d="M1 8.5 9 1.5l8 7"/></svg>',
+  chevD: '<svg viewBox="0 0 18 10"><path d="M1 1.5 9 8.5l8-7"/></svg>',
   bell: '<svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7"/><path d="M13.7 20a2 2 0 0 1-3.4 0"/></svg>',
   home: '<svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.4V20h13V9.4"/></svg>',
   books: '<svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="4.5" height="16" rx="1"/><rect x="10" y="4" width="4.5" height="16" rx="1"/><path d="M17.2 4.7l3.3.9-3.4 14-3.3-.9"/></svg>',
@@ -82,7 +84,10 @@ const I = {
 // API istemcisi
 // ═══════════════════════════════════════════════════════════════
 async function api(method, path, body, opts = {}) {
-  const headers = {};
+  // Trafiği sunucuda ayırt etmek için etiket: simülatör istekleri kendi rate
+  // limit kovasında sayılır, böylece test eden biri gerçek kullanıcının
+  // bütçesini yemez (bkz. app.js). Yetki başlığı DEĞİL — hiçbir kapı açmaz.
+  const headers = { 'X-Musubi-Client': 'simulator' };
   if (body !== undefined) headers['Content-Type'] = 'application/json';
   if (opts.auth !== false && state.access) headers.Authorization = 'Bearer ' + state.access;
 
@@ -97,7 +102,8 @@ async function api(method, path, body, opts = {}) {
 
   if (res.status === 401 && json.message === 'Token expired' && state.refresh && !opts._retried) {
     const r = await fetch('/api/auth/refresh', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'X-Musubi-Client': 'simulator' },
       body: JSON.stringify({ refreshToken: state.refresh })
     });
     const rj = await r.json().catch(() => ({}));
@@ -306,6 +312,21 @@ function statusScreen({ icon = I.checkCircle, tone = '', title, body, primary, s
 
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
+// Hedef preset'leri onboarding ile Ayarlar'da AYNI olmak zorunda: kullanıcı
+// kayıtta "Ciddi 20" seçip ayarlarda başka bir liste görürse eşleşme bozulur
+const GOAL_OPTS = [[5, 'Rahat'], [10, 'Orta'], [20, 'Ciddi'], [40, 'Yoğun']];
+const goalChoices = (cur) => GOAL_OPTS.map(([n, label]) => `
+  <button class="choice ${n === cur ? 'on' : ''}" data-goal="${n}">
+    <span class="txt"><b>${label}</b><span>${n} kelime/gün</span></span>
+    <span class="mark">${I.check}</span>
+  </button>`).join('');
+
+// Tarayıcı saat dilimi okunamazsa alan hiç gönderilmez; sunucu kendi
+// varsayılanına düşer (API.md › register › timezone)
+const deviceTimezone = () => {
+  try { return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined; } catch { return undefined; }
+};
+
 // ═══════════════════════════════════════════════════════════════
 // AUTH
 // ═══════════════════════════════════════════════════════════════
@@ -394,20 +415,112 @@ function showRegPassword() {
            <div class="errline" id="err"></div>`
   });
   wireEyes(); wireStrength('in-pw', 'pwbox');
-  $('#f-action').addEventListener('click', async () => {
+  // Sonraki iki onboarding adımından geri dönülebildiği için şifre kaybolmasın
+  if (state.wizard.password) {
+    $('#in-pw').value = $('#in-pw2').value = state.wizard.password;
+    $('#pwbox').innerHTML = pwBars(pwScore(state.wizard.password));
+  }
+  $('#f-action').addEventListener('click', () => {
     const p1 = $('#in-pw').value, p2 = $('#in-pw2').value, err = $('#err');
     if (p1.length < 8) { err.textContent = 'Şifre en az 8 karakter olmalı'; return; }
     if (p1 !== p2) { err.textContent = 'Şifreler eşleşmiyor'; return; }
+    state.wizard.password = p1;
+    go('reg-reminder');
+  });
+}
+
+// Onboarding'in son iki adımı KAYIT İSTEĞİNİ BEKLETİR: hesap, hedef ekranındaki
+// "Kayıt Ol" ile tek istekte açılır (bkz. API.md › POST /auth/register). Ayrı
+// ayrı PUT /auth/update-info çağrılsaydı, doğrulanmamış hesap iki isteğin
+// arasında kalabilir ve seçimler yarım kaydedilirdi.
+const pad2 = (n) => String(n).padStart(2, '0');
+
+function showRegReminder() {
+  let h = state.wizard.reminderHour ?? 20;
+  let m = state.wizard.reminderMinute ?? 0;
+  paint(topbar() + `<div class="pad">
+      <h1 class="title-xl">Hatırlatma Bildirimi</h1>
+      <p class="lead">Sana ne zaman ders çalışacağını hatırlatalım?</p>
+      <div class="timepick">
+        <div class="col">
+          <button class="arrow" data-step="h:1">${I.chevU}</button>
+          <div class="cell" id="tp-h">${pad2(h)}</div>
+          <button class="arrow" data-step="h:-1">${I.chevD}</button>
+        </div>
+        <div class="colon">:</div>
+        <div class="col">
+          <button class="arrow" data-step="m:1">${I.chevU}</button>
+          <div class="cell" id="tp-m">${pad2(m)}</div>
+          <button class="arrow" data-step="m:-1">${I.chevD}</button>
+        </div>
+      </div>
+      <p class="tiny" style="text-align:center">Saat kendi saat dilimine göre ayarlanır.</p>
+    </div>
+    <div class="footer">
+      <button class="link skip" id="b-skip">Şimdilik Geç</button>
+      <button class="btn btn-primary" id="f-action">Devam Et</button>
+    </div>`);
+
+  $$('[data-step]').forEach(b => b.addEventListener('click', () => {
+    const [unit, dir] = b.dataset.step.split(':');
+    if (unit === 'h') { h = (h + Number(dir) + 24) % 24; $('#tp-h').textContent = pad2(h); }
+    // Dakika 5'er adım ilerler: 60 tıklamayla 55'e ulaşmak için sebep yok
+    else { m = (m + Number(dir) * 5 + 60) % 60; $('#tp-m').textContent = pad2(m); }
+  }));
+
+  $('#f-action').addEventListener('click', () => {
+    state.wizard.reminderHour = h;
+    state.wizard.reminderMinute = m;
+    state.wizard.reminderTime = `${pad2(h)}:${pad2(m)}`;
+    state.wizard.dailyReminder = true;
+    go('reg-goal');
+  });
+  // "Şimdilik Geç" hatırlatmayı KAPALI açar; saat gönderilmez, hesap
+  // varsayılan saatinde kalır (yalnız "Günlük Kelimeler" bildirimi için)
+  $('#b-skip').addEventListener('click', () => {
+    state.wizard.reminderTime = null;
+    state.wizard.dailyReminder = false;
+    go('reg-goal');
+  });
+}
+
+function showRegGoal() {
+  let picked = state.wizard.dailyGoal ?? 20;
+  paint(topbar() + `<div class="pad">
+      <h1 class="title-xl">Günlük Kelime Hedefi</h1>
+      <p class="lead">Günde kaç kelime çalışacaksın?</p>
+      ${goalChoices(picked)}
+      <div class="errline" id="err"></div>
+    </div>
+    <div class="footer"><button class="btn btn-primary" id="f-action">Kayıt Ol</button></div>`);
+  $$('[data-goal]').forEach(b => b.addEventListener('click', () => {
+    picked = state.wizard.dailyGoal = Number(b.dataset.goal);
+    $$('[data-goal]').forEach(x => x.classList.toggle('on', x === b));
+  }));
+
+  $('#f-action').addEventListener('click', async () => {
+    const w = state.wizard, err = $('#err'), btn = $('#f-action');
+    btn.disabled = true;
     const res = await api('POST', '/auth/register', {
-      name: state.wizard.name, surname: state.wizard.surname,
-      email: state.wizard.email, password: p1, deviceName: 'web-simülatör'
+      name: w.name, surname: w.surname, email: w.email, password: w.password,
+      deviceName: 'web-simülatör',
+      dailyGoal: picked,
+      dailyReminder: w.dailyReminder !== false,
+      ...(w.reminderTime && { reminderTime: w.reminderTime }),
+      // Hatırlatma saati kullanıcının KENDİ diliminde yorumlanır; saat dilimi
+      // gönderilmezse seçtiği saat sunucunun varsayılanına göre kayar
+      timezone: deviceTimezone()
     }, { auth: false });
+    btn.disabled = false;
+    // Kayıt artık bu ekranda bittiği için e-posta/şifre hataları da burada
+    // görünür; kullanıcı geri gidip ilgili adımı düzeltebilir
     if (!res.ok) { err.textContent = res.json.message || 'Kayıt başarısız'; return; }
     setTokens(res.json.accessToken, res.json.refreshToken);
     if (res.json.verificationToken) {
       state.devVerificationToken = res.json.verificationToken;
       localStorage.setItem('musubi_dev_vtoken', res.json.verificationToken);
     }
+    w.password = null;
     reset('reg-success');
   });
 }
@@ -1482,15 +1595,10 @@ function pickPref(key, values, labels, title) {
 
 function showSettingsGoal() {
   const cur = state.me?.dailyGoal ?? 20;
-  const opts = [[5, 'Rahat'], [10, 'Orta'], [20, 'Ciddi'], [40, 'Yoğun']];
   paint(topbar() + `<div class="pad">
       <h1 class="title-xl">Günlük Kelime Hedefi</h1>
       <p class="lead">Günde kaç kelime çalışacaksın?</p>
-      ${opts.map(([n, label]) => `
-        <button class="choice ${n === cur ? 'on' : ''}" data-goal="${n}">
-          <span class="txt"><b>${label}</b><span>${n} kelime/gün</span></span>
-          <span class="mark">${I.check}</span>
-        </button>`).join('')}
+      ${goalChoices(cur)}
       <p class="tiny gap-16">Hedefini gün içinde artırırsan havuz aynı gün genişler; azaltırsan yeni hedef yarın geçerli olur.</p>
     </div>
     <div class="footer"><button class="btn btn-primary" id="b-save">Kaydet</button></div>`);
@@ -1718,7 +1826,8 @@ function showSettingsDelete() {
 // ═══════════════════════════════════════════════════════════════
 const SHOW = {
   welcome: showWelcome,
-  'reg-email': showRegEmail, 'reg-name': showRegName, 'reg-password': showRegPassword, 'reg-success': showRegSuccess,
+  'reg-email': showRegEmail, 'reg-name': showRegName, 'reg-password': showRegPassword,
+  'reg-reminder': showRegReminder, 'reg-goal': showRegGoal, 'reg-success': showRegSuccess,
   'verify-ok': showVerifyOk, 'verify-fail': showVerifyFail, 'verify-nudge': showVerifyNudge,
   login: showLogin, 'forgot-email': showForgotEmail, 'forgot-newpass': showForgotNewPass, 'reset-success': showResetSuccess,
 

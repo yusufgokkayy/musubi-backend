@@ -1,19 +1,61 @@
 # Bağımlılıklar
 node_modules/
 
-# Gizli bilgiler — asla commit etme
-config/.env
+# Gizli bilgiler — asla commit etme.
+# .env* geniş tutuluyor: .env.local / .env.production gibi türevler tek tek
+# sayılınca er ya da geç biri unutuluyor. Şablon tek istisna.
 .env
-firebase-service-account.json
+.env.*
+!.env.example
+config/.env
 
-# Harici kelime listesi (ayrı git klonu, seed için lokalde bulunmalı)
+# Servis hesabı anahtarları. Yalın ad zaten her dizinde yakalanır (config/ dahil),
+# joker ise "musubi-firebase-adminsdk-xxxxx.json" gibi konsolun ürettiği
+# indirme adlarını da kapsar.
+firebase-service-account.json
+*service-account*.json
+*firebase-adminsdk*.json
+google-services.json
+GoogleService-Info.plist
+
+# Özel anahtar / sertifika / imza dosyaları.
+# .p8 özellikle önemli: "Sign in with Apple" anahtarı bu uzantıyla iner
+# (AuthKey_XXXXXXXX.p8) ve iptal edilene kadar kimlik doğrulama yetkisi taşır.
+*.pem
+*.key
+*.p8
+*.p12
+*.pfx
+*.jks
+*.keystore
+
+# Kullanıcı verisi / harici veri — repoya girmez
+# uploads/  : yüklenen görseller (lokal depolama sürücüsü)
+# veri-seti/: kelime veri seti (ayrıca temin edilir, bkz. README)
+uploads/
 veri-seti/
 
-# Yüklenen görseller (lokal depolama sürücüsü) — kullanıcı verisi, repoya girmez
-uploads/
+# Test ve derleme çıktıları
+coverage/
+.nyc_output/
+
+# Editör / IDE
+.claude/
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# İşletim sistemi
+.DS_Store
+Thumbs.db
+desktop.ini
 
 # Araç / geçici dosyalar
-.claude/
 *.log
-.DS_Store
+tmp/
+.cache/
+*.bak
+*.orig
+*.rej
 test_code.txt
