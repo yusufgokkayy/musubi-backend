@@ -1,34 +1,86 @@
-/* Musubi mobil simülatör — gerçek backend API'sine bağlı, Figma akışını
-   izleyen bir "telefon" arayüzü. Mobil client durduğu için manuel curl/dev-panel
-   testi yerine gerçek kullanıcı akışıyla (kayıt→doğrulama→ders→sınav→ayarlar)
-   tıklanarak test edilsin diye yazıldı. Aynı origin'den servis edilir (CORS yok);
-   helmet CSP nedeniyle tüm JS bu dosyadadır. */
+/* Musubi mobil simülatör — gerçek backend API'sine bağlı, 04.08.2026 Figma
+   revizyonunu izleyen "telefon" arayüzü. Mobil client hazır olmadığı için
+   manuel curl testi yerine gerçek kullanıcı akışıyla (kayıt → doğrulama →
+   ders → sınav → hafıza → ayarlar) tıklanarak test edilsin diye yazıldı.
+   Aynı origin'den servis edilir (CORS yok); helmet CSP satır içi script'e
+   izin vermediği için TÜM JS bu dosyadadır. */
 'use strict';
 
 const $ = (sel, root = document) => root.querySelector(sel);
 const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
 const JLPT = ['N5', 'N4', 'N3', 'N2', 'N1'];
+const TAB_ROOTS = ['home', 'library', 'memory', 'settings'];
 
-// ───────────────────────── Durum ─────────────────────────
+// Hafıza kutusu → CSS değişkeni. Sunucu kutu anahtarlarını ve etiketlerini
+// kendisi veriyor (bkz. GET /memory) — burada YALNIZCA renk eşlemesi var,
+// isim/sıra/eşik sözlüğü istemcide TUTULMAZ.
+const BOX_COLOR = { new: 'var(--box-new)', weak: 'var(--box-weak)', medium: 'var(--box-medium)', good: 'var(--box-good)', mastered: 'var(--box-mastered)' };
+
 const state = {
   access: localStorage.getItem('musubi_access') || null,
   refresh: localStorage.getItem('musubi_refresh') || null,
-  me: null,                 // GET /auth/me sonucu (yalnızca doğrulanmış hesapta dolu)
+  me: null,
   stack: [{ name: 'welcome' }],
-  wizard: {},                // kayıt sihirbazı: email/name/surname biriktirir
+  wizard: {},
   devVerificationToken: localStorage.getItem('musubi_dev_vtoken') || null,
   devResetToken: localStorage.getItem('musubi_dev_rtoken') || null,
-  checkedPlacement: false,   // "Seviyeni Öğrenelim mi?" oturum başına bir kez
+  promptedPlacement: false,
+  home: null,
   lesson: null,
   quiz: null,
-  library: { page: 1, totalPages: 1 },
-  levels: { selected: null, mastery: '' }
+  library: { page: 1, totalPages: 1, level: '', q: '' },
+  memory: null
 };
 
-const TAB_ROOTS = ['home', 'library', 'levels', 'settings'];
+// ═══════════════════════════════════════════════════════════════
+// İkonlar — hepsi stroke tabanlı, renk CSS'ten gelir
+// ═══════════════════════════════════════════════════════════════
+const I = {
+  chevL: '<svg viewBox="0 0 10 18"><path d="M8.5 1 1.5 9l7 8"/></svg>',
+  chevR: '<svg viewBox="0 0 8 14"><path d="M1 1l6 6-6 6"/></svg>',
+  bell: '<svg viewBox="0 0 24 24"><path d="M18 8a6 6 0 1 0-12 0c0 6-2 7-2 7h16s-2-1-2-7"/><path d="M13.7 20a2 2 0 0 1-3.4 0"/></svg>',
+  home: '<svg viewBox="0 0 24 24"><path d="M3 10.5 12 3l9 7.5"/><path d="M5.5 9.4V20h13V9.4"/></svg>',
+  books: '<svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="4.5" height="16" rx="1"/><rect x="10" y="4" width="4.5" height="16" rx="1"/><path d="M17.2 4.7l3.3.9-3.4 14-3.3-.9"/></svg>',
+  brain: '<svg viewBox="0 0 24 24"><path d="M12 4.5v15"/><path d="M12 6a3 3 0 0 0-5.6-1.5A2.8 2.8 0 0 0 4 8.6a3 3 0 0 0-.4 5A3 3 0 0 0 5.6 19 3 3 0 0 0 12 18"/><path d="M12 6a3 3 0 0 1 5.6-1.5A2.8 2.8 0 0 1 20 8.6a3 3 0 0 1 .4 5A3 3 0 0 1 18.4 19 3 3 0 0 1 12 18"/></svg>',
+  gear: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 14.5a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1v.3a2 2 0 1 1-4 0v-.2a1.6 1.6 0 0 0-2.8-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7h-.3a2 2 0 1 1 0-4h.2a1.6 1.6 0 0 0 1.1-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3 1.6 1.6 0 0 0 1-1.4v-.3a2 2 0 1 1 4 0v.2a1.6 1.6 0 0 0 2.7 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7h.3a2 2 0 1 1 0 4h-.2a1.6 1.6 0 0 0-1.4 1"/></svg>',
+  key: '<svg viewBox="0 0 24 24"><circle cx="8" cy="8.5" r="4.5"/><path d="M11.3 11.8 20 20.5"/><path d="M17 17.5l2-2"/></svg>',
+  bellRing: '<svg viewBox="0 0 24 24"><path d="M17.5 9a5.5 5.5 0 1 0-11 0c0 5.5-1.8 6.5-1.8 6.5h14.6S17.5 14.5 17.5 9"/><path d="M13.5 19a1.8 1.8 0 0 1-3 0"/><path d="M20 3.5A9 9 0 0 1 21.8 7M4 3.5A9 9 0 0 0 2.2 7"/></svg>',
+  translate: '<svg viewBox="0 0 24 24"><path d="M2.5 5.5h9"/><path d="M7 3.5v2"/><path d="M9.5 5.5c0 3.5-2.4 6.5-6 8"/><path d="M4 9.5c1.4 2.4 3.6 4 6 4.6"/><path d="M12.5 20.5l4-11 4 11"/><path d="M14 17h5"/></svg>',
+  palette: '<svg viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 1 9-9c0 2-1.6 3-3 3h-1.5a2 2 0 0 0-1.4 3.4c.4.5.4 1.3-.2 1.9-.5.5-1.3.7-1.9.7"/><circle cx="7.5" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="9.8" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.2" cy="8" r="1.1" fill="currentColor" stroke="none"/></svg>',
+  target: '<svg viewBox="0 0 24 24"><circle cx="11.5" cy="12.5" r="8.5"/><circle cx="11.5" cy="12.5" r="4.6"/><circle cx="11.5" cy="12.5" r="1.1" fill="currentColor" stroke="none"/><path d="M14.5 9.5 20 4"/><path d="M17.4 3.2l.4 2.6 2.6.4"/></svg>',
+  bookOpen: '<svg viewBox="0 0 24 24"><path d="M12 6.5S10 4.5 3.5 4.5v13C10 17.5 12 19.5 12 19.5s2-2 8.5-2v-13C14 4.5 12 6.5 12 6.5z"/><path d="M12 6.5v13"/></svg>',
+  typeface: '<svg viewBox="0 0 24 24"><path d="M2.5 18 7 6l4.5 12"/><path d="M4 14.2h6"/><path d="M14 18l3.5-8L21 18"/><path d="M15.2 15.4h4.6"/></svg>',
+  doc: '<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M8.5 13h7M8.5 16.5h5"/></svg>',
+  logout: '<svg viewBox="0 0 24 24"><path d="M14 20.5H6a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2h8"/><path d="M15.5 16.5 20 12l-4.5-4.5"/><path d="M20 12H9"/></svg>',
+  trash: '<svg viewBox="0 0 24 24"><path d="M4 6.5h16"/><path d="M9 6.5V4.5h6v2"/><path d="M6.5 6.5 7.4 20a1.5 1.5 0 0 0 1.5 1.4h6.2a1.5 1.5 0 0 0 1.5-1.4l.9-13.5"/><path d="M10.5 10.5v7M13.5 10.5v7"/></svg>',
+  mail: '<svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>',
+  lock: '<svg viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg>',
+  unlock: '<svg viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 7.5-2"/></svg>',
+  eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.8-6.5 10-6.5S22 12 22 12s-3.8 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/></svg>',
+  eyeOff: '<svg viewBox="0 0 24 24"><path d="M10 5.7A9.9 9.9 0 0 1 12 5.5C18.2 5.5 22 12 22 12a17 17 0 0 1-3 3.8M6.3 7.9A17 17 0 0 0 2 12s3.8 6.5 10 6.5a9.6 9.6 0 0 0 4-.8"/><path d="M3 3l18 18"/></svg>',
+  search: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>',
+  pencil: '<svg viewBox="0 0 24 24"><path d="M16.4 4.6a2.3 2.3 0 0 1 3.3 3.3L8.2 19.4 3.5 20.5l1.1-4.7z"/></svg>',
+  check: '<svg viewBox="0 0 14 14"><path d="M2 7.4 5.3 10.7 12 4"/></svg>',
+  checkCircle: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="m7.8 12.2 2.9 2.9 5.6-6"/></svg>',
+  xCircle: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="m9 9 6 6M15 9l-6 6"/></svg>',
+  qCircle: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="M9.6 9.4a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.4"/><circle cx="12" cy="16.6" r="1" fill="currentColor" stroke="none"/></svg>',
+  flame: '<svg viewBox="0 0 24 24"><path d="M13 2.5s.9 3.2-1.2 5.6c-2 2.3-4.6 3.4-4.6 7.1a6.3 6.3 0 0 0 12.6.3c0-3.6-2.2-5.5-3.2-6.6 0 1.6-.8 2.6-1.8 2.9.6-2.6-.3-6.7-1.8-9.3z"/></svg>',
+  wave: '<svg viewBox="0 0 24 24"><path d="M3 11v2M6.5 8.5v7M10 5.5v13M13.5 8v8M17 10v4M20.5 11.5v1"/></svg>',
+  snail: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="13" r="7.5"/><path d="M10.5 13a3 3 0 1 1 3 3 4.5 4.5 0 0 1-4.5-4.5A6 6 0 0 1 15 5.5"/><path d="M18 20.5h-7.5"/><path d="M18.5 7.5 21 4.5M20.2 5.7l1.6.6"/></svg>',
+  speaker: '<svg viewBox="0 0 24 24"><path d="M11 5 6.5 9H3.5v6h3L11 19z"/><path d="M15 9.5a3.5 3.5 0 0 1 0 5M17.6 7a7 7 0 0 1 0 10"/></svg>',
+  bulb: '<svg viewBox="0 0 24 24"><path d="M9.5 18.5h5"/><path d="M10 21.5h4"/><path d="M12 2.5a6.5 6.5 0 0 0-3.7 11.8c.6.5 1 1.2 1.1 2h5.2c.1-.8.5-1.5 1.1-2A6.5 6.5 0 0 0 12 2.5z"/></svg>',
+  info: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="M12 11v5.5"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/></svg>',
+  trend: '<svg viewBox="0 0 24 24"><path d="M3 17 9.5 10.5l4 4L21 7"/><path d="M15.5 7H21v5.5"/></svg>',
+  pause: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="M10 9v6M14 9v6"/></svg>',
+  close: '<svg viewBox="0 0 20 20"><path d="m4 4 12 12M16 4 4 16"/></svg>',
+  user: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></svg>',
+  levels: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>'
+};
 
-// ───────────────────────── API istemcisi ─────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// API istemcisi
+// ═══════════════════════════════════════════════════════════════
 async function api(method, path, body, opts = {}) {
   const headers = {};
   if (body !== undefined) headers['Content-Type'] = 'application/json';
@@ -38,7 +90,7 @@ async function api(method, path, body, opts = {}) {
   try {
     res = await fetch('/api' + path, { method, headers, body: body !== undefined ? JSON.stringify(body) : undefined });
     json = await res.json().catch(() => ({}));
-  } catch (e) {
+  } catch {
     toast('Sunucuya ulaşılamadı — backend çalışıyor mu?', 'err');
     return { ok: false, status: 0, json: { message: 'network error' } };
   }
@@ -75,30 +127,30 @@ function setTokens(access, refresh) {
 }
 
 function toast(msg, kind = '') {
-  const host = $('#toasts') || (() => { const d = document.createElement('div'); d.id = 'toasts'; $('.phone').appendChild(d); return d; })();
   const t = document.createElement('div');
   t.className = 'toast ' + kind;
   t.textContent = msg;
-  host.appendChild(t);
-  setTimeout(() => t.remove(), 3800);
+  $('#toasts').appendChild(t);
+  setTimeout(() => t.remove(), 3600);
 }
 
-// ───────────────────────── Navigasyon ─────────────────────────
+// ═══════════════════════════════════════════════════════════════
+// Navigasyon
+// ═══════════════════════════════════════════════════════════════
 function go(name, data) { state.stack.push({ name, data }); renderCurrent(); }
 function reset(name, data) { state.stack = [{ name, data }]; renderCurrent(); }
 function back() { if (state.stack.length > 1) state.stack.pop(); renderCurrent(); }
 function current() { return state.stack[state.stack.length - 1]; }
 
-// Ekranlar arası hızlı geçişte (örn. veri henüz dönmeden geri tuşuna basmak)
-// bir önceki ekranın bekleyen async render'ı DOM'a yazmaya çalışırsa ya var
-// olmayan bir alt elemente null.innerHTML hatası atar ya da güncel ekranı
-// sessizce ezer. Her navigasyonda artan token, async fonksiyonların "hâlâ
-// güncel ekran ben miyim?" diye kontrol etmesini sağlar.
+// Ekranlar arası hızlı geçişte bir önceki ekranın bekleyen async render'ı
+// güncel ekranı sessizce ezebiliyordu. Her navigasyonda artan bu token,
+// async fonksiyonların "hâlâ güncel ekran ben miyim?" diye sormasını sağlar.
 let activeToken = 0;
-function stale(token) { return token !== activeToken; }
+const stale = (t) => t !== activeToken;
 
 function renderCurrent() {
   activeToken++;
+  closeSheet();
   const top = current();
   renderTabbar(top.name);
   SHOW[top.name](top.data || {});
@@ -107,69 +159,105 @@ function renderCurrent() {
 function renderTabbar(name) {
   const slot = $('#tabbar-slot');
   if (!TAB_ROOTS.includes(name)) { slot.innerHTML = ''; return; }
-  const tabs = [
-    ['home', '🏠', 'Anasayfa'], ['library', '📚', 'Kütüphane'],
-    ['levels', '📊', 'Seviyeler'], ['settings', '⚙️', 'Ayarlar']
-  ];
-  slot.innerHTML = `<div class="tabbar">${tabs.map(([id, ic, lbl]) =>
-    `<button data-tab="${id}" class="${name === id ? 'active' : ''}"><span class="ic">${ic}</span>${lbl}</button>`).join('')}</div>`;
+  const tabs = [['home', I.home, 'Anasayfa'], ['library', I.books, 'Kütüphane'], ['memory', I.brain, 'Hafıza'], ['settings', I.gear, 'Ayarlar']];
+  slot.innerHTML = `<nav class="tabbar">${tabs.map(([id, ic, lbl]) =>
+    `<button data-tab="${id}" class="${name === id ? 'on' : ''}">${ic}<span>${lbl}</span></button>`).join('')}</nav>`;
 }
 
-function showModal(html) {
-  $('#modal-slot').innerHTML = `<div class="modal-overlay" data-modal-close>${html}</div>`;
+function paint(html) { $('#screen').innerHTML = html; }
+function loading(topbarHtml = '') { paint(topbarHtml + '<div class="loading"><div class="spinner"></div></div>'); }
+
+function topbar(title = 'Geri') {
+  return `<div class="topbar"><button data-back>${I.chevL}<span>${esc(title)}</span></button></div>`;
 }
-function closeModal() { $('#modal-slot').innerHTML = ''; }
+function pagehead(jp, title, opts = {}) {
+  return `<div class="pagehead">
+    <div><div class="jp">${esc(jp)}</div><h1>${esc(title)}</h1></div>
+    <div class="headtools">
+      <div class="bell" data-nav="notifications">${I.bell}<span class="dot" ${opts.unread ? '' : 'hidden'}></span></div>
+      ${avatarHtml()}
+    </div>
+  </div>`;
+}
+function avatarHtml() {
+  const url = state.home?.avatarUrl;
+  const initial = (state.me?.name || 'M').trim().charAt(0).toLocaleUpperCase('tr');
+  return url ? `<img class="avatar" src="${esc(url)}" alt="">` : `<div class="avatar" data-tab="settings">${esc(initial)}</div>`;
+}
+
+function sheet(html) { $('#sheet-slot').innerHTML = `<div class="overlay" data-overlay><div class="sheet">${html}</div></div>`; }
+function closeSheet() { $('#sheet-slot').innerHTML = ''; }
 
 document.addEventListener('click', (e) => {
-  const tabBtn = e.target.closest('[data-tab]');
-  if (tabBtn) return reset(tabBtn.dataset.tab);
-  const backBtn = e.target.closest('[data-back]');
-  if (backBtn) return back();
-  if (e.target.closest('[data-modal-close]') && e.target.matches('.modal-overlay')) return closeModal();
+  const tab = e.target.closest('[data-tab]');
+  if (tab) return reset(tab.dataset.tab);
+  if (e.target.closest('[data-back]')) return back();
+  const nav = e.target.closest('[data-nav]');
+  if (nav) return go(nav.dataset.nav);
+  if (e.target.matches('[data-overlay]')) return closeSheet();
 });
 
-// ───────────────────────── Ortak parçalar ─────────────────────────
-function topbar(title) {
-  return `<div class="topbar"><button class="back" data-back>‹ Geri</button><div class="title">${esc(title)}</div></div>`;
-}
-function spinner() { return `<div class="screen-pad"><div class="spinner"></div></div>`; }
-
-// pending>0 ise halka iki tona ayrılır: koyu kırmızı (gerçek cevap) + amber
-// (hâlâ "Şimdilik Geç" ile ertelenmiş) — Ders ekranındaki çubukla aynı mantık,
-// kullanıcı isteği: Anasayfa'daki yuvarlak da aynı ayrımı göstersin.
-// completed = NİHAİ cevaplı kelime sayısı (backend'in today.completedWords'ü),
-// pending = ertelenmiş kelime sayısı; ikisi ayrı yay olarak çizilir.
-// Eskiden buraya dokunulan toplam (totalWords) geçiliyor ve pending burada
-// çıkarılıyordu — çember doğru çiziliyordu ama ortadaki sayı aynı değeri
-// çıkarmadığı için "20/20 Tamamlandı" derken ders bitmiyordu.
-function ringSvg(completed, total, size = 168, stroke = 14, pending = 0) {
+// ═══════════════════════════════════════════════════════════════
+// Ortak parçalar
+// ═══════════════════════════════════════════════════════════════
+function ringSvg(pct, { size = 168, stroke = 13, color = 'var(--brand)', track = 'var(--line)', second = 0, secondColor = 'var(--warn)' } = {}) {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r;
-  const finalFrac = total > 0 ? Math.min(1, Math.max(0, completed) / total) : 0;
-  const pendingFrac = total > 0 ? Math.min(1 - finalFrac, Math.max(0, pending) / total) : 0;
-  const finalLen = c * finalFrac;
-  const pendingLen = c * pendingFrac;
-  const hasPending = pendingLen > 0.5;
-  return `<svg width="${size}" height="${size}">
-    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="var(--line)" stroke-width="${stroke}"/>
-    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="var(--brand)" stroke-width="${stroke}"
-      stroke-linecap="${hasPending ? 'butt' : 'round'}" stroke-dasharray="${finalLen} ${c - finalLen}"/>
-    ${hasPending ? `<circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="#D9A441" stroke-width="${stroke}"
-      stroke-linecap="round" stroke-dasharray="${pendingLen} ${c - pendingLen}" stroke-dashoffset="${-finalLen}"/>` : ''}
+  const a = c * Math.min(1, Math.max(0, pct));
+  const b = c * Math.min(1 - Math.min(1, pct), Math.max(0, second));
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${track}" stroke-width="${stroke}"/>
+    <circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${color}" stroke-width="${stroke}"
+      stroke-linecap="${b > 0.5 ? 'butt' : 'round'}" stroke-dasharray="${a} ${c - a}"/>
+    ${b > 0.5 ? `<circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${secondColor}" stroke-width="${stroke}"
+      stroke-linecap="round" stroke-dasharray="${b} ${c - b}" stroke-dashoffset="${-a}"/>` : ''}
   </svg>`;
 }
 
-function donutStyle(distribution, totalForDonut) {
-  const colors = ['var(--m1)', 'var(--m2)', 'var(--m3)', 'var(--m4)', 'var(--m5)'];
-  if (!totalForDonut) return 'var(--line)';
-  let acc = 0; const stops = [];
-  for (let lvl = 1; lvl <= 5; lvl++) {
-    const v = distribution[lvl] || 0;
-    if (!v) continue;
-    const start = acc / totalForDonut * 360; acc += v;
-    stops.push(`${colors[lvl - 1]} ${start}deg ${acc / totalForDonut * 360}deg`);
-  }
-  if (acc < totalForDonut) stops.push(`var(--line) ${acc / totalForDonut * 360}deg 360deg`);
-  return stops.length ? `conic-gradient(${stops.join(',')})` : 'var(--line)';
+function badge(level, cls = '') { return `<span class="badge ${cls}">${esc(level)}</span>`; }
+
+function wordRow(w, { right, tail, click } = {}) {
+  return `<button class="wordrow" ${click ? `data-word="${esc(w._id || w.id)}"` : ''}>
+    <span class="jp"><b>${esc(w.kanji)}</b><span>${esc(w.romaji || w.kana || '')}</span></span>
+    <span class="tr">${esc(right ?? (w.meaningTr || w.meaning))}</span>
+    ${tail || ''}
+  </button>`;
+}
+
+// Ses: "Yavaş" ayrı bir dosya değil, aynı sesin düşük hızda çalınmasıdır
+// (audioUrlSlow henüz backend'de yok — geldiğinde burası tek satır değişir).
+function audioRow(url) {
+  if (!url) return '';
+  return `<div class="pillbtns gap-16">
+    <button class="pillbtn" data-audio="${esc(url)}">${I.wave}<span>Dinle</span></button>
+    <button class="pillbtn" data-audio="${esc(url)}" data-slow="1">${I.snail}<span>Yavaş</span></button>
+  </div>`;
+}
+function wireAudio() {
+  $$('[data-audio]').forEach(b => b.addEventListener('click', () => {
+    const a = new Audio(b.dataset.audio);
+    if (b.dataset.slow) a.playbackRate = 0.6;
+    a.play().catch(() => toast('Ses çalınamadı (URL erişilemiyor olabilir)', 'err'));
+  }));
+}
+
+// exampleFurigana biçimi: 東京[とうきょう]**駅[えき]**で会[あ]いましょう。
+// Köşeli parantez kendinden önceki kanji dizisinin okunuşu, ** ** ise
+// cümledeki hedef kelime (tasarımdaki kırmızı vurgu).
+function furigana(src, plain) {
+  if (!src) return esc(plain || '');
+  return esc(src)
+    .replace(/\*\*(.+?)\*\*/g, '<em>$1</em>')
+    .replace(/([一-鿿々]+|[぀-ヿ]+)\[([^\]]+)\]/g, '<ruby>$1<rt>$2</rt></ruby>');
+}
+
+function exampleBlock(w) {
+  if (!w.example && !w.exampleFurigana) return '';
+  return `<div class="row between gap-24" style="margin-bottom:8px">
+      <span class="slabel">Örnek Kullanım</span>
+      ${w.audioUrl ? `<button class="bell" data-audio="${esc(w.audioUrl)}" style="width:22px;height:22px">${I.speaker}</button>` : ''}
+    </div>
+    <div class="example">${furigana(w.exampleFurigana, w.example)}</div>
+    ${w.exampleTr ? `<p class="tiny gap-8">${esc(w.exampleTr)}</p>` : ''}`;
 }
 
 function pwScore(pw) {
@@ -180,84 +268,96 @@ function pwScore(pw) {
   if (/[^A-Za-z0-9]/.test(pw)) s++;
   return s;
 }
-function pwBarsHtml(score) {
+function pwBars(score) {
   const cls = score <= 1 ? 'weak' : score <= 2 ? 'mid' : 'strong';
-  const label = score <= 1 ? 'Zayıf şifre' : score <= 2 ? 'Orta şifre' : score === 3 ? 'İyi şifre' : 'Güçlü şifre';
+  const label = ['Çok zayıf şifre', 'Zayıf şifre', 'Orta şifre', 'İyi şifre', 'Güçlü şifre'][score];
   return `<div class="strength">${[0, 1, 2, 3].map(i => `<i class="${i < score ? 'on ' + cls : ''}"></i>`).join('')}</div>
     <div class="strength-label">${label}</div>`;
 }
-function wirePwStrength(inputEl, boxEl) {
-  inputEl.addEventListener('input', () => { boxEl.innerHTML = pwBarsHtml(pwScore(inputEl.value)); });
+function pwField(id, placeholder = 'En az 8 karakter') {
+  return `<div class="input">${I.lock}<input id="${id}" type="password" placeholder="${esc(placeholder)}">
+    <button type="button" class="eye" data-eye="${id}">${I.eye}</button></div>`;
 }
-
-function audioButtons(url) {
-  if (!url) return '';
-  return `<div class="audio-row">
-    <button data-audio="${esc(url)}">🔊 Dinle</button>
-    <button data-audio="${esc(url)}" data-slow="1">🐌 Yavaş</button>
-  </div>`;
-}
-function wireAudioButtons(root) {
-  $$('[data-audio]', root).forEach(b => b.addEventListener('click', () => {
-    const a = new Audio(b.dataset.audio);
-    if (b.dataset.slow) a.playbackRate = 0.6;
-    a.play().catch(() => toast('Ses çalınamadı (URL erişilemiyor olabilir)', 'err'));
+function wireEyes() {
+  $$('[data-eye]').forEach(b => b.addEventListener('click', () => {
+    const inp = $('#' + b.dataset.eye);
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+    b.innerHTML = inp.type === 'password' ? I.eye : I.eyeOff;
   }));
 }
-
-// Genel "durum" ekranı: başarı/hata bildirimleri (Hesabınız Oluşturuldu,
-// Şifreniz Değiştirildi, E-postanız Doğrulandı, vb.) hepsi bunu kullanır.
-function statusScreen({ icon = '✓', kind = 'ok', title, body, buttonLabel = 'Devam Et', onContinue, secondary }) {
-  $('#screen').innerHTML = `
-    <div class="status-scr">
-      <div class="status-ic ${kind}">${icon}</div>
-      <h2>${esc(title)}</h2>
-      <p>${esc(body)}</p>
-      <button class="btn btn-primary" id="status-continue">${esc(buttonLabel)}</button>
-      ${secondary ? `<button class="btn btn-ghost gap-8" id="status-secondary">${esc(secondary.label)}</button>` : ''}
-    </div>`;
-  $('#status-continue').addEventListener('click', onContinue);
-  if (secondary) $('#status-secondary').addEventListener('click', secondary.onClick);
+function wireStrength(inputId, boxId) {
+  const inp = $('#' + inputId), box = $('#' + boxId);
+  box.innerHTML = pwBars(0);
+  inp.addEventListener('input', () => { box.innerHTML = pwBars(pwScore(inp.value)); });
 }
 
-// ═══════════════════════════════════════════════════════════════
-// AUTH — welcome / register wizard / login / forgot password
-// ═══════════════════════════════════════════════════════════════
+// Genel durum ekranı (Hesabınız Oluşturuldu, Şifreniz Değiştirildi, …)
+function statusScreen({ icon = I.checkCircle, tone = '', title, body, primary, secondary }) {
+  paint(`<div class="center-scr">
+      <div class="blob ${tone}">${icon}</div>
+      <h2>${esc(title)}</h2>
+      <p>${esc(body)}</p>
+      <button class="btn btn-primary" id="s-primary" style="max-width:300px">${esc(primary.label)}</button>
+      ${secondary ? `<button class="btn btn-ghost" id="s-secondary" style="max-width:300px">${esc(secondary.label)}</button>` : ''}
+    </div>`);
+  $('#s-primary').addEventListener('click', primary.onClick);
+  if (secondary) $('#s-secondary').addEventListener('click', secondary.onClick);
+}
 
+const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
+
+// ═══════════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════════
 function showWelcome() {
-  $('#screen').innerHTML = `
-    <div class="screen-pad center" style="padding-top:90px">
-      <div class="brandmark">結</div>
-      <h1 class="scr-title">Musubi</h1>
-      <p class="muted" style="margin-bottom:44px">Kelime Ezberlemenin En Kolay Yolu</p>
-      <button class="btn btn-google" id="btn-google">🔵 Google ile Devam Et</button>
-      <button class="btn btn-primary gap-12" id="btn-email">E-posta ile Devam Et</button>
-      <button class="btn btn-ghost gap-8" id="btn-login">Zaten bir hesabım var · Giriş Yap</button>
-    </div>`;
-  $('#btn-google').addEventListener('click', () => toast('Bu simülatörde Google girişi desteklenmiyor — e-posta ile devam et', 'err'));
-  $('#btn-email').addEventListener('click', () => { state.wizard = {}; go('reg-email'); });
-  $('#btn-login').addEventListener('click', () => go('login'));
+  paint(`<div class="pad" style="display:flex;flex-direction:column">
+      <div style="flex:1;display:grid;place-items:center;padding:28px 0">
+        <img src="/assets/musubi-logo.png" alt="Musubi" style="width:172px;height:172px">
+      </div>
+      <h1 class="title-xl">Kelime Ezberlemenin<br>En Hızlı Yolu</h1>
+      <p class="lead">Hesabını kurmaya devam etmek için lütfen tercih ettiğin yöntemi seç.</p>
+      <button class="btn btn-primary" id="b-register">Kayıt Ol</button>
+      <button class="btn btn-outline" id="b-login">Giriş Yap</button>
+      <p class="legal gap-24">Yeni bir hesap oluşturuyorsanız
+        <button class="link" data-legal="terms">Kullanıcı Sözleşmesi</button>,
+        <button class="link" data-legal="kvkk">KVKK Aydınlatma &amp; Açık Rıza Metni</button> ve
+        <button class="link" data-legal="privacy">Gizlilik Politikası</button> geçerli olacaktır.</p>
+    </div>`);
+  $('#b-register').addEventListener('click', () => { state.wizard = {}; go('reg-email'); });
+  $('#b-login').addEventListener('click', () => go('login'));
+  $$('[data-legal]').forEach(b => b.addEventListener('click', () => go('legal-doc', { key: b.dataset.legal })));
+}
+
+// Form iskeleti: başlık + alanlar üstte, birincil buton EKRANIN ALTINDA sabit
+function formScreen({ title, lead, body, action, backLabel = 'Geri' }) {
+  paint(topbar(backLabel) + `
+    <div class="pad">
+      <h1 class="title-xl">${esc(title)}</h1>
+      ${lead ? `<p class="lead">${esc(lead)}</p>` : ''}
+      ${body}
+    </div>
+    <div class="footer"><button class="btn btn-primary" id="f-action">${esc(action)}</button></div>`);
 }
 
 function showRegEmail() {
-  $('#screen').innerHTML = topbar('Kayıt Ol') + `
-    <div class="screen-pad">
-      <h1 class="scr-title">E-posta Adresin</h1>
-      <p class="muted gap-8" style="margin-bottom:20px">Giriş yaparken bu adresi kullanacaksın.</p>
-      <div class="field"><label>E-posta</label><input id="in-email" type="email" placeholder="ornek@eposta.com" value="${esc(state.wizard.email || '')}"></div>
-      <div class="err-line" id="email-err"></div>
-      <button class="btn btn-primary gap-8" id="btn-continue">Devam Et</button>
-    </div>`;
-  const input = $('#in-email'), err = $('#email-err');
-  $('#btn-continue').addEventListener('click', async () => {
+  formScreen({
+    title: 'E-posta ile Devam Et',
+    lead: 'Lütfen bir sonraki adıma geçmek için e-postanızı giriniz.',
+    action: 'Devam Et',
+    body: `<div class="input" id="w-email">${I.mail}<input id="in-email" type="email" placeholder="ornek@ornek.com" value="${esc(state.wizard.email || '')}"></div>
+           <div class="errline" id="err"></div>`
+  });
+  const input = $('#in-email'), err = $('#err'), wrap = $('#w-email');
+  input.addEventListener('input', () => { wrap.classList.remove('bad'); err.textContent = ''; });
+  $('#f-action').addEventListener('click', async () => {
     const email = input.value.trim();
-    if (!/^[\w.-]+@([\w-]+\.)+[\w-]{2,}$/.test(email)) { err.textContent = 'Geçerli bir e-posta adresi girin'; return; }
-    err.textContent = '';
+    const fail = (msg, html) => { wrap.classList.add('bad'); if (html) err.innerHTML = html; else err.textContent = msg; };
+    if (!/^[\w.-]+@([\w-]+\.)+[\w-]{2,}$/.test(email)) return fail('E-posta formatınız yanlış');
     const res = await api('POST', '/auth/check-email', { email }, { auth: false });
-    if (!res.ok) { err.textContent = res.json.message || 'Bir şeyler ters gitti'; return; }
+    if (!res.ok) return fail(res.json.message || 'Bir şeyler ters gitti');
     if (!res.json.available) {
-      err.innerHTML = `Bu e-posta adresi zaten kayıtlı · <button class="link" id="go-login">Giriş Yap</button>`;
-      $('#go-login').addEventListener('click', () => { state.wizard.email = email; go('login'); });
+      fail(null, 'Bu e-posta ile zaten hesap açılmış. Lütfen <button class="link" id="to-login">giriş yapın</button>.');
+      $('#to-login').addEventListener('click', () => { state.wizard.email = email; go('login'); });
       return;
     }
     state.wizard.email = email;
@@ -266,45 +366,38 @@ function showRegEmail() {
 }
 
 function showRegName() {
-  $('#screen').innerHTML = topbar('Kayıt Ol') + `
-    <div class="screen-pad">
-      <h1 class="scr-title">Ad Soyad</h1>
-      <p class="muted gap-8" style="margin-bottom:20px">Sana nasıl seslenelim?</p>
-      <div class="field"><label>Ad</label><input id="in-name" placeholder="Ad" value="${esc(state.wizard.name || '')}"></div>
-      <div class="field"><label>Soyad</label><input id="in-surname" placeholder="Soyad" value="${esc(state.wizard.surname || '')}"></div>
-      <button class="btn btn-primary gap-8" id="btn-continue">Devam Et</button>
-    </div>`;
-  $('#btn-continue').addEventListener('click', () => {
-    const name = $('#in-name').value.trim(), surname = $('#in-surname').value.trim();
-    if (!name) return toast('Ad gerekli', 'err');
-    state.wizard.name = name; state.wizard.surname = surname;
+  formScreen({
+    title: 'Adın Soyadın',
+    lead: 'Sana nasıl seslenelim?',
+    action: 'Devam Et',
+    body: `<div class="field"><label>Ad</label><div class="input">${I.user}<input id="in-name" placeholder="Adın" value="${esc(state.wizard.name || '')}"></div></div>
+           <div class="field"><label>Soyad</label><div class="input">${I.user}<input id="in-surname" placeholder="Soyadın" value="${esc(state.wizard.surname || '')}"></div></div>
+           <div class="errline" id="err"></div>`
+  });
+  $('#f-action').addEventListener('click', () => {
+    const name = $('#in-name').value.trim();
+    if (!name) { $('#err').textContent = 'Adını girmen gerekiyor'; return; }
+    state.wizard.name = name;
+    state.wizard.surname = $('#in-surname').value.trim();
     go('reg-password');
   });
 }
 
 function showRegPassword() {
-  $('#screen').innerHTML = topbar('Kayıt Ol') + `
-    <div class="screen-pad">
-      <h1 class="scr-title">Yeni Şifre Oluştur</h1>
-      <p class="muted gap-8" style="margin-bottom:20px">Lütfen şifreni gir ve doğrula.</p>
-      <div class="field">
-        <label>Şifre</label>
-        <div class="wrap"><input id="in-pw" type="password" placeholder="En az 8 karakter"><button type="button" class="eye" data-toggle-eye="in-pw">👁</button></div>
-      </div>
-      <div id="pw-strength"></div>
-      <div class="field gap-12"><label>Şifre (tekrar)</label><input id="in-pw2" type="password" placeholder="Şifreni tekrar gir"></div>
-      <div class="err-line" id="pw-err"></div>
-      <button class="btn btn-primary gap-8" id="btn-continue">Devam Et</button>
-    </div>`;
-  const pw = $('#in-pw'), box = $('#pw-strength');
-  box.innerHTML = pwBarsHtml(0);
-  wirePwStrength(pw, box);
-  wireEyeToggle();
-  $('#btn-continue').addEventListener('click', async () => {
-    const p1 = $('#in-pw').value, p2 = $('#in-pw2').value, err = $('#pw-err');
+  formScreen({
+    title: 'Yeni Şifre Oluştur',
+    lead: 'Lütfen şifreni gir ve doğrula.',
+    action: 'Devam Et',
+    body: `<div class="field"><label>Şifre</label>${pwField('in-pw')}</div>
+           <div id="pwbox"></div>
+           <div class="field gap-12"><label>Şifre (tekrar)</label>${pwField('in-pw2', 'Şifreni tekrar gir')}</div>
+           <div class="errline" id="err"></div>`
+  });
+  wireEyes(); wireStrength('in-pw', 'pwbox');
+  $('#f-action').addEventListener('click', async () => {
+    const p1 = $('#in-pw').value, p2 = $('#in-pw2').value, err = $('#err');
     if (p1.length < 8) { err.textContent = 'Şifre en az 8 karakter olmalı'; return; }
     if (p1 !== p2) { err.textContent = 'Şifreler eşleşmiyor'; return; }
-    err.textContent = '';
     const res = await api('POST', '/auth/register', {
       name: state.wizard.name, surname: state.wizard.surname,
       email: state.wizard.email, password: p1, deviceName: 'web-simülatör'
@@ -319,128 +412,119 @@ function showRegPassword() {
   });
 }
 
+const clearVToken = () => { state.devVerificationToken = null; localStorage.removeItem('musubi_dev_vtoken'); };
+
 function showRegSuccess() {
   statusScreen({
-    icon: '✓', kind: 'ok', title: 'Hesabınız Oluşturuldu',
+    title: 'Hesabın Oluşturuldu',
     body: 'Devam etmeden önce e-postana gönderdiğimiz bağlantıyla hesabını doğrulaman gerekiyor.',
-    buttonLabel: state.devVerificationToken ? '(dev) E-postamı Doğrula' : 'E-postamı Doğrula',
-    onContinue: async () => {
-      if (!state.devVerificationToken) return go('verify-nudge');
-      const res = await api('GET', '/auth/verify-email/' + state.devVerificationToken, undefined, { auth: false });
-      if (!res.ok) return go('verify-fail');
-      if (res.json.data?.accessToken) setTokens(res.json.data.accessToken, res.json.data.refreshToken);
-      clearDevVerificationToken();
-      go('verify-ok');
-    },
-    secondary: { label: 'Daha Sonra', onClick: () => reset('verify-nudge') }
+    primary: { label: 'Doğrulama Ekranına Git', onClick: () => reset('verify-nudge') }
   });
 }
-
-function clearDevVerificationToken() { state.devVerificationToken = null; localStorage.removeItem('musubi_dev_vtoken'); }
 
 function showVerifyOk() {
   statusScreen({
-    icon: '📩', kind: 'ok', title: 'E-postanız Doğrulandı',
+    icon: I.mail, tone: 'ok', title: 'E-postan Doğrulandı',
     body: 'Harika! Artık öğrenmeye başlayabilirsin.',
-    buttonLabel: 'Devam Et', onContinue: () => enterApp()
+    primary: { label: 'Devam Et', onClick: () => enterApp() }
   });
 }
+
 function showVerifyFail() {
   statusScreen({
-    icon: '📪', kind: 'err', title: 'E-postanız Doğrulanamadı',
-    body: 'Bağlantının süresi dolmuş olabilir. Doğrulama mailini tekrar gönderelim.',
-    buttonLabel: 'Tekrar Gönder',
-    onContinue: async () => {
-      const email = state.wizard.email || state.profile?.email;
-      if (!email) return toast('E-posta adresi bulunamadı, girişten devam et', 'err');
-      const res = await api('POST', '/auth/resend-verification-email', { email }, { auth: false });
-      guard(res, 'Doğrulama maili tekrar gönderildi');
+    icon: I.xCircle, title: 'E-postan Doğrulanamadı',
+    body: 'Bağlantının süresi dolmuş olabilir. Doğrulama e-postasını tekrar gönderelim.',
+    primary: {
+      label: 'Tekrar Gönder',
+      onClick: async () => {
+        const email = state.wizard.email || state.me?.email;
+        if (!email) return toast('E-posta adresi bulunamadı, girişten devam et', 'err');
+        guard(await api('POST', '/auth/resend-verification-email', { email }, { auth: false }), 'Doğrulama e-postası tekrar gönderildi');
+      }
     },
     secondary: { label: 'Geri', onClick: back }
   });
 }
 
-// Doğrulanmamış ama giriş yapmış kullanıcı — /auth/me 403 döndüğü sürece
-// backend TÜM ana uç noktaları (isEmailVerified) kapatıyor; bu yüzden burası
-// gerçek bir kapı, süslü bir banner değil.
+// Doğrulanmamış hesapta backend TÜM ana uçları kapatıyor (isEmailVerified) —
+// burası süslü bir banner değil, gerçek bir kapı.
+//
+// Doğrulama akışı WEB'DE tamamlanır (ürün kararı: deep link yok): kullanıcı
+// e-postadaki linke tıklar, /verify-email/:token sayfası işi bitirir. Uygulama
+// yalnızca "doğruladım" diyebilir ve /auth/me ile teyit eder. Token kutusu
+// yalnızca simülatör kolaylığı — gerçek istemcide böyle bir alan olmayacak.
 function showVerifyNudge() {
-  $('#screen').innerHTML = `
-    <div class="status-scr">
-      <div class="status-ic brand">✉️</div>
-      <h2>E-postanı Doğrula</h2>
-      <p>Devam etmeden önce e-postana gelen bağlantıyla hesabını doğrulaman gerekiyor. Doğrulama linki backend tarafından web sayfası olarak açılır; test için tokenı burada elle de kullanabilirsin.</p>
-      <div class="field" style="text-align:left"><label>(dev) Doğrulama tokenı</label>
-        <input id="vtoken" placeholder="40 haneli token" value="${esc(state.devVerificationToken || '')}"></div>
-      <button class="btn btn-primary gap-8" id="btn-verify">Doğrula</button>
-      <button class="btn btn-outline gap-8" id="btn-resend">Doğrulama Mailini Tekrar Gönder</button>
-      <button class="btn btn-ghost gap-8" id="btn-logout">Çıkış Yap</button>
-    </div>`;
-  $('#btn-verify').addEventListener('click', async () => {
+  paint(`<div class="pad">
+      <div class="blob" style="margin:24px auto 20px">${I.mail}</div>
+      <h1 class="title-xl" style="text-align:center">E-postanı Doğrula</h1>
+      <p class="lead" style="text-align:center">Sana bir doğrulama bağlantısı gönderdik. Bağlantıya tıkladıktan sonra aşağıdaki butonla devam edebilirsin.</p>
+      <button class="btn btn-primary" id="b-recheck">Doğruladım, Devam Et</button>
+      <button class="btn btn-outline" id="b-resend">Bağlantıyı Tekrar Gönder</button>
+      <div class="grouplabel">Simülatör kısayolu</div>
+      <div class="input">${I.key}<input id="vtoken" placeholder="Doğrulama tokenını yapıştır" value="${esc(state.devVerificationToken || '')}"></div>
+      <button class="btn btn-ghost gap-8" id="b-verify">Tokenla Doğrula</button>
+      <button class="btn btn-ghost" id="b-logout">Çıkış Yap</button>
+    </div>`);
+  $('#b-recheck').addEventListener('click', async () => {
+    const res = await api('GET', '/auth/me');
+    if (res.status === 403) return toast('Hesap hâlâ doğrulanmamış görünüyor', 'err');
+    if (!res.ok) return toast(res.json.message || 'Kontrol edilemedi', 'err');
+    state.me = res.json.data;
+    go('verify-ok');
+  });
+  $('#b-verify').addEventListener('click', async () => {
     const token = $('#vtoken').value.trim();
     if (!token) return toast('Token gerekli', 'err');
     const res = await api('GET', '/auth/verify-email/' + token, undefined, { auth: false });
-    if (!res.ok) return toast(res.json.message || 'Doğrulanamadı', 'err');
+    if (!res.ok) return go('verify-fail');
     if (res.json.data?.accessToken) setTokens(res.json.data.accessToken, res.json.data.refreshToken);
-    clearDevVerificationToken();
-    toast('E-posta doğrulandı 🎉', 'ok');
+    clearVToken();
+    toast('E-posta doğrulandı', 'ok');
     enterApp();
   });
-  $('#btn-resend').addEventListener('click', async () => {
-    const email = prompt('Kayıtlı e-posta adresini gir:', state.wizard.email || '');
+  $('#b-resend').addEventListener('click', async () => {
+    const email = state.wizard.email || prompt('Kayıtlı e-posta adresin:');
     if (!email) return;
-    const res = await api('POST', '/auth/resend-verification-email', { email }, { auth: false });
-    if (guard(res, 'Doğrulama maili tekrar gönderildi')) {
-      // dev ortamında token'ı tekrar yakalamak için kullanıcı e-posta kutusuna
-      // bakamayacağı için manuel giriş kutusu bırakılır.
-    }
+    guard(await api('POST', '/auth/resend-verification-email', { email }, { auth: false }), 'Doğrulama e-postası gönderildi');
   });
-  $('#btn-logout').addEventListener('click', async () => {
-    await api('POST', '/auth/logout', { refreshToken: state.refresh });
-    setTokens(null, null);
-    reset('welcome');
-  });
+  $('#b-logout').addEventListener('click', doLogout);
 }
 
 function showLogin() {
-  $('#screen').innerHTML = topbar('Giriş Yap') + `
-    <div class="screen-pad">
-      <h1 class="scr-title">Giriş Yap</h1>
-      <div class="field gap-16"><label>E-posta</label><input id="in-email" type="email" placeholder="ornek@eposta.com" value="${esc(state.wizard.email || '')}"></div>
-      <div class="field">
-        <label>Şifre</label>
-        <div class="wrap"><input id="in-pw" type="password" placeholder="Şifren"><button type="button" class="eye" data-toggle-eye="in-pw">👁</button></div>
-      </div>
-      <div class="err-line" id="login-err"></div>
-      <button class="btn btn-primary gap-8" id="btn-login">Giriş Yap</button>
-      <button class="btn btn-ghost gap-8" id="btn-forgot">Şifremi Unuttum</button>
-    </div>`;
-  wireEyeToggle();
-  $('#btn-forgot').addEventListener('click', () => go('forgot-email'));
-  $('#btn-login').addEventListener('click', async () => {
-    const email = $('#in-email').value.trim(), password = $('#in-pw').value, err = $('#login-err');
+  formScreen({
+    title: 'Giriş Yap',
+    lead: 'Hesabına giriş yaparak kaldığın yerden devam et.',
+    action: 'Giriş Yap',
+    body: `<div class="field"><label>E-posta</label><div class="input">${I.mail}<input id="in-email" type="email" placeholder="ornek@ornek.com" value="${esc(state.wizard.email || '')}"></div></div>
+           <div class="field"><label>Şifre</label>${pwField('in-pw', 'Şifren')}</div>
+           <div class="errline" id="err"></div>
+           <div class="row center gap-8"><button class="link" id="b-forgot">Şifremi Unuttum</button></div>`
+  });
+  wireEyes();
+  $('#b-forgot').addEventListener('click', () => go('forgot-email'));
+  $('#f-action').addEventListener('click', async () => {
+    const email = $('#in-email').value.trim(), password = $('#in-pw').value;
     const res = await api('POST', '/auth/login', { email, password, deviceName: 'web-simülatör' }, { auth: false });
-    if (!res.ok) { err.textContent = res.json.message || 'Giriş başarısız'; return; }
-    err.textContent = '';
+    if (!res.ok) { $('#err').textContent = res.json.message || 'Giriş başarısız'; return; }
     setTokens(res.json.accessToken, res.json.refreshToken);
-    state.profile = { name: res.json.data.name, email };
+    state.wizard.email = email;
     if (!res.json.isEmailVerified) return reset('verify-nudge');
     enterApp();
   });
 }
 
 function showForgotEmail() {
-  $('#screen').innerHTML = topbar('Şifremi Unuttum') + `
-    <div class="screen-pad">
-      <h1 class="scr-title">Şifreni mi Unuttun?</h1>
-      <p class="muted gap-8" style="margin-bottom:20px">E-posta adresini gir, sana bir sıfırlama bağlantısı gönderelim.</p>
-      <div class="field"><label>E-posta</label><input id="in-email" type="email" placeholder="ornek@eposta.com"></div>
-      <button class="btn btn-primary gap-8" id="btn-send">Sıfırlama Maili Gönder</button>
-    </div>`;
-  $('#btn-send').addEventListener('click', async () => {
+  formScreen({
+    title: 'Şifreni mi Unuttun?',
+    lead: 'E-posta adresini gir, sana bir sıfırlama bağlantısı gönderelim.',
+    action: 'Sıfırlama Bağlantısı Gönder',
+    body: `<div class="input">${I.mail}<input id="in-email" type="email" placeholder="ornek@ornek.com"></div><div class="errline" id="err"></div>`
+  });
+  $('#f-action').addEventListener('click', async () => {
     const email = $('#in-email').value.trim();
-    if (!email) return toast('E-posta gir', 'err');
+    if (!email) { $('#err').textContent = 'E-posta adresini gir'; return; }
     const res = await api('POST', '/auth/forgot-password', { email }, { auth: false });
-    if (!guard(res, 'Sıfırlama maili gönderildi (varsa)')) return;
+    if (!guard(res, 'Bağlantı gönderildi (hesap varsa)')) return;
     if (res.json.resetToken) {
       state.devResetToken = res.json.resetToken;
       localStorage.setItem('musubi_dev_rtoken', res.json.resetToken);
@@ -450,32 +534,24 @@ function showForgotEmail() {
 }
 
 function showForgotNewPass() {
-  $('#screen').innerHTML = topbar('Şifremi Unuttum') + `
-    <div class="screen-pad">
-      <h1 class="scr-title">Yeni Şifre Oluştur</h1>
-      <p class="muted gap-8" style="margin-bottom:20px">Lütfen şifreni gir ve doğrula.</p>
-      <div class="field" style="text-align:left"><label>(dev) Sıfırlama tokenı</label>
-        <input id="rtoken" value="${esc(state.devResetToken || '')}"></div>
-      <div class="field">
-        <label>Şifre</label>
-        <div class="wrap"><input id="in-pw" type="password" placeholder="En az 8 karakter"><button type="button" class="eye" data-toggle-eye="in-pw">👁</button></div>
-      </div>
-      <div id="pw-strength"></div>
-      <div class="field gap-12"><label>Şifre (tekrar)</label><input id="in-pw2" type="password"></div>
-      <div class="err-line" id="pw-err"></div>
-      <button class="btn btn-primary gap-8" id="btn-continue">Şifreyi Güncelle</button>
-    </div>`;
-  const pw = $('#in-pw'), box = $('#pw-strength');
-  box.innerHTML = pwBarsHtml(0);
-  wirePwStrength(pw, box);
-  wireEyeToggle();
-  $('#btn-continue').addEventListener('click', async () => {
-    const token = $('#rtoken').value.trim(), p1 = $('#in-pw').value, p2 = $('#in-pw2').value, err = $('#pw-err');
+  formScreen({
+    title: 'Yeni Şifre Oluştur',
+    lead: 'Lütfen şifreni gir ve doğrula.',
+    action: 'Şifreyi Güncelle',
+    body: `<div class="field"><label>Sıfırlama tokenı (dev)</label><div class="input">${I.key}<input id="rtoken" value="${esc(state.devResetToken || '')}"></div></div>
+           <div class="field"><label>Şifre</label>${pwField('in-pw')}</div>
+           <div id="pwbox"></div>
+           <div class="field gap-12"><label>Şifre (tekrar)</label>${pwField('in-pw2', 'Şifreni tekrar gir')}</div>
+           <div class="errline" id="err"></div>`
+  });
+  wireEyes(); wireStrength('in-pw', 'pwbox');
+  $('#f-action').addEventListener('click', async () => {
+    const token = $('#rtoken').value.trim(), p1 = $('#in-pw').value, p2 = $('#in-pw2').value, err = $('#err');
     if (!token) { err.textContent = 'Sıfırlama tokenı gerekli'; return; }
     if (p1.length < 8) { err.textContent = 'Şifre en az 8 karakter olmalı'; return; }
     if (p1 !== p2) { err.textContent = 'Şifreler eşleşmiyor'; return; }
-    // deviceName BİLEREK gönderilmiyor: backend web-akışında oturum açmıyor,
-    // gerçek davranış budur — kullanıcı yeni şifreyle tekrar giriş yapar.
+    // deviceName BİLEREK gönderilmiyor: backend bu akışta oturum açmaz,
+    // kullanıcı yeni şifresiyle tekrar giriş yapar — gerçek davranış budur.
     const res = await api('POST', '/auth/reset-password', { token, password: p1 }, { auth: false });
     if (!res.ok) { err.textContent = res.json.message || 'Şifre sıfırlanamadı'; return; }
     localStorage.removeItem('musubi_dev_rtoken'); state.devResetToken = null;
@@ -485,25 +561,25 @@ function showForgotNewPass() {
 
 function showResetSuccess() {
   statusScreen({
-    icon: '✱', kind: 'brand', title: 'Şifreniz Değiştirildi',
-    body: 'Başarıyla işleminiz tamamlandı. Yeni şifrenle giriş yapabilirsin.',
-    buttonLabel: 'Giriş Yap', onContinue: () => reset('login')
+    title: 'Şifren Değiştirildi',
+    body: 'İşlemin başarıyla tamamlandı. Yeni şifrenle giriş yapabilirsin.',
+    primary: { label: 'Giriş Yap', onClick: () => reset('login') }
   });
 }
 
-function wireEyeToggle() {
-  $$('[data-toggle-eye]').forEach(b => b.addEventListener('click', () => {
-    const inp = $('#' + b.dataset.toggleEye);
-    inp.type = inp.type === 'password' ? 'text' : 'password';
-  }));
+async function doLogout() {
+  await api('POST', '/auth/logout', { refreshToken: state.refresh });
+  setTokens(null, null);
+  state.me = null; state.home = null; state.promptedPlacement = false;
+  closeSheet();
+  reset('welcome');
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Uygulamaya giriş / önyükleme
+// Önyükleme
 // ═══════════════════════════════════════════════════════════════
-
 async function boot() {
-  applyThemeFont();
+  applyPrefs();
   if (!state.access) return reset('welcome');
   const res = await api('GET', '/auth/me');
   if (res.status === 403) return reset('verify-nudge');
@@ -513,120 +589,223 @@ async function boot() {
 }
 
 async function enterApp() {
-  const meRes = await api('GET', '/auth/me');
-  if (!meRes.ok) return reset('welcome');
-  state.me = meRes.json.data;
-  applyThemeFont();
-
-  if (!state.checkedPlacement) {
-    state.checkedPlacement = true;
-    const qs = await api('GET', '/quiz/status');
-    if (qs.ok && qs.json.data.placementAvailable) {
-      reset('home');
-      showModal(quizIntroHtml({ type: 'placement' }));
-      wireQuizIntroModal({ type: 'placement' });
-      return;
-    }
-  }
+  const res = await api('GET', '/auth/me');
+  if (res.status === 403) return reset('verify-nudge');
+  if (!res.ok) return reset('welcome');
+  state.me = res.json.data;
+  applyPrefs();
+  renderDevBar();
   reset('home');
 }
 
-function applyThemeFont() {
-  const prefs = state.me?.preferences || {};
+function applyPrefs() {
+  const p = state.me?.preferences || {};
   const phone = $('#phone');
-  const theme = prefs.theme === 'dark' ? 'dark'
-    : prefs.theme === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
+  phone.dataset.theme = p.theme === 'dark' ? 'dark'
+    : p.theme === 'system' ? (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light')
     : 'light';
-  phone.dataset.theme = theme;
-  const scale = prefs.fontSize === 'small' ? 0.92 : prefs.fontSize === 'large' ? 1.14 : 1;
-  phone.style.setProperty('--font-scale', scale);
+  phone.style.setProperty('--font-scale', p.fontSize === 'small' ? 0.93 : p.fontSize === 'large' ? 1.12 : 1);
 }
 
 // ═══════════════════════════════════════════════════════════════
 // ANASAYFA
 // ═══════════════════════════════════════════════════════════════
-
 async function showHome() {
-  const myToken = activeToken;
-  $('#screen').innerHTML = spinner();
-  const [sumRes, calRes, misRes] = await Promise.all([
-    api('GET', '/home/summary'), api('GET', '/home/calendar'), api('GET', '/userwords/mistakes?limit=4')
-  ]);
-  if (stale(myToken)) return;
+  const tk = activeToken;
+  loading();
+  const [sumRes, storyRes] = await Promise.all([api('GET', '/home/summary'), api('GET', '/stories')]);
+  if (stale(tk)) return;
+  if (sumRes.status === 403) return reset('verify-nudge');
   if (!sumRes.ok) { toast(sumRes.json.message || 'Anasayfa yüklenemedi', 'err'); return reset('welcome'); }
+
   const d = sumRes.json.data;
-  const cal = calRes.ok ? calRes.json.data : [];
-  const mistakes = misRes.ok ? misRes.json.data : { mistakes: [], total: 0 };
+  state.home = d;
+  const stories = storyRes.ok ? storyRes.json.data : [];
+  const pct = d.goal > 0 ? d.today.completedWords / d.goal : 0;
 
-  const days = [];
-  for (let i = 6; i >= 0; i--) {
-    const dt = new Date(); dt.setDate(dt.getDate() - i);
-    const key = dt.toISOString().slice(0, 10);
-    const entry = cal.find(s => s.date.slice(0, 10) === key);
-    days.push({ label: 'PSÇPCCP'[dt.getDay()] || '·', done: !!entry && entry.totalWords > 0, today: i === 0 });
+  paint(`<div class="pad">
+      ${pagehead(d.greeting, `Merhaba ${d.name}`, { unread: d.unreadNotifications > 0 })}
+
+      ${stories.length ? `<div class="stories">${stories.map(s => `
+        <button class="story" data-story="${esc(s.id)}">
+          <span class="ring ${s.seen ? 'seen' : ''}"><img src="${esc(s.coverUrl)}" alt=""></span>
+          <span class="nm">${esc(s.title)}</span>
+        </button>`).join('')}</div>` : ''}
+
+      ${d.advanceableLevel ? `<div class="unlock-card gap-16">
+        <div class="kicker">${I.unlock}<span>Kilit Açıldı</span></div>
+        <h3>${esc(d.advanceableLevel.jlptLevel)} • ${esc(d.advanceableLevel.label)} Seviyesi Hazır</h3>
+        <p>${esc(d.activeLevel)}'i sağlam öğrendin. Hazır olduğunda yeni seviyeye geç.</p>
+        <button id="b-advance">Şimdi Geç</button>
+      </div>` : ''}
+
+      <div class="card gap-16">
+        <div class="today-card">
+          <div class="miniring">
+            ${ringSvg(pct, { size: 52, stroke: 5, second: d.goal > 0 ? d.today.emptyCount / d.goal : 0 })}
+            <span class="v">%${Math.round(pct * 100)}</span>
+          </div>
+          <div class="txt">
+            <b>Bugünün Çalışması</b>
+            <span>${d.today.completedWords}/${d.goal} tamamlandı${d.today.emptyCount ? ` · ${d.today.emptyCount} ertelendi` : ''}</span>
+          </div>
+          <button class="btn btn-primary btn-sm" id="b-lesson">${d.today.completedWords >= d.goal ? 'Tekrar Et' : 'Devam'}</button>
+        </div>
+        <div class="streakline">
+          <span class="flame">${I.flame}${d.streak.current} Gün</span>
+          <div class="weekdots">${d.streak.week.map(w => `
+            <span class="weekdot ${w.studied ? 'done' : ''} ${w.isToday ? 'today' : ''}" title="${esc(w.date)}">${w.studied ? I.check : ''}</span>`).join('')}</div>
+        </div>
+      </div>
+
+      ${d.todayMistakeCount > 0 ? `<div class="mistake-card gap-16">
+        <div class="hd">${I.xCircle}<b>Bugünün Hataları</b><button class="n" data-nav="mistakes">${d.todayMistakeCount} Hata</button></div>
+        <div class="chips">${d.todayMistakes.map(m => `<span class="chip">${esc(m.kanji)}</span>`).join('')}</div>
+        <button class="btn btn-outline" data-nav="mistakes">Detaya Git</button>
+      </div>` : `<div class="card fill gap-16" style="text-align:center;padding:22px">
+        <div class="row center" style="gap:8px;color:var(--ok)">${I.checkCircle}<b style="font-size:15px">Bugün hiç hata yok</b></div>
+        <p class="tiny gap-8" style="margin:0">Böyle devam! Hatalı kelimelerin burada listelenir.</p>
+      </div>`}
+
+      <div class="tiny gap-24" style="text-align:center">Aktif seviyen ${esc(d.activeLevel)} • ${esc(d.activeLevelLabel)}</div>
+    </div>`);
+
+  $('#b-lesson').addEventListener('click', startLesson);
+  const adv = $('#b-advance');
+  if (adv) adv.addEventListener('click', () => confirmLevelSwitch(d.advanceableLevel));
+  $$('[data-story]').forEach(b => b.addEventListener('click', () => openStory(stories, stories.findIndex(s => String(s.id) === b.dataset.story))));
+
+  // "Seviyeni Öğrenelim Mi?" — oturum başına bir kez, ayrı istek gerekmiyor
+  if (d.placementPrompt && !state.promptedPlacement) {
+    state.promptedPlacement = true;
+    placementSheet();
   }
+}
 
-  $('#screen').innerHTML = `
-    <div class="screen-pad">
-      <div class="hello">
-        <h1>Merhaba ${esc(d.name)} 👋</h1>
-        <div class="bell" data-nav="notifications">🔔<span class="dot" hidden></span></div>
-      </div>
-      <div class="ring-wrap"><div class="ring">${ringSvg(d.today.completedWords, d.goal, 168, 14, d.today.emptyCount)}
-        <div class="num"><b>${d.today.completedWords}/${d.goal}</b><span>Tamamlandı</span></div></div></div>
-      ${d.today.emptyCount > 0 ? `<div class="center muted" style="font-size:12.5px;margin:-8px 0 14px">🟡 ${d.today.emptyCount} kelime ertelendi — tekrar sorulacak</div>` : ''}
-      <button class="btn btn-primary" id="btn-start-lesson">Bugünkü Kelimelerine Geç</button>
-      ${d.tomorrowReviews > 0 ? `<div class="pending-banner">📅 Yarın ${d.tomorrowReviews} kart seni bekliyor</div>` : ''}
-      <div class="card">
-        <div class="streak-row">🔥 ${d.streak.current} Günlük Seri <span class="muted" style="font-weight:400">· En iyi ${d.streak.longest}</span></div>
-        <div class="day-strip">${days.map(x => `<div class="day-chip ${x.done ? 'done' : ''} ${x.today ? 'today' : ''}"><div class="d">${x.done ? '✓' : ''}</div><span>${x.label}</span></div>`).join('')}</div>
-      </div>
-      <div class="card">
-        <div class="row between"><h2 style="margin:0">Bugünün Hataları</h2><span class="badge">${mistakes.total}</span></div>
-        ${mistakes.total === 0
-          ? '<div class="empty-state" style="padding:14px 0">Bugün hata yok 🎉</div>'
-          : `<div class="wlist gap-8">${mistakes.mistakes.map(m => `
-              <div class="witem" style="cursor:default">
-                <div class="kj">${esc(m.word.kanji)}<small>${esc(m.word.romaji)}</small></div>
-                <div class="mean">${esc(m.word.meaning)}</div>
-              </div>`).join('')}</div>`}
-      </div>
-    </div>`;
-
-  api('GET', '/notifications').then(r => {
-    if (stale(myToken) || !r.ok) return;
-    const dot = $('.bell .dot'); if (dot) dot.hidden = r.json.data.unreadCount === 0;
+function placementSheet() {
+  sheet(`<div class="grab"></div>
+    <div class="blob">${I.target}</div>
+    <h3>Seviyeni Öğrenelim Mi?</h3>
+    <p>Sana uygun içerikleri gösterebilmemiz için kısa bir sınav yapmak istiyoruz. Dilersen daha sonra Ayarlar'dan da girebilirsin.</p>
+    <button class="btn btn-primary" id="sh-start">Sınava Başla</button>
+    <button class="btn btn-ghost" id="sh-later">Daha Sonra</button>`);
+  $('#sh-start').addEventListener('click', () => { closeSheet(); go('quiz-intro'); });
+  $('#sh-later').addEventListener('click', async () => {
+    closeSheet();
+    // "Daha Sonra" kalıcıdır: bayrak sunucuda söner, modal bir daha çıkmaz
+    await api('POST', '/quiz/placement/defer');
   });
+}
 
-  $('#btn-start-lesson').addEventListener('click', () => startLesson());
-  $('[data-nav="notifications"]').addEventListener('click', () => go('notifications'));
+async function confirmLevelSwitch(level) {
+  sheet(`<div class="grab"></div>
+    <div class="blob">${I.unlock}</div>
+    <h3>${esc(level.jlptLevel)} • ${esc(level.label)} seviyesine geçilsin mi?</h3>
+    <p>İlerlemen kaybolmaz — dilediğin an eski seviyene geri dönebilirsin. Serilerin de bozulmaz.</p>
+    <button class="btn btn-primary" id="sh-yes">Evet, Geç</button>
+    <button class="btn btn-ghost" id="sh-no">Vazgeç</button>`);
+  $('#sh-no').addEventListener('click', closeSheet);
+  $('#sh-yes').addEventListener('click', async () => {
+    const res = await api('PUT', '/progress/active-level', { jlptLevel: level.jlptLevel });
+    closeSheet();
+    if (guard(res, `Seviyen ${level.jlptLevel} olarak güncellendi`)) showHome();
+  });
+}
+
+// ─────────────────── Bugünün hataları (tam liste) ───────────────────
+async function showMistakes() {
+  const tk = activeToken;
+  loading(topbar());
+  const res = await api('GET', '/userwords/mistakes?limit=50');
+  if (stale(tk)) return;
+  if (!guard(res)) return back();
+  const { mistakes, total } = res.json.data;
+  paint(topbar() + `<div class="pad">
+      <h1 class="title-xl">Bugünün Hataları</h1>
+      <p class="lead">${total} kelimeyi bugün yanlış cevapladın. Yarınki tekrarda bunlar öncelikli gelecek.</p>
+      ${total === 0 ? `<div class="empty">${I.checkCircle}<div>Bugün hiç hatan yok.</div></div>`
+        : `<div class="wordlist">${mistakes.filter(m => m.word).map(m => wordRow(m.word, { click: true, tail: badge(m.word.jlptLevel) })).join('')}</div>`}
+    </div>`);
+  wireWordRows();
+}
+
+function wireWordRows() {
+  $$('[data-word]').forEach(el => el.addEventListener('click', () => go('word-detail', { id: el.dataset.word })));
+}
+
+// ─────────────────── Hikâyeler ───────────────────
+function openStory(stories, startIndex) {
+  if (startIndex < 0) return;
+  let si = startIndex, sl = 0;
+  const host = document.createElement('div');
+  host.className = 'storyview';
+  $('.viewport').appendChild(host);
+
+  const close = () => { host.remove(); showHome(); };
+
+  const draw = async () => {
+    const s = stories[si];
+    host.innerHTML = `
+      <div class="bars">${s.slides.map((_, i) => `<i><b style="width:${i < sl ? 100 : 0}%"></b></i>`).join('')}</div>
+      <div class="hd"><img src="${esc(s.coverUrl)}" alt=""><b>${esc(s.title)}</b>
+        <button id="sv-close">${I.close}</button></div>
+      <div class="slide"><img src="${esc(s.slides[sl].url)}" alt=""></div>
+      <div class="nav"><button id="sv-prev"></button><button id="sv-next"></button></div>`;
+    $('#sv-close', host).addEventListener('click', close);
+    $('#sv-prev', host).addEventListener('click', prev);
+    $('#sv-next', host).addEventListener('click', next);
+    if (sl === 0) await api('POST', `/stories/${s.id}/opened`);
+  };
+
+  // "Görüldü" YALNIZCA son slayt izlenince yazılır — yarıda bırakan
+  // kullanıcının halkası yanık kalmalı (backend de bunu böyle ayırıyor).
+  const next = async () => {
+    const s = stories[si];
+    if (sl < s.slides.length - 1) { sl++; return draw(); }
+    await api('POST', `/stories/${s.id}/seen`);
+    if (si < stories.length - 1) { si++; sl = 0; return draw(); }
+    close();
+  };
+  const prev = () => {
+    if (sl > 0) { sl--; return draw(); }
+    if (si > 0) { si--; sl = 0; return draw(); }
+  };
+  draw();
 }
 
 // ═══════════════════════════════════════════════════════════════
 // BİLDİRİMLER
 // ═══════════════════════════════════════════════════════════════
-const NOTIF_ICONS = { daily_word: 'あ', streak_reminder: '🔥', daily_task: '📅', streak_warning: '☹️', word_level_down: '↘' };
+const NOTIF_ICON = {
+  daily_word: '<span class="jp">あ</span>', streak_reminder: I.flame, streak_warning: I.flame,
+  daily_task: I.target, word_level_down: I.trend
+};
 
 async function showNotifications() {
-  const myToken = activeToken;
-  $('#screen').innerHTML = topbar('Bildirimler') + spinner();
-  const res = await api('GET', '/notifications');
-  if (stale(myToken)) return;
+  const tk = activeToken;
+  loading(topbar());
+  const res = await api('GET', '/notifications?limit=30');
+  if (stale(tk)) return;
   if (!guard(res)) return back();
-  const { notifications } = res.json.data;
-  $('#screen').innerHTML = topbar('Bildirimler') + `
-    <div class="screen-pad">
-      ${notifications.length ? `<button class="btn btn-outline" id="btn-readall" style="margin-bottom:12px">Tümünü Okundu Yap</button>` : ''}
-      ${notifications.length === 0 ? '<div class="empty-state">Bildirim yok.</div>' : notifications.map(n => `
-        <div class="notif-item ${n.read ? 'read' : ''}" data-id="${n._id}">
-          <div class="ic">${NOTIF_ICONS[n.type] || '🔔'}</div>
-          <div><b>${esc(n.title)}</b><p>${esc(n.body)}</p></div>
+  const { notifications, unreadCount } = res.json.data;
+
+  paint(topbar() + `<div class="pad">
+      <div class="sec-row" style="margin-top:0">
+        <h2>Bildirimler</h2>
+        ${unreadCount > 0 ? `<button class="more" id="b-readall">Tümünü Okundu Yap</button>` : ''}
+      </div>
+      ${notifications.length === 0 ? `<div class="empty">${I.bell}<div>Henüz bildirim yok.</div></div>`
+        : notifications.map(n => `
+        <div class="notif ${n.read ? 'read' : ''}" data-id="${n._id}">
+          <span class="ic">${NOTIF_ICON[n.type] || I.bell}</span>
+          <span class="bd"><b>${esc(n.title)}</b><p>${esc(n.body)}</p>
+            <time>${new Date(n.createdAt).toLocaleString('tr', { day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })}</time></span>
         </div>`).join('')}
-    </div>`;
-  if (notifications.length) $('#btn-readall').addEventListener('click', async () => {
-    await api('PUT', '/notifications/read-all'); showNotifications();
-  });
-  $$('.notif-item').forEach(el => el.addEventListener('click', async () => {
+    </div>`);
+
+  const all = $('#b-readall');
+  if (all) all.addEventListener('click', async () => { await api('PUT', '/notifications/read-all'); showNotifications(); });
+  $$('.notif').forEach(el => el.addEventListener('click', async () => {
     if (el.classList.contains('read')) return;
     await api('PUT', `/notifications/${el.dataset.id}/read`);
     showNotifications();
@@ -634,379 +813,378 @@ async function showNotifications() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// DERS (SRS çalışma akışı) — yazma sorusu, backend puanlar
+// DERS — yazma sorusu, puanlamayı BACKEND yapar
 // ═══════════════════════════════════════════════════════════════
-
 async function startLesson() {
-  const myToken = activeToken;
-  const progRes = await api('GET', '/progress');
-  if (stale(myToken)) return;
-  let jlptLevel = 'N5';
-  if (progRes.ok) {
-    const unlocked = progRes.json.data.levels.filter(l => l.isUnlocked);
-    if (unlocked.length) jlptLevel = unlocked[unlocked.length - 1].jlptLevel;
-  }
-  state.lesson = { jlptLevel, queue: [], idx: 0, correctStreak: 0, phase: 'loading', doneToday: 0, totalToday: 0, pendingToday: 0 };
-  go('lesson', { jlptLevel });
-  await loadLessonWords(jlptLevel);
-}
-
-async function loadLessonWords(jlptLevel) {
-  const myToken = activeToken;
-  await api('POST', '/sessions/start', { jlptLevel });
-  const res = await api('GET', `/userwords/today?jlptLevel=${jlptLevel}`);
-  if (stale(myToken)) return;
+  // Dersin seviyesi SUNUCUDAN gelir (User.activeLevel). /userwords/today
+  // artık jlptLevel parametresi ALMIYOR; seviye iki yerde saklanınca
+  // aynı gün için ikinci bir havuz açılıyordu.
+  const level = state.home?.activeLevel || state.me?.activeLevel || 'N5';
+  state.lesson = { level, queue: [], idx: 0, streak: 0, phase: 'loading', done: 0, total: 0, pending: 0 };
+  go('lesson');
+  const tk = activeToken;
+  await api('POST', '/sessions/start', { jlptLevel: level });
+  const res = await api('GET', '/userwords/today');
+  if (stale(tk)) return;
   if (!guard(res)) return back();
-  const d = res.json.data;
+  applyTodayPayload(res.json.data);
+  state.lesson.phase = state.lesson.queue.length ? 'question' : 'empty';
+  renderLesson();
+}
+
+function applyTodayPayload(d) {
+  const L = state.lesson;
   const queue = [];
-  d.reviewWords.forEach(uw => { if (!uw.answeredToday) queue.push({ wordId: uw.word._id, word: uw.word, isReview: true }); });
-  d.newWords.forEach(w => { if (!w.answeredToday) queue.push({ wordId: w._id, word: w, isReview: false }); });
-  state.lesson.queue = queue;
-  state.lesson.idx = 0;
-  // Anasayfa (/home/summary) ile AYNI kaynak: backend'in döndürdüğü goal/today
-  // doğrudan kullanılır, yerel toplama YAPILMAZ — bkz. submitLessonAnswer.
-  state.lesson.doneToday = d.today.completedWords;
-  state.lesson.totalToday = d.goal;
-  state.lesson.pendingToday = d.today.emptyCount;
-  state.lesson.phase = queue.length ? 'question' : 'already-done';
-  renderLessonScreen();
+  d.reviewWords.forEach(uw => { if (!uw.answeredToday && uw.word) queue.push({ id: uw.word._id, word: uw.word, review: true }); });
+  d.newWords.forEach(w => { if (!w.answeredToday) queue.push({ id: w._id, word: w, review: false }); });
+  L.queue = queue; L.idx = 0;
+  // Sayaçlar HER ZAMAN backend'den okunur, istemcide toplanmaz — Anasayfa ile
+  // aynı kaynak. Yerel toplama, "gir-çık'ta oran sıçrıyor" bug sınıfının kökü.
+  L.done = d.today.completedWords;
+  L.total = d.goal;
+  L.pending = d.today.emptyCount;
 }
 
-function renderLessonScreen() {
+function renderLesson() {
   const L = state.lesson;
-  if (L.phase === 'loading') { $('#screen').innerHTML = spinner(); return; }
-  if (L.phase === 'already-done') {
-    $('#screen').innerHTML = `
-      <div class="status-scr">
-        <div class="status-ic ok">✓</div>
-        <h2>Bugün İçin Kelime Kalmadı</h2>
-        <p>Bugünkü ${L.totalToday} kelimenin tamamını zaten cevapladın. Yarın yeni kelimeler seni bekliyor.</p>
-        <button class="btn btn-primary" id="btn-back-home">Ana Sayfaya Dön</button>
-      </div>`;
-    $('#btn-back-home').addEventListener('click', () => reset('home'));
-    return;
-  }
-  if (L.phase === 'streak-splash') return renderStreakSplash();
-  if (L.phase === 'result') return renderLessonResult();
-  renderLessonQuestion();
+  if (L.phase === 'loading') return loading();
+  if (L.phase === 'empty') return statusScreen({
+    tone: 'ok', title: 'Bugün İçin Kelime Kalmadı',
+    body: `Bugünkü ${L.total} kelimenin tamamını cevapladın. Yarın yeni kelimeler seni bekliyor.`,
+    primary: { label: 'Ana Sayfaya Dön', onClick: () => reset('home') }
+  });
+  if (L.phase === 'streak') return renderStreakSplash();
+  // Sonuç verisi henüz gelmediyse (geri/ileri ile bu ekrana dönüldü) bekle —
+  // finishLesson tamamlanınca kendisi çiziyor
+  if (L.phase === 'result') return L.result ? renderLessonResult() : loading();
+  if (L.phase === 'streakday') return renderStreakDay();
+  renderQuestion();
 }
 
-function lessonTopbar() {
+function lessonHead() {
   const L = state.lesson;
-  const total = L.totalToday || 1;
-  // doneToday zaten NİHAİ cevap sayısıdır (backend'in completedWords'ü);
-  // ertelenenler ayrı bir bant olarak çizilir
-  const finalCount = L.doneToday;
-  // Kullanıcı günlük hedefi aşabilir (birden fazla tur) — payda SABİT kalır,
-  // bar %100'de kilitlenir ama üstteki "X/Y" metni gerçek sayıyı gösterir.
-  const finalPct = Math.min(100, (finalCount / total) * 100);
-  const pendingPct = Math.min(100 - finalPct, (L.pendingToday / total) * 100);
-  return `
-    <div class="topbar">
-      <button class="back" id="btn-exit-lesson">‹ Ders</button>
-      <div class="title">${L.doneToday}/${L.totalToday} Tamamlandı</div>
-    </div>
-    <div class="screen-pad" style="padding-bottom:0">
-      <div class="lesson-progress"><i class="final" style="width:${finalPct}%"></i><i class="pending" style="width:${pendingPct}%"></i></div>
-      ${L.pendingToday > 0 ? `<div class="muted" style="font-size:11.5px;margin-top:5px">🟡 ${L.pendingToday} kelime ertelendi — tekrar sorulacak</div>` : ''}
+  const total = L.total || 1;
+  const donePct = Math.min(100, (L.done / total) * 100);
+  const pendPct = Math.min(100 - donePct, (L.pending / total) * 100);
+  return `<div class="topbar"><button id="b-exit">${I.chevL}<span>Ders</span></button></div>
+    <div style="padding:0 20px">
+      <div class="lesson-bar">
+        <i style="width:${donePct}%">${L.done}</i>
+        ${pendPct > 0 ? `<i class="pending" style="width:${pendPct}%"></i>` : ''}
+        <span class="total">${L.total}</span>
+      </div>
+      <p class="lesson-pct">%${Math.round((L.done / total) * 100)} Tamamlandı</p>
     </div>`;
 }
 
-function wireExitLesson() {
-  $('#btn-exit-lesson').addEventListener('click', () => {
-    showModal(`
-      <div class="modal-sheet">
-        <div class="ic">⏸</div>
-        <h3>Çıkmak istediğine emin misin?</h3>
-        <p>Cevapladığın kelimeler kaydedildi — kaldığın yerden istediğin zaman devam edebilirsin.</p>
-        <button class="btn btn-primary" id="modal-stay">Devam Et</button>
-        <button class="btn btn-ghost gap-8" id="modal-leave">Çık</button>
-      </div>`);
-    $('#modal-stay').addEventListener('click', closeModal);
-    $('#modal-leave').addEventListener('click', () => { closeModal(); reset('home'); });
+function wireExit() {
+  $('#b-exit').addEventListener('click', () => {
+    sheet(`<div class="grab"></div>
+      <div class="blob">${I.pause}</div>
+      <h3>Çıkmak istediğine emin misin?</h3>
+      <p>Cevapladığın kelimeler kaydedildi — kaldığın yerden istediğin zaman devam edebilirsin.</p>
+      <button class="btn btn-primary" id="sh-stay">Derse Devam Et</button>
+      <button class="btn btn-ghost" id="sh-leave">Çık</button>`);
+    $('#sh-stay').addEventListener('click', closeSheet);
+    $('#sh-leave').addEventListener('click', () => { closeSheet(); reset('home'); });
   });
 }
 
-function renderLessonQuestion() {
+function renderQuestion() {
   const L = state.lesson;
-  L.submitting = false;
-  const item = L.queue[L.idx];
-  const word = item.word;
-  $('#screen').innerHTML = lessonTopbar() + `
-    <div class="screen-pad" style="padding-top:8px">
-      <div class="lesson-card">
-        <span class="badge lvl-badge">${esc(word.jlptLevel)}</span>
-        <div class="instr">${item.isReview ? 'Tekrar · ' : ''}Bu kelimenin Türkçesini yazınız.</div>
-        <div class="kj">${esc(word.kanji)}</div>
-        <div class="kana">${esc(word.kana || word.romaji)}</div>
-        ${audioButtons(word.audioUrl)}
+  L.busy = false;
+  const w = L.queue[L.idx].word;
+  paint(lessonHead() + `
+    <div class="pad">
+      <div class="qhead">${badge(w.jlptLevel)}<span class="instr">Bu kelimenin Türkçesini yazınız.</span></div>
+      <div class="wordcard">
+        <div class="type">${esc(w.type || '')}</div>
+        <div class="kanji">${esc(w.kanji)}</div>
+        <div class="kana">${esc(w.kana || w.romaji || '')}</div>
       </div>
-      <form id="f-answer">
-        <div class="answer-row">
-          <input id="in-answer" placeholder="Cevabınızı yazın…" autocomplete="off" autofocus>
-          <button type="submit" class="send">➤</button>
-        </div>
-      </form>
-      <div class="row center"><button class="btn-ghost link" id="btn-skip">Şimdilik Geç →</button></div>
-    </div>`;
-  wireAudioButtons();
-  wireExitLesson();
-  $('#f-answer').addEventListener('submit', (e) => { e.preventDefault(); submitLessonAnswer({ answer: $('#in-answer').value }); });
-  $('#btn-skip').addEventListener('click', () => submitLessonAnswer({ result: 'empty' }));
+      ${audioRow(w.audioUrl)}
+      <div class="gap-24">${exampleBlock(w)}</div>
+    </div>
+    <div class="footer hairline">
+      <div class="row center" style="margin-bottom:10px"><button class="link gold" id="b-skip">Şimdilik Geç</button></div>
+      <form id="f-answer"><div class="answerbox">${I.pencil}
+        <input id="in-answer" placeholder="Cevabını yaz..." autocomplete="off" autofocus></div></form>
+    </div>`);
+  wireAudio(); wireExit();
+  $('#f-answer').addEventListener('submit', (e) => { e.preventDefault(); submitAnswer({ answer: $('#in-answer').value }); });
+  $('#b-skip').addEventListener('click', () => submitAnswer({ result: 'empty' }));
+  $('#in-answer').focus();
 }
 
-async function submitLessonAnswer(payload) {
+async function submitAnswer(payload) {
   const L = state.lesson;
-  // Hızlı çift dokunuş/Enter+tıklama aynı kelime için iki istek atıp aynı
-  // cevabı iki kez saydırabiliyordu (backend artık buna karşı korunuyor ama
-  // burada da önlemek gereksiz isteği baştan engeller). Cevap dönene kadar
-  // kontrolleri kilitle.
-  if (L.submitting) return;
-  L.submitting = true;
-  const sendBtn = $('.answer-row .send'), skipBtn = $('#btn-skip'), input = $('#in-answer');
-  if (sendBtn) sendBtn.disabled = true;
-  if (skipBtn) skipBtn.disabled = true;
+  if (L.busy) return;
+  L.busy = true;
+  const input = $('#in-answer'), skip = $('#b-skip');
   if (input) input.disabled = true;
+  if (skip) skip.disabled = true;
 
-  const myToken = activeToken;
+  const tk = activeToken;
   const item = L.queue[L.idx];
-  const res = await api('POST', '/userwords/answer', { wordId: item.wordId, ...payload });
-  if (stale(myToken)) return;
-  L.submitting = false;
+  const res = await api('POST', '/userwords/answer', { wordId: item.id, ...payload });
+  if (stale(tk)) return;
+  L.busy = false;
   if (!guard(res)) {
-    if (sendBtn) sendBtn.disabled = false;
-    if (skipBtn) skipBtn.disabled = false;
-    if (input) input.disabled = false;
+    if (input) { input.disabled = false; input.focus(); }
+    if (skip) skip.disabled = false;
     return;
   }
+
   const d = res.json.data;
-  // Yerel toplama YAPILMAZ: her yanıt kendi goal/today'ini taşır (Anasayfa'yla
-  // aynı kaynak) — istemci sadece bunu görüntüler. Çift sayma, gir-çık'ta
-  // sıçrama/düşme gibi bütün bir bug sınıfı böylece yapısal olarak kapanır.
-  L.doneToday = d.today.completedWords;
-  L.totalToday = d.goal;
-  L.pendingToday = d.today.emptyCount;
-  if (d.result === 'correct' || d.result === 'easy') L.correctStreak++; else L.correctStreak = 0;
+  L.done = d.today.completedWords;
+  L.total = d.goal;
+  L.pending = d.today.emptyCount;
+  L.streak = (d.result === 'correct' || d.result === 'easy') ? L.streak + 1 : 0;
 
-  const kind = d.result === 'wrong' ? 'bad' : d.result === 'empty' ? 'warn' : 'good';
-  const headText = d.result === 'wrong' ? '✗ Yanlış Cevap!' : d.result === 'empty' ? '○ Şimdilik Geçildi' : '✓ Doğru!';
-  $('#screen').innerHTML = lessonTopbar() + `
-    <div class="screen-pad" style="padding-top:8px">
-      <div class="lesson-card" style="margin-top:0">
-        <span class="badge lvl-badge">${esc(item.word.jlptLevel)}</span>
-        <div class="kj">${esc(item.word.kanji)}</div>
-        <div class="kana">${esc(item.word.kana || item.word.romaji)}</div>
+  const tone = d.result === 'wrong' ? 'bad' : d.result === 'empty' ? 'warn' : 'good';
+  const icon = d.result === 'wrong' ? I.xCircle : d.result === 'empty' ? I.qCircle : I.checkCircle;
+  const head = d.result === 'wrong' ? 'Yanlış Cevap!' : d.result === 'empty' ? 'Cevap:' : 'Doğru!';
+  const btn = d.result === 'wrong' ? 'btn-primary' : d.result === 'empty' ? 'btn-warn' : 'btn-ok';
+
+  // Soru kartı yerinde kalır, yalnızca alt bant (cevap kutusu → geri bildirim)
+  // değişir: kullanıcı cevabını verdiği kelimeyi görmeye devam etsin diye
+  paint(lessonHead() + `
+    <div class="pad">
+      <div class="qhead">${badge(item.word.jlptLevel)}<span class="instr">Bu kelimenin Türkçesini yazınız.</span></div>
+      <div class="wordcard">
+        <div class="type">${esc(item.word.type || '')}</div>
+        <div class="kanji">${esc(item.word.kanji)}</div>
+        <div class="kana">${esc(item.word.kana || item.word.romaji || '')}</div>
       </div>
-      <div class="feedback-card ${kind}">
-        <div class="head">${headText}</div>
-        <div class="word">${esc(item.word.kanji)} — ${esc(item.word.meaning)}</div>
-        ${d.correctAnswer && d.result !== 'correct' && d.result !== 'easy' ? `<div class="ans">Cevap: <b>${esc(d.correctAnswer)}</b></div>` : ''}
-        <button id="btn-next">Devam Et</button>
+      ${audioRow(item.word.audioUrl)}
+      <div class="gap-24">${exampleBlock(item.word)}</div>
+    </div>
+    <div class="footer" style="padding:0">
+      <div class="feedback ${tone}">
+        <div class="hd">${icon}<b>${head}</b></div>
+        <div class="ans"><span class="jp">${esc(item.word.kanji)}</span> — ${esc(d.correctAnswer || item.word.meaningTr || item.word.meaning)}</div>
+        <button class="btn ${btn}" id="b-next">Devam Et</button>
       </div>
-    </div>`;
-  wireExitLesson();
-  $('#btn-next').addEventListener('click', () => advanceLesson());
+    </div>`);
+  wireAudio(); wireExit();
+  $('#b-next').addEventListener('click', advance);
 }
 
-function advanceLesson() {
+function advance() {
   const L = state.lesson;
-  if (L.correctStreak > 0 && L.correctStreak % 5 === 0) {
-    L.phase = 'streak-splash';
-    return renderLessonScreen();
-  }
-  proceedToNextWord();
+  if (L.streak > 0 && L.streak % 5 === 0) { L.phase = 'streak'; return renderLesson(); }
+  nextWord();
 }
 
-function proceedToNextWord() {
+function nextWord() {
   const L = state.lesson;
+  L.phase = 'question';
   L.idx++;
-  if (L.idx >= L.queue.length) return verifyQueueEmptyThenFinish();
-  renderLessonQuestion();
+  if (L.idx >= L.queue.length) return refreshQueueOrFinish();
+  renderQuestion();
 }
 
-// Yerel kuyruk bittiğinde körlemesine "bitti" denilmez: "Şimdilik Geç"
-// ile ertelenmiş ama henüz gerçek cevap almamış kelimeler olabilir (backend
-// bunları answeredToday:false tutar, gün içinde yeniden sorulmalıdır).
-// Tamamlamadan (/sessions/complete → roundClosedAt) önce backend'e sorup
-// gerçekten kimse kalmadığını doğrularız — yoksa erteleneni tamamlanmış
-// sayıp bir daha hiç sormama riski vardı.
-async function verifyQueueEmptyThenFinish() {
-  const L = state.lesson;
-  const myToken = activeToken;
-  $('#screen').innerHTML = spinner();
-  const res = await api('GET', `/userwords/today?jlptLevel=${L.jlptLevel}`);
-  if (stale(myToken)) return;
+// Yerel kuyruk bitince körlemesine "bitti" denmez: "Şimdilik Geç" ile
+// ertelenmiş kelimeler gün içinde yeniden sorulmalıdır (backend bunları
+// answeredToday:false tutar ve ertelenmişken /sessions/complete 409 döner).
+async function refreshQueueOrFinish() {
+  const tk = activeToken;
+  loading();
+  const res = await api('GET', '/userwords/today');
+  if (stale(tk)) return;
   if (!guard(res)) return reset('home');
-  const d = res.json.data;
-  const queue = [];
-  d.reviewWords.forEach(uw => { if (!uw.answeredToday) queue.push({ wordId: uw.word._id, word: uw.word, isReview: true }); });
-  d.newWords.forEach(w => { if (!w.answeredToday) queue.push({ wordId: w._id, word: w, isReview: false }); });
-  L.doneToday = d.today.completedWords;
-  L.totalToday = d.goal;
-  L.pendingToday = d.today.emptyCount;
-
-  if (queue.length > 0) {
-    // Hâlâ ertelenmiş (empty) kelime var — kuyruğu tazeleyip devam et
-    L.queue = queue;
-    L.idx = 0;
-    return renderLessonQuestion();
-  }
-  L.phase = 'result';
-  return finishLessonSession();
+  applyTodayPayload(res.json.data);
+  if (state.lesson.queue.length > 0) return renderQuestion();
+  state.lesson.phase = 'result';
+  finishLesson();
 }
 
 function renderStreakSplash() {
   const L = state.lesson;
-  $('#screen').innerHTML = `
-    <div class="streak-splash">
-      <div class="ic">🔥</div>
-      <h2>${L.correctStreak} Kere Üstüste!</h2>
+  paint(`<div class="center-scr">
+      <div class="blob">${I.flame}</div>
+      <h2>${L.streak} Kere Üstüste!</h2>
       <p>Harika gidiyorsun. Böyle devam et!</p>
-      <button class="btn btn-primary" id="btn-continue-splash" style="width:220px">Devam Et</button>
-    </div>`;
-  $('#btn-continue-splash').addEventListener('click', proceedToNextWord);
+      <button class="btn btn-primary" id="b-go" style="max-width:260px">Devam Et</button>
+    </div>`);
+  $('#b-go').addEventListener('click', nextWord);
 }
 
-async function finishLessonSession() {
-  const myToken = activeToken;
-  $('#screen').innerHTML = spinner();
+async function finishLesson() {
+  const tk = activeToken;
+  loading();
   const res = await api('PUT', '/sessions/complete');
-  if (stale(myToken)) return;
-  // 409 = backend'de hâlâ ertelenmiş kelime var. Normal akışta buraya
-  // düşülmez (kuyruk zaten doğrulanıyor), ama düşülürse kullanıcıyı ana
-  // sayfaya atmak yerine kalan kelimelerle derse geri dönmek doğrusu.
-  if (res.status === 409) {
-    toast(res.json.message, 'err');
-    return verifyQueueEmptyThenFinish();
-  }
+  if (stale(tk)) return;
+  if (res.status === 409) { toast(res.json.message, 'err'); return refreshQueueOrFinish(); }
   if (!guard(res)) return reset('home');
-  const sumRes = await api('GET', '/home/summary');
-  if (stale(myToken)) return;
-  state.lesson.resultData = {
-    ...res.json.data,
-    streak: sumRes.ok ? sumRes.json.data.streak.current : 0
-  };
+  const sum = await api('GET', '/home/summary');
+  if (stale(tk)) return;
+  state.lesson.result = { ...res.json.data, summary: sum.ok ? sum.json.data : null };
   renderLessonResult();
 }
 
-// L.phase==='result' iken geri/ileri navigasyonla renderLessonScreen tekrar
-// çağrılabilir — API'yi tekrar vurmadan önbellekteki resultData'dan çizilir.
 function renderLessonResult() {
-  const d = state.lesson.resultData;
-  $('#screen').innerHTML = `
-    <div class="screen-pad result-scr">
-      <div class="ring-wrap"><div class="ring">${ringSvg(d.totalWords, d.totalWords)}
-        <div class="num"><b>${d.totalWords}/${d.totalWords}</b><span>Tamamlandı</span></div></div></div>
-      <h2>Tebrikler!</h2>
-      <p class="muted" style="margin-bottom:18px">Bugünkü çalışma serüvenin başarıyla sona erdi.</p>
-      <div class="result-tiles">
-        <div class="t"><div class="v">%${d.accuracy}</div><div class="k">Doğruluk</div></div>
-        <div class="t"><div class="v">${d.duration} dk</div><div class="k">Süre</div></div>
-        <div class="t"><div class="v">+${d.streak}</div><div class="k">Seri</div></div>
+  const r = state.lesson.result;
+  const s = r.summary;
+  const mins = Math.floor((r.duration || 0));
+  paint(`<div class="center-scr">
+      <div class="bigring">${ringSvg(1, { size: 168, stroke: 13 })}
+        <span class="v"><b>${r.totalWords}/${r.totalWords}</b><span>Tamamlandı</span></span></div>
+      <h2>Tebrikler! 🎉</h2>
+      <p>Dersi başarıyla bitirdin! Bugünkü dersin analizine anasayfadan ulaşabilirsin.</p>
+      <div class="tiles">
+        <div class="tile"><div class="ic">${I.target}</div><div class="v">%${r.accuracy ?? 0}</div><div class="k">Doğruluk</div></div>
+        <div class="tile"><div class="ic">${I.target}</div><div class="v">${mins} dk</div><div class="k">Süre</div></div>
+        <div class="tile"><div class="ic"><span class="jp">結</span></div><div class="v">+${r.correctCount ?? 0}</div><div class="k">Doğru</div></div>
       </div>
-      <button class="btn btn-primary" id="btn-back-home">Ana Sayfaya Dön</button>
-    </div>`;
-  $('#btn-back-home').addEventListener('click', () => reset('home'));
-}
-
-// ═══════════════════════════════════════════════════════════════
-// SINAV (placement / level-up)
-// ═══════════════════════════════════════════════════════════════
-
-function quizIntroHtml({ type, jlptLevel }) {
-  return `
-    <div class="modal-sheet">
-      <div class="ic">🎯</div>
-      <h3>${type === 'placement' ? 'Seviyeni Öğrenelim Mi?' : `${esc(jlptLevel)} Seviye Atlama Sınavı`}</h3>
-      <p>Sana uygun içerikleri gösterebilmemiz için kısa bir sınav yapmak istiyoruz. Dilersen daha sonra da ayarlardan devam edebilirsin.</p>
-      <button class="btn btn-primary" id="modal-start-quiz">Sınava Başla</button>
-      <button class="btn btn-ghost gap-8" id="modal-later">Daha Sonra</button>
-    </div>`;
-}
-function wireQuizIntroModal({ type, jlptLevel }) {
-  $('#modal-start-quiz').addEventListener('click', async () => {
-    closeModal();
-    await beginQuiz({ type, jlptLevel });
+      <button class="btn btn-primary gap-24" id="b-next" style="max-width:300px">Devam Et</button>
+    </div>`);
+  $('#b-next').addEventListener('click', () => {
+    if (s?.streak?.current > 0) { state.lesson.phase = 'streakday'; return renderLesson(); }
+    reset('home');
   });
-  $('#modal-later').addEventListener('click', closeModal);
 }
 
-async function beginQuiz(body) {
-  const res = await api('POST', '/quiz/start', body);
+function renderStreakDay() {
+  const s = state.lesson.result.summary;
+  const dayNames = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+  paint(`<div class="center-scr">
+      <div class="blob">${I.flame}<span class="count">${s.streak.current}</span></div>
+      <h2 style="margin-top:14px">${s.streak.current} Günlük Seridesin!</h2>
+      <p>Derslerine her gün devam et.</p>
+      <div class="weekstrip">${s.streak.week.map((w, i) => `
+        <div class="d"><span>${dayNames[i]}</span>
+          <span class="weekdot ${w.studied ? 'done' : ''} ${w.isToday ? 'today' : ''}" style="margin:0 auto">${w.studied ? I.check : (w.isToday ? I.flame : '')}</span>
+        </div>`).join('')}</div>
+      <button class="btn btn-primary gap-24" id="b-home" style="max-width:300px">Ana Sayfaya Dön</button>
+    </div>`);
+  $('#b-home').addEventListener('click', () => reset('home'));
+}
+
+// ═══════════════════════════════════════════════════════════════
+// SEVİYE TESPİT SINAVI — 40 soruluk TEK sınav (merdiven kaldırıldı)
+// ═══════════════════════════════════════════════════════════════
+async function showQuizIntro() {
+  const tk = activeToken;
+  loading(topbar());
+  const res = await api('GET', '/quiz/status');
+  if (stale(tk)) return;
+  if (!guard(res)) return back();
+  const d = res.json.data;
+  const cooldown = d.nextAttemptAllowedAt ? new Date(d.nextAttemptAllowedAt) : null;
+
+  paint(topbar() + `<div class="pad">
+      <h1 class="title-xl">Seviye Tespit Sınavı</h1>
+      <div class="card soft gap-8" style="display:flex;gap:10px;align-items:flex-start">
+        ${I.info}
+        <p style="margin:0;font-size:13.5px;line-height:1.55;color:var(--brand)">Seviye tespit sınavı toplam ${d.totalQuestions} sorudan oluşmaktadır. Her soru için ${d.secondsPerQuestion} saniyeniz vardır.</p>
+      </div>
+      <div class="group gap-16">
+        ${d.distribution.map(x => `<div class="row-item" style="cursor:default">
+          ${badge(x.jlptLevel)}
+          <span class="lbl"><b style="font-weight:700">${esc(x.jlptLevel)} • ${esc(x.label)}</b>
+            <span style="display:block;font-size:13px;color:var(--brand);font-weight:650;margin-top:2px">${x.questionCount} Soru</span></span>
+        </div>`).join('')}
+      </div>
+      ${cooldown && !d.placementAvailable ? `<p class="tiny gap-16" style="text-align:center">Yeniden girebileceğin tarih: <b>${cooldown.toLocaleDateString('tr', { day: 'numeric', month: 'long', year: 'numeric' })}</b></p>` : ''}
+    </div>
+    <div class="footer"><button class="btn btn-primary" id="b-start" ${d.placementAvailable ? '' : 'disabled'}>${d.inProgressQuizId ? 'Sınava Devam Et' : 'Başla'}</button></div>`);
+  $('#b-start').addEventListener('click', beginQuiz);
+}
+
+async function beginQuiz() {
+  const res = await api('POST', '/quiz/start', { type: 'placement' });
   if (!res.ok) {
-    const msg = res.json.message + (res.json.nextAttemptAllowedAt ? ' · ' + new Date(res.json.nextAttemptAllowedAt).toLocaleDateString('tr') : '');
-    toast(msg, 'err');
-    return;
+    const when = res.json.nextAttemptAllowedAt ? ' · ' + new Date(res.json.nextAttemptAllowedAt).toLocaleDateString('tr') : '';
+    return toast((res.json.message || 'Sınav başlatılamadı') + when, 'err');
   }
   const d = res.json.data;
-  state.quiz = { id: d.quizId, questions: d.questions, idx: 0, total: d.totalQuestions, type: d.type, level: d.jlptLevel, passThreshold: d.passThreshold };
-  go('quiz-question');
+  // Yarım kalan sınav aynı id ile döner (answeredCount ile nerede kalındığı belli)
+  state.quiz = {
+    id: d.quizId, questions: d.questions, total: d.totalQuestions,
+    idx: Math.max(0, d.questions.findIndex(q => !q.answered)),
+    perQuestion: d.secondsPerQuestion
+  };
+  if (state.quiz.idx < 0) state.quiz.idx = 0;
+  reset('quiz-question');
 }
+
+const QUIZ_INSTR = {
+  meaning: 'Bu kelimenin Türkçesini seçiniz.', reverse: 'Anlama uyan kelimeyi seçiniz.',
+  reading: 'Kelimenin okunuşunu seçiniz.', typing: 'Bu kelimenin Türkçesini yazınız.',
+  fillblank: 'Boşluğa uygun kelimeyi yerleştir.', image: 'Doğru şıkkı işaretleyiniz.'
+};
 
 function showQuizQuestion() {
   const Q = state.quiz;
   const q = Q.questions[Q.idx];
   const pct = (Q.idx / Q.total) * 100;
-  const instr = {
-    meaning: 'Bu kelimenin Türkçesini seçiniz', reverse: 'Anlama uyan kelimeyi seçiniz',
-    reading: 'Kelimenin okunuşunu seçiniz', typing: 'Bu kelimenin Türkçesini yazınız',
-    fillblank: 'Boşluğa uygun kelimeyi yerleştir', image: 'Doğru şıkkı işaretleyiniz'
-  }[q.format];
 
-  let promptHtml, answerHtml;
-  if (q.format === 'typing') {
-    promptHtml = `<div class="q-prompt"><div class="big">${esc(q.prompt.kanji)}</div><div class="sub">${esc(q.prompt.romaji)}</div>${audioButtons(q.prompt.audioUrl)}</div>`;
-    answerHtml = `<form id="f-typing"><div class="answer-row"><input id="in-typing" placeholder="Cevabınızı yazın…" autocomplete="off"><button type="submit" class="send">➤</button></div></form>
-      <div class="row center"><button class="btn-ghost link" data-skip="1">Şimdilik Geç →</button></div>`;
-  } else {
-    promptHtml = q.format === 'reverse' ? `<div class="q-prompt"><div class="big" style="font-size:24px">${esc(q.prompt.meaning)}</div></div>`
-      : q.format === 'fillblank' ? `<div class="q-prompt"><div class="sentence">${esc(q.prompt.sentence)}</div></div>`
-      : q.format === 'image' ? `<div class="q-prompt"><img src="${esc(q.prompt.imageUrl)}" alt="soru görseli"></div>`
-      : `<div class="q-prompt"><div class="big">${esc(q.prompt.kanji)}</div>${q.prompt.romaji ? `<div class="sub">${esc(q.prompt.romaji)}</div>` : ''}${audioButtons(q.prompt.audioUrl)}</div>`;
-    answerHtml = `<div class="q-choices">${q.choices.map((c, i) => `<button data-choice="${i}">${'ABCD'[i]}) ${esc(c)}</button>`).join('')}</div>
-      <div class="row center"><button class="btn-ghost link" data-skip="1">Şimdilik Geç →</button></div>`;
-  }
+  const prompt =
+    q.format === 'reverse' ? `<div class="wordcard"><div class="kanji" style="font-size:26px;font-family:inherit;font-weight:750">${esc(q.prompt.meaning)}</div></div>`
+    : q.format === 'fillblank' ? `<div class="wordcard"><div class="kanji" style="font-size:28px">${esc(q.prompt.sentence)}</div></div>`
+    : q.format === 'image' ? `<img class="qimage" src="${esc(q.prompt.imageUrl)}" alt="soru görseli">`
+    : `<div class="wordcard">
+         <div class="kanji">${esc(q.prompt.kanji)}</div>
+         ${q.prompt.romaji ? `<div class="kana">${esc(q.prompt.romaji)}</div>` : ''}
+       </div>`;
 
-  $('#screen').innerHTML = `
-    <div class="topbar"><button class="back" id="btn-exit-quiz">‹ Sınav</button>
-      <div class="title">${Q.idx + 1} / ${Q.total}</div></div>
-    <div class="screen-pad" style="padding-top:8px">
-      <div class="lesson-progress"><i style="width:${pct}%"></i></div>
-      <div class="row between gap-16"><span class="badge">${esc(Q.level)}</span><span class="muted">${instr}</span></div>
-      ${promptHtml}${answerHtml}
-      <div id="q-feedback"></div>
-    </div>`;
-  wireAudioButtons();
-  $('#btn-exit-quiz').addEventListener('click', () => reset('home'));
-  $$('[data-choice]').forEach(b => b.addEventListener('click', () => submitQuizAnswer(Number(b.dataset.choice))));
-  $$('[data-skip]').forEach(b => b.addEventListener('click', () => submitQuizAnswer(null)));
+  const answer = q.format === 'typing'
+    ? `<form id="f-typing"><div class="answerbox">${I.pencil}<input id="in-typing" placeholder="Cevabını yaz..." autocomplete="off"></div></form>`
+    : `<div class="choices">${q.choices.map((c, i) => `<button class="choicebtn" data-choice="${i}">${'ABCD'[i]}) <span class="jp">${esc(c)}</span></button>`).join('')}</div>`;
+
+  paint(`<div class="topbar"><button id="b-exit-quiz">${I.chevL}<span>Sınav</span></button>
+      <span style="margin-left:auto;padding-right:10px;font-size:13.5px;color:var(--muted);font-variant-numeric:tabular-nums">${Q.idx + 1} / ${Q.total}</span></div>
+    <div style="padding:0 20px"><div class="lesson-bar"><i style="width:${pct}%"></i></div></div>
+    <div class="pad" style="padding-top:14px">
+      <div class="qhead" style="margin-top:6px">${badge(q.jlptLevel)}<span class="instr">${QUIZ_INSTR[q.format] || ''}</span></div>
+      ${prompt}
+      ${q.prompt?.audioUrl ? audioRow(q.prompt.audioUrl) : ''}
+      <div class="gap-24">${answer}</div>
+      <div class="row center gap-16"><button class="link gold" data-skip>Şimdilik Geç</button></div>
+    </div>
+    <div id="q-foot"></div>`);
+  wireAudio();
+  $('#b-exit-quiz').addEventListener('click', exitQuiz);
+  $$('[data-choice]').forEach(b => b.addEventListener('click', () => answerQuiz(Number(b.dataset.choice))));
+  $$('[data-skip]').forEach(b => b.addEventListener('click', () => answerQuiz(null)));
   const ft = $('#f-typing');
-  if (ft) ft.addEventListener('submit', (e) => { e.preventDefault(); submitQuizAnswer($('#in-typing').value); });
+  if (ft) { ft.addEventListener('submit', (e) => { e.preventDefault(); answerQuiz($('#in-typing').value); }); $('#in-typing').focus(); }
 }
 
-async function submitQuizAnswer(answer) {
-  const myToken = activeToken;
+function exitQuiz() {
+  sheet(`<div class="grab"></div>
+    <div class="blob">${I.pause}</div>
+    <h3>Sınavdan çıkmak istiyor musun?</h3>
+    <p>Cevapların saklanır; 30 dakika içinde geri dönersen kaldığın yerden devam edersin.</p>
+    <button class="btn btn-primary" id="sh-stay">Sınava Devam Et</button>
+    <button class="btn btn-ghost" id="sh-leave">Çık</button>`);
+  $('#sh-stay').addEventListener('click', closeSheet);
+  $('#sh-leave').addEventListener('click', () => { closeSheet(); reset('home'); });
+}
+
+async function answerQuiz(answer) {
+  const tk = activeToken;
   const Q = state.quiz;
-  const res = await api('POST', `/quiz/${Q.id}/answer`, { index: Q.questions[Q.idx].index, answer });
-  if (stale(myToken)) return;
-  if (!guard(res)) return;
-  const d = res.json.data;
-  const correctText = d.correctAnswer ?? (d.correctIndex !== undefined ? Q.questions[Q.idx].choices?.[d.correctIndex] : '');
   $$('[data-choice], [data-skip]').forEach(b => b.disabled = true);
-  const ft = $('#f-typing'); if (ft) ft.querySelector('button').disabled = true;
-  if (d.correctIndex !== undefined) {
-    const btn = $(`[data-choice="${d.correctIndex}"]`); if (btn) btn.classList.add('correct');
-    if (!d.correct && typeof answer === 'number') { const wb = $(`[data-choice="${answer}"]`); if (wb) wb.classList.add('wrong'); }
+  const res = await api('POST', `/quiz/${Q.id}/answer`, { index: Q.questions[Q.idx].index, answer });
+  if (stale(tk)) return;
+  if (!guard(res)) { $$('[data-choice], [data-skip]').forEach(b => b.disabled = false); return; }
+  const d = res.json.data;
+
+  if (d.correctIndex !== undefined && d.correctIndex !== null) {
+    const ok = $(`[data-choice="${d.correctIndex}"]`); if (ok) ok.classList.add('correct');
+    if (!d.correct && typeof answer === 'number') { const bad = $(`[data-choice="${answer}"]`); if (bad) bad.classList.add('wrong'); }
   }
-  $('#q-feedback').innerHTML = `
-    <div class="feedback-card ${d.correct ? 'good' : 'bad'}">
-      <div class="head">${d.correct ? '✓ Doğru!' : '✗ Yanlış Cevap!'}</div>
-      <div class="word">${esc(d.word?.kanji || '')} — ${esc(d.word?.meaning || '')}</div>
-      ${!d.correct && correctText ? `<div class="ans">Cevap: <b>${esc(correctText)}</b></div>` : ''}
-      <button id="btn-quiz-next">${d.finished ? 'Sonucu Gör' : 'Devam Et'}</button>
-    </div>`;
-  $('#btn-quiz-next').addEventListener('click', () => {
-    if (d.finished) { state.quiz.result = d.result; return go('quiz-result'); }
+  const shown = d.correctAnswer ?? (d.correctIndex !== undefined ? Q.questions[Q.idx].choices?.[d.correctIndex] : '');
+  $('#q-foot').innerHTML = `<div class="footer" style="padding:0">
+      <div class="feedback ${d.correct ? 'good' : 'bad'}">
+        <div class="hd">${d.correct ? I.checkCircle : I.xCircle}<b>${d.correct ? 'Doğru!' : 'Yanlış Cevap!'}</b></div>
+        <div class="ans"><span class="jp">${esc(d.word?.kanji || '')}</span> — ${esc(shown || d.word?.meaning || '')}</div>
+        <button class="btn ${d.correct ? 'btn-ok' : 'btn-primary'}" id="b-qnext">${d.finished ? 'Sonucu Gör' : 'Devam Et'}</button>
+      </div></div>`;
+  $('#b-qnext').addEventListener('click', () => {
+    if (d.finished) { state.quiz.result = d.result; return reset('quiz-result'); }
     state.quiz.idx++;
     showQuizQuestion();
   });
@@ -1014,435 +1192,567 @@ async function submitQuizAnswer(answer) {
 
 function showQuizResult() {
   const r = state.quiz.result;
-  const s = r.summary;
-  $('#screen').innerHTML = `
-    <div class="screen-pad result-scr">
-      ${s ? `<div class="badge lvl-badge" style="font-size:22px;padding:8px 24px;margin-bottom:12px;display:inline-block">${esc(s.determinedLevel)}</div><h2>Seviyen Belirlendi!</h2>` : `<h2>Sınav Tamamlandı</h2>`}
-      <div class="result-tiles" style="grid-template-columns:1fr">
-        <div class="t"><div class="v" style="font-size:38px;color:var(--brand)">%${r.score}</div><div class="k">Puan</div></div>
+  const mm = Math.floor((r.durationSeconds || 0) / 60), ss = String((r.durationSeconds || 0) % 60).padStart(2, '0');
+  const correctPct = r.totalQuestions ? (r.correctCount / r.totalQuestions) * 100 : 0;
+  paint(`<div class="center-scr">
+      <p class="tiny" style="margin-bottom:14px">Sınav Tamamlandı</p>
+      <div class="badge lg">${esc(r.determinedLevel)}</div>
+      <h2 style="margin-top:20px">Seviyen Belirlendi</h2>
+      <p>${esc(r.levelDescription || '')}</p>
+      <div class="card fill" style="width:100%;text-align:left">
+        <div class="row between" style="margin-bottom:9px">
+          <span style="font-size:14.5px;font-weight:650">${r.totalQuestions} Soru</span>
+          <span class="tiny" style="font-variant-numeric:tabular-nums">${mm}:${ss}</span>
+        </div>
+        <div style="display:flex;height:9px;border-radius:999px;overflow:hidden;gap:2px">
+          <i style="width:${correctPct}%;background:var(--ok)"></i>
+          <i style="flex:1;background:var(--brand)"></i>
+        </div>
+        <div class="row gap-12" style="gap:18px;margin-top:11px">
+          <span class="row" style="gap:7px;font-size:13px;color:var(--ok)"><b style="width:9px;height:9px;border-radius:50%;background:var(--ok)"></b>${r.correctCount} Doğru</span>
+          <span class="row" style="gap:7px;font-size:13px;color:var(--brand)"><b style="width:9px;height:9px;border-radius:50%;background:var(--brand)"></b>${r.wrongCount} Yanlış</span>
+        </div>
       </div>
-      <div class="row center wrap" style="gap:8px;flex-wrap:wrap;justify-content:center">
-        <span class="pill ${r.passed ? 'good' : 'bad'}">${r.passed ? 'Geçti' : 'Kaldı'} (eşik %${r.passThreshold})</span>
-        <span class="pill good">✓ ${r.correctCount}</span>
-        <span class="pill bad">✗ ${r.totalQuestions - r.correctCount}</span>
-        ${r.unlockedLevel ? `<span class="pill good">🔓 ${esc(r.unlockedLevel)} açıldı</span>` : ''}
-        ${r.cooldownDays ? `<span class="pill warn">⏳ ${r.cooldownDays} gün beklemelisin</span>` : ''}
-      </div>
-      ${s ? `<div class="row center wrap gap-16" style="flex-wrap:wrap;justify-content:center">
-        <span class="pill plain">${s.totalQuestions} soru</span>
-        <span class="pill good">${s.correctCount} doğru</span>
-        <span class="pill bad">${s.wrongCount} yanlış</span>
-      </div>` : ''}
-      ${r.nextRung ? `<button class="btn btn-primary gap-16" id="btn-next-rung">Sonraki Basamak: ${esc(r.nextRung)} →</button>` : ''}
-      <button class="btn ${r.nextRung ? 'btn-ghost' : 'btn-primary'} gap-8" id="btn-back-home">Ana Sayfaya Dön</button>
-    </div>`;
-  $('#btn-back-home').addEventListener('click', () => reset('home'));
-  const nx = $('#btn-next-rung');
-  if (nx) nx.addEventListener('click', () => beginQuiz({ type: 'placement' }));
+      ${r.unlockedLevels?.length ? `<p class="tiny gap-16">🔓 Bu sınavla açılan seviyeler: <b>${r.unlockedLevels.join(', ')}</b></p>` : ''}
+    </div>
+    <div class="footer"><button class="btn btn-primary" id="b-home">Ana Sayfaya Dön</button></div>`);
+  // Sınav bitince activeLevel sunucu tarafından taşınır — anasayfa tazelenmeli
+  $('#b-home').addEventListener('click', () => enterApp());
 }
 
 // ═══════════════════════════════════════════════════════════════
 // KÜTÜPHANE
 // ═══════════════════════════════════════════════════════════════
-
-async function showLibrary() {
-  $('#screen').innerHTML = `
-    <div class="screen-pad">
-      <h1 class="scr-title">Kütüphane</h1>
-      <div class="field"><input id="lib-search" placeholder="Bir kelime ara… (kanji / romaji / anlam)"></div>
-      <div class="chip-row" id="lib-levels">
-        <div class="chip active" data-level="">Tümü</div>
-        ${JLPT.map(l => `<div class="chip" data-level="${l}">${l}</div>`).join('')}
+function showLibrary() {
+  const L = state.library;
+  paint(`<div class="pad">
+      ${pagehead('図書館', 'Kütüphane', { unread: state.home?.unreadNotifications > 0 })}
+      <div class="searchbar">${I.search}<input id="lib-q" placeholder="Bir kelime ara..." value="${esc(L.q)}"></div>
+      <div class="filters">
+        <button class="filterchip ${L.level === '' ? 'on' : ''}" data-level="">Tümü</button>
+        ${JLPT.map(l => `<button class="filterchip ${L.level === l ? 'on' : ''}" data-level="${l}">${l}</button>`).join('')}
       </div>
-      <div id="lib-list"><div class="spinner"></div></div>
-      <div class="row center gap-16" id="lib-pager" hidden>
-        <button class="btn-sm btn-outline" id="lib-prev">‹ Önceki</button>
-        <span class="muted" id="lib-page-label"></span>
-        <button class="btn-sm btn-outline" id="lib-next">Sonraki ›</button>
+      <div id="lib-list"><div class="loading" style="padding:40px 0"><div class="spinner"></div></div></div>
+      <div class="pager" id="lib-pager" hidden>
+        <button class="btn btn-outline btn-sm" id="lib-prev">${I.chevL}</button>
+        <span class="pg" id="lib-page"></span>
+        <button class="btn btn-outline btn-sm" id="lib-next">${I.chevR}</button>
       </div>
-    </div>`;
-  $('#lib-search').addEventListener('input', debounce(() => {
-    const q = $('#lib-search').value.trim();
-    q ? searchLibrary(q) : loadLibrary(1);
-  }, 350));
-  $$('#lib-levels .chip').forEach(c => c.addEventListener('click', () => {
-    $$('#lib-levels .chip').forEach(x => x.classList.remove('active'));
-    c.classList.add('active');
-    state.library.level = c.dataset.level;
+    </div>`);
+  $('#lib-q').addEventListener('input', debounce(() => { L.q = $('#lib-q').value.trim(); loadLibrary(1); }, 320));
+  $$('.filterchip').forEach(c => c.addEventListener('click', () => {
+    $$('.filterchip').forEach(x => x.classList.toggle('on', x === c));
+    L.level = c.dataset.level;
     loadLibrary(1);
   }));
   loadLibrary(1);
 }
 
-function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
-
 async function loadLibrary(page) {
-  const myToken = activeToken;
-  const lvl = state.library.level || '';
-  const res = await api('GET', `/words?page=${page}&limit=12${lvl ? '&jlptLevel=' + lvl : ''}`);
-  if (stale(myToken)) return;
-  if (!res.ok) { $('#lib-list').innerHTML = '<div class="empty-state">Yüklenemedi.</div>'; return; }
+  const tk = activeToken;
+  const L = state.library;
+  // Arama ve listeleme AYNI uçtan: /words?q= sayfalıdır, eski /words/search
+  // sabit 20 sonuç döndürüp sessizce eksik liste gösteriyordu.
+  const qs = `page=${page}&limit=15${L.level ? '&jlptLevel=' + L.level : ''}${L.q ? '&q=' + encodeURIComponent(L.q) : ''}`;
+  const res = await api('GET', '/words?' + qs);
+  if (stale(tk)) return;
+  const box = $('#lib-list');
+  if (!box) return;
+  if (!res.ok) { box.innerHTML = `<div class="empty">${I.search}<div>Liste yüklenemedi.</div></div>`; return; }
   const { words, total, totalPages } = res.json.data;
-  state.library.page = page; state.library.totalPages = totalPages;
+  L.page = page; L.totalPages = totalPages;
   if (total === 0) {
-    $('#lib-list').innerHTML = '<div class="empty-state">Kelime bulunamadı — <code>npm run seed</code> çalıştırıldı mı?</div>';
-    $('#lib-pager').hidden = true; return;
+    box.innerHTML = `<div class="empty">${I.search}<div>${L.q ? 'Aramanla eşleşen kelime yok.' : 'Kelime bulunamadı — <code>npm run seed</code> çalıştırıldı mı?'}</div></div>`;
+    $('#lib-pager').hidden = true;
+    return;
   }
-  renderLibList(words);
-  $('#lib-pager').hidden = false;
-  $('#lib-page-label').textContent = `${page} / ${totalPages}`;
-  $('#lib-prev').onclick = () => { if (state.library.page > 1) loadLibrary(state.library.page - 1); };
-  $('#lib-next').onclick = () => { if (state.library.page < state.library.totalPages) loadLibrary(state.library.page + 1); };
-}
-
-async function searchLibrary(q) {
-  const myToken = activeToken;
-  const res = await api('GET', '/words/search?q=' + encodeURIComponent(q));
-  if (stale(myToken) || !res.ok) return;
-  $('#lib-pager').hidden = true;
-  res.json.data.length ? renderLibList(res.json.data) : $('#lib-list').innerHTML = '<div class="empty-state">Sonuç yok.</div>';
-}
-
-function renderLibList(words) {
-  $('#lib-list').innerHTML = `<div class="wlist">${words.map(w => `
-    <div class="witem" data-id="${w._id}">
-      <div class="kj">${esc(w.kanji)}<small>${esc(w.kana || w.romaji)}</small></div>
-      <div class="mean">${esc(w.meaning)}</div>
-      <span class="badge">${esc(w.jlptLevel)}</span>
-    </div>`).join('')}</div>`;
-  $$('#lib-list .witem').forEach(el => el.addEventListener('click', () => go('word-detail', { id: el.dataset.id })));
+  box.innerHTML = `<div class="wordlist">${words.map(w => wordRow(w, { click: true, tail: badge(w.jlptLevel) })).join('')}</div>`;
+  wireWordRows();
+  $('#lib-pager').hidden = totalPages <= 1;
+  $('#lib-page').textContent = `${page} / ${totalPages}`;
+  $('#lib-prev').disabled = page <= 1;
+  $('#lib-next').disabled = page >= totalPages;
+  $('#lib-prev').onclick = () => loadLibrary(L.page - 1);
+  $('#lib-next').onclick = () => loadLibrary(L.page + 1);
 }
 
 async function showWordDetail({ id }) {
-  const myToken = activeToken;
-  $('#screen').innerHTML = topbar('Kelime') + spinner();
+  const tk = activeToken;
+  loading(topbar());
   const res = await api('GET', '/words/' + id);
-  if (stale(myToken)) return;
+  if (stale(tk)) return;
   if (!guard(res)) return back();
   const w = res.json.data;
-  $('#screen').innerHTML = topbar('Kelime') + `
-    <div class="screen-pad">
-      <div class="row between"><span class="badge">${esc(w.jlptLevel)}</span>${w.isCore ? '<span class="pill good">çekirdek</span>' : '<span class="pill plain">pasif</span>'}</div>
-      <div class="wd-head gap-12">
-        <div class="muted">${esc(w.type)}</div>
-        <div class="kj">${esc(w.kanji)}</div>
-        <div class="kana">${esc(w.kana || w.romaji)}</div>
-        <div style="font-size:18px;font-weight:700;margin-top:8px">${esc(w.meaningTr || w.meaning)}</div>
-        ${audioButtons(w.audioUrl)}
+  paint(topbar() + `<div class="pad">
+      <div class="row gap-8" style="margin-bottom:16px">${badge(w.jlptLevel)}<span style="font-size:16px;font-weight:650">Kelime</span></div>
+      <div class="wordcard">
+        <div class="type">${esc(w.type || '')}</div>
+        <div class="kanji">${esc(w.kanji)}</div>
+        <div class="kana">${esc(w.kana || w.romaji || '')}</div>
       </div>
-      ${w.example ? `<div class="muted" style="margin-bottom:6px">ÖRNEK KULLANIM</div><div class="wd-example">${esc(w.example)}</div>`
-                  : '<div class="empty-state">Örnek cümle henüz yok.</div>'}
-    </div>`;
-  wireAudioButtons();
+      ${audioRow(w.audioUrl)}
+      <div class="slabel gap-24">Anlamı</div>
+      <div class="card fill gap-8" style="font-size:17px;font-weight:650">${esc(w.meaningTr || w.meaning)}</div>
+      ${w.meaningTr && w.meaning && w.meaningTr !== w.meaning ? `<p class="tiny gap-8">İngilizce: ${esc(w.meaning)}</p>` : ''}
+      <div class="gap-24">${exampleBlock(w) || `<div class="empty">${I.bookOpen}<div>Örnek cümle henüz eklenmemiş.</div></div>`}</div>
+    </div>`);
+  wireAudio();
 }
 
 // ═══════════════════════════════════════════════════════════════
-// SEVİYELER
+// HAFIZA
 // ═══════════════════════════════════════════════════════════════
+async function showMemory() {
+  const tk = activeToken;
+  loading();
+  const res = await api('GET', '/memory');
+  if (stale(tk)) return;
+  if (!guard(res)) return;
+  const d = res.json.data;
+  state.memory = d;
+  const box = state.memoryBox && d.boxes.some(b => b.key === state.memoryBox) ? state.memoryBox : d.defaultBox;
+  state.memoryBox = box;
 
-async function showLevels() {
-  const myToken = activeToken;
-  $('#screen').innerHTML = `<div class="screen-pad"><h1 class="scr-title">Seviyeler</h1><div class="spinner"></div></div>`;
-  const res = await api('GET', '/progress');
-  if (stale(myToken)) return;
-  if (!res.ok) { $('#screen').innerHTML = `<div class="screen-pad"><h1 class="scr-title">Seviyeler</h1><div class="empty-state">Yüklenemedi.</div></div>`; return; }
-  const { completionThreshold, levels } = res.json.data;
-  levels.sort((a, b) => JLPT.indexOf(a.jlptLevel) - JLPT.indexOf(b.jlptLevel));
-  $('#screen').innerHTML = `
-    <div class="screen-pad">
-      <h1 class="scr-title">Seviyeler</h1>
-      <div class="card">
-        ${levels.map(l => `
-          <div class="level-row" data-level="${l.jlptLevel}" style="${l.isUnlocked ? 'cursor:pointer' : 'opacity:.55'}">
-            <div class="lvl-chip ${l.isUnlocked ? '' : 'locked'}">${l.jlptLevel}</div>
-            <div style="flex:1">
-              <div class="row between" style="margin-bottom:4px"><span style="font-size:12.5px">${l.totalWords} kelime</span>${!l.isUnlocked ? '<span class="muted">🔒</span>' : ''}</div>
-              <div class="meter"><i style="width:${l.completionRate}%"></i></div>
-            </div>
-            <div class="pct">%${l.completionRate}</div>
-          </div>`).join('')}
-      </div>
-      <div class="muted">ℹ️ Bir sonraki seviyeye geçmek için listeyi %${completionThreshold} oranında tamamlayın.</div>
-    </div>`;
-  $$('.level-row').forEach(el => {
-    const l = levels.find(x => x.jlptLevel === el.dataset.level);
-    if (l.isUnlocked) el.addEventListener('click', () => go('level-detail', { level: l.jlptLevel }));
-  });
-}
+  paint(`<div class="pad">
+      ${pagehead('メモリ', 'Hafıza', { unread: state.home?.unreadNotifications > 0 })}
 
-async function showLevelDetail({ level }) {
-  const myToken = activeToken;
-  $('#screen').innerHTML = topbar(`${level} Seviyesi`) + spinner();
-  const [distRes, quizStatusRes] = await Promise.all([api('GET', `/progress/${level}/distribution`), api('GET', '/quiz/status')]);
-  if (stale(myToken)) return;
-  if (!guard(distRes)) return back();
-  const d = distRes.json.data;
-  const started = d.totalWords - d.notStarted;
-  const progRes = await api('GET', '/progress');
-  if (stale(myToken)) return;
-  const progressLevel = progRes.json.data.levels.find(l => l.jlptLevel === level);
-  const canAttempt = quizStatusRes.ok && quizStatusRes.json.data.levels[level]?.canAttempt;
-
-  $('#screen').innerHTML = topbar(`${level} Seviyesi`) + `
-    <div class="screen-pad">
-      <div class="donut-wrap card">
-        <div class="donut" style="background:${donutStyle(d.distribution, d.totalWords)}"><div class="hole"><b>%${progressLevel?.completionRate ?? 0}</b><span>Tamamlandı</span></div></div>
-        <div class="legend">
-          ${[5, 4, 3, 2, 1].map(l => `<span><span class="sw" style="background:var(--m${l})"></span>${l}. Seviye (${d.distribution[l] || 0})</span>`).join('')}
-          <span><span class="sw" style="background:var(--line)"></span>Başlanmadı (${d.notStarted})</span>
+      <div class="levelcard">
+        <div class="top">
+          ${badge(d.jlptLevel)}
+          <span class="now"><span>Şu an</span><b>${esc(d.label)} Seviyesi</b></span>
+          ${d.nextLevel ? `<span class="next"><span>Sonraki</span><b>${esc(d.nextLevel.jlptLevel)} • ${esc(d.nextLevel.label)}</b></span>` : ''}
         </div>
+        ${d.nextLevel ? `
+          <div class="split"></div>
+          <div class="goal">
+            <span class="t">${d.nextLevel.isUnlocked
+              ? `${esc(d.nextLevel.jlptLevel)} kilidi açıldı`
+              : `${esc(d.nextLevel.jlptLevel)}'e geçmene <em>%${d.remainingPercent}</em> kaldı`}</span>
+            <span class="f">%${d.completionRate} / %${d.completionThreshold}</span>
+          </div>
+          <div class="meter">
+            <i style="width:${Math.min(100, d.completionRate)}%"></i>
+            <span class="notch" style="left:${d.completionThreshold}%"></span>
+          </div>
+          ${d.unlockHint ? `<p class="hint">${esc(d.unlockHint)}</p>` : ''}` : `
+          <div class="split"></div>
+          <p class="hint" style="margin:0">En üst seviyedesin — bundan sonrası tekrar ve pekiştirme.</p>`}
       </div>
-      ${canAttempt ? `<button class="btn btn-secondary" id="btn-levelup-quiz">Seviye Atlama Sınavı Başlat</button>` : ''}
-      <h2 class="gap-16">Kelime Listesi</h2>
-      <select id="wl-mastery" class="gap-8">
-        <option value="">Tüm seviyeler</option>
-        ${[1, 2, 3, 4, 5].map(l => `<option value="${l}">${l}. Seviye</option>`).join('')}
-      </select>
-      <div id="wl-box" class="gap-8"><div class="spinner"></div></div>
-    </div>`;
-  if (canAttempt) $('#btn-levelup-quiz').addEventListener('click', () => beginQuiz({ type: 'levelup', jlptLevel: level }));
-  $('#wl-mastery').addEventListener('change', () => loadLevelWordList(level, $('#wl-mastery').value));
-  loadLevelWordList(level, '');
+
+      <div class="sec-row">
+        <h2>Hafıza</h2>
+        ${d.weeklyImproved !== null && d.weeklyImproved !== undefined
+          ? `<span class="trendchip">${I.trend}Bu hafta +${d.weeklyImproved} kelime iyiye geçti</span>` : ''}
+      </div>
+
+      <div class="boxbar">${d.boxes.filter(b => b.count > 0).map(b =>
+        `<i style="flex:${b.count};background:${BOX_COLOR[b.key]}"></i>`).join('')}</div>
+
+      <div class="boxes">${d.boxes.map(b => `
+        <button class="boxbtn ${b.key === box ? 'on' : ''}" data-box="${b.key}">
+          <span class="dot" style="background:${BOX_COLOR[b.key]}"></span>
+          <span class="n">${b.count}</span>
+          <span class="l">${esc(b.label)}</span>
+        </button>`).join('')}</div>
+
+      <div class="sec-row">
+        <h2 id="box-title"></h2>
+        <button class="more" id="b-seeall">Tümünü Gör</button>
+      </div>
+      <div id="box-list"><div class="loading" style="padding:30px 0"><div class="spinner"></div></div></div>
+      <p class="tiny gap-16" style="text-align:center">${esc(d.jlptLevel)} seviyesinde toplam ${d.totalWords} kelime · %${d.completionRate}'i Orta ve üzeri</p>
+    </div>`);
+
+  $$('[data-box]').forEach(b => b.addEventListener('click', () => {
+    state.memoryBox = b.dataset.box;
+    $$('[data-box]').forEach(x => x.classList.toggle('on', x === b));
+    loadBoxPreview(b.dataset.box);
+  }));
+  $('#b-seeall').addEventListener('click', () => go('memory-box', { box: state.memoryBox }));
+  loadBoxPreview(box);
 }
 
-async function loadLevelWordList(level, mastery) {
-  const myToken = activeToken;
-  const res = await api('GET', `/userwords/list?jlptLevel=${level}${mastery ? '&masteryLevel=' + mastery : ''}&limit=15`);
-  if (stale(myToken) || !res.ok) return;
+async function loadBoxPreview(box) {
+  const tk = activeToken;
+  const label = state.memory.boxes.find(b => b.key === box)?.label || '';
+  const t = $('#box-title'); if (t) t.textContent = `${label} Kutusundakiler`;
+  const res = await api('GET', `/memory/words?box=${box}&limit=5`);
+  if (stale(tk)) return;
+  const host = $('#box-list');
+  if (!host) return;
+  if (!res.ok) { host.innerHTML = `<div class="empty">${I.brain}<div>Liste yüklenemedi.</div></div>`; return; }
   const { items, total } = res.json.data;
-  $('#wl-box').innerHTML = total === 0 ? '<div class="empty-state">Bu filtreyle çalışılmış kelime yok.</div>' :
-    `<div class="wlist">${items.map(i => `
-      <div class="witem" style="cursor:default">
-        <div class="kj">${esc(i.word?.kanji)}<small>${esc(i.word?.romaji)}</small></div>
-        <div class="mean">${esc(i.word?.meaningTr || i.word?.meaning)}</div>
-        <span class="pill plain">${i.masteryLevel}. seviye</span>
-      </div>`).join('')}</div>`;
+  host.innerHTML = total === 0
+    ? `<div class="empty">${I.brain}<div>Bu kutuda kelime yok.</div></div>`
+    : `<div class="wordlist">${items.map(i => wordRow(i.word, { click: true })).join('')}</div>`;
+  wireWordRows();
+}
+
+async function showMemoryBox({ box }) {
+  const tk = activeToken;
+  loading(topbar());
+  const res = await api('GET', `/memory/words?box=${box}&limit=50`);
+  if (stale(tk)) return;
+  if (!guard(res)) return back();
+  const d = res.json.data;
+  paint(topbar() + `<div class="pad">
+      <div class="row gap-8" style="margin-bottom:6px">
+        <span class="dot" style="width:11px;height:11px;border-radius:50%;background:${BOX_COLOR[d.box]}"></span>
+        <span class="tiny">${esc(d.jlptLevel)} · ${d.total} kelime</span>
+      </div>
+      <h1 class="title-xl">${esc(d.label)} Kutusundakiler</h1>
+      <p class="lead">${d.box === 'new'
+        ? 'Henüz hiç çalışmadığın kelimeler. Sıra, günlük dersinde geleceği sırayla aynı.'
+        : 'Vadesi en yakın olan kelime en üstte — yarınki tekrarında ilk bunu göreceksin.'}</p>
+      ${d.items.length === 0 ? `<div class="empty">${I.brain}<div>Bu kutuda kelime yok.</div></div>`
+        : `<div class="wordlist">${d.items.map(i => wordRow(i.word, {
+            click: true,
+            tail: i.masteryLevel ? `<span class="tag plain">${i.masteryLevel}. sv</span>` : badge(i.word.jlptLevel)
+          })).join('')}</div>`}
+      ${d.totalPages > 1 ? `<p class="tiny gap-16" style="text-align:center">İlk ${d.items.length} kelime gösteriliyor (toplam ${d.total}).</p>` : ''}
+    </div>`);
+  wireWordRows();
 }
 
 // ═══════════════════════════════════════════════════════════════
 // AYARLAR
 // ═══════════════════════════════════════════════════════════════
+const THEME_LABEL = { light: 'Açık', dark: 'Koyu', system: 'Sistem' };
+const FONT_LABEL = { small: 'Küçük', medium: 'Orta', large: 'Büyük' };
 
 function showSettings() {
   const me = state.me || {};
-  const prefs = me.preferences || {};
-  $('#screen').innerHTML = `
-    <div class="screen-pad">
-      <h1 class="scr-title">Ayarlar</h1>
-      <div class="settings-list card">
-        <button class="settings-item" id="st-ads"><span class="ic">🚫</span><span class="lbl">Reklamları Kaldır</span><span class="chev">›</span></button>
-        <button class="settings-item" id="st-goal"><span class="ic">🎯</span><span class="lbl">Günlük Kelime Hedefi</span><span class="val">${me.dailyGoal ?? 20}</span><span class="chev">›</span></button>
-        <button class="settings-item" id="st-password"><span class="ic">🔑</span><span class="lbl">Şifreyi Değiştir</span><span class="chev">›</span></button>
-        <button class="settings-item" id="st-notif"><span class="ic">🔔</span><span class="lbl">Bildirim Ayarları</span><span class="chev">›</span></button>
-        <button class="settings-item" id="st-lang"><span class="ic">🌐</span><span class="lbl">Dil Ayarları</span><span class="val">Türkçe</span><span class="chev">›</span></button>
-        <button class="settings-item" id="st-theme"><span class="ic">🌗</span><span class="lbl">Tema Değiştir</span><span class="val">${themeLabel(prefs.theme)}</span><span class="chev">›</span></button>
-        <button class="settings-item" id="st-font"><span class="ic">🔤</span><span class="lbl">Font Boyutu</span><span class="val">${fontLabel(prefs.fontSize)}</span><span class="chev">›</span></button>
-        <button class="settings-item" id="st-about"><span class="ic">ℹ️</span><span class="lbl">Hakkında</span><span class="chev">›</span></button>
-        <button class="settings-item" id="st-logout"><span class="ic">↪</span><span class="lbl">Çıkış Yap</span><span class="chev">›</span></button>
-        <button class="settings-item danger" id="st-delete"><span class="ic">🗑</span><span class="lbl">Hesabı Sil</span><span class="chev">›</span></button>
+  const p = me.preferences || {};
+  paint(`<div class="pad">
+      ${pagehead('設定', 'Ayarlar', { unread: state.home?.unreadNotifications > 0 })}
+
+      <div class="grouplabel" style="margin-top:6px">Hesap</div>
+      <div class="group">
+        <button class="row-item" data-nav="settings-password"><span class="ic">${I.key}</span><span class="lbl">Şifreyi Değiştir</span><span class="chev">${I.chevR}</span></button>
+        <button class="row-item" data-nav="settings-notifications"><span class="ic">${I.bellRing}</span><span class="lbl">Bildirim Ayarları</span><span class="chev">${I.chevR}</span></button>
       </div>
-    </div>`;
-  $('#st-ads').addEventListener('click', () => toast('Bu özellik yakında', ''));
-  $('#st-goal').addEventListener('click', () => go('settings-goal'));
-  $('#st-password').addEventListener('click', () => go('settings-password-current'));
-  $('#st-notif').addEventListener('click', () => go('settings-notifications'));
+
+      <div class="grouplabel">Uygulama</div>
+      <div class="group">
+        <button class="row-item" id="st-lang"><span class="ic">${I.translate}</span><span class="lbl">Dil Ayarları</span><span class="val">Türkçe</span><span class="chev">${I.chevR}</span></button>
+        <button class="row-item" id="st-theme"><span class="ic">${I.palette}</span><span class="lbl">Tema Değiştir</span><span class="val">${THEME_LABEL[p.theme] || 'Açık'}</span><span class="chev">${I.chevR}</span></button>
+        <button class="row-item" data-nav="settings-level"><span class="ic">${I.levels}</span><span class="lbl">Öğrenme Seviyeni Değiştir</span><span class="val accent">${esc(me.activeLevel || 'N5')}</span><span class="chev">${I.chevR}</span></button>
+        <button class="row-item" data-nav="quiz-intro"><span class="ic">${I.bookOpen}</span><span class="lbl">Seviye Tespit Sınavına Gir</span><span class="chev">${I.chevR}</span></button>
+        <button class="row-item" id="st-font"><span class="ic">${I.typeface}</span><span class="lbl">Kanji Font Boyutu</span><span class="val">${FONT_LABEL[p.fontSize] || 'Orta'}</span><span class="chev">${I.chevR}</span></button>
+        <button class="row-item" data-nav="settings-goal"><span class="ic">${I.target}</span><span class="lbl">Günlük Kelime Hedefi</span><span class="val accent">${me.dailyGoal ?? 20} Kelime</span><span class="chev">${I.chevR}</span></button>
+      </div>
+
+      <div class="grouplabel">Diğer</div>
+      <div class="group">
+        <button class="row-item" data-nav="settings-legal"><span class="ic">${I.doc}</span><span class="lbl">Hakkında</span><span class="chev">${I.chevR}</span></button>
+        <button class="row-item danger" id="st-logout"><span class="ic">${I.logout}</span><span class="lbl">Çıkış Yap</span><span class="chev">${I.chevR}</span></button>
+        <button class="row-item danger" data-nav="settings-delete"><span class="ic">${I.trash}</span><span class="lbl">Hesabı Sil</span><span class="chev">${I.chevR}</span></button>
+      </div>
+
+      <p class="tiny gap-24" style="text-align:center">Musubi · Sürüm 1.0.0<br>${esc(me.email || '')}</p>
+    </div>`);
+
   $('#st-lang').addEventListener('click', () => toast('Şu an yalnızca Türkçe destekleniyor', ''));
-  $('#st-theme').addEventListener('click', () => cycleTheme());
-  $('#st-font').addEventListener('click', () => cycleFont());
-  $('#st-about').addEventListener('click', () => go('settings-about'));
+  $('#st-theme').addEventListener('click', () => pickPref('theme', ['light', 'dark', 'system'], THEME_LABEL, 'Tema Değiştir'));
+  $('#st-font').addEventListener('click', () => pickPref('fontSize', ['small', 'medium', 'large'], FONT_LABEL, 'Kanji Font Boyutu'));
   $('#st-logout').addEventListener('click', () => {
-    showModal(`<div class="modal-sheet"><div class="ic">↪</div><h3>Çıkış Yap</h3><p>Bu cihazdan çıkış yapmak istediğine emin misin?</p>
-      <button class="btn btn-danger" id="modal-confirm-logout">Çıkış Yap</button>
-      <button class="btn btn-ghost gap-8" id="modal-cancel">Vazgeç</button></div>`);
-    $('#modal-confirm-logout').addEventListener('click', async () => {
-      await api('POST', '/auth/logout', { refreshToken: state.refresh });
-      setTokens(null, null); state.me = null; state.checkedPlacement = false;
-      closeModal(); reset('welcome');
-    });
-    $('#modal-cancel').addEventListener('click', closeModal);
+    sheet(`<div class="grab"></div><h3>Çıkış Yap</h3>
+      <p>Bu cihazdan çıkış yapmak istediğine emin misin?</p>
+      <button class="btn btn-primary" id="sh-yes">Çıkış Yap</button>
+      <button class="btn btn-ghost" id="sh-no">Vazgeç</button>`);
+    $('#sh-yes').addEventListener('click', doLogout);
+    $('#sh-no').addEventListener('click', closeSheet);
   });
-  $('#st-delete').addEventListener('click', () => go('settings-delete'));
 }
 
-function themeLabel(t) { return t === 'dark' ? 'Koyu' : t === 'system' ? 'Sistem' : 'Açık'; }
-function fontLabel(f) { return f === 'small' ? 'Küçük' : f === 'large' ? 'Büyük' : 'Orta'; }
-
-async function cycleTheme() {
-  const order = ['light', 'dark', 'system'];
-  const cur = state.me?.preferences?.theme || 'light';
-  const next = order[(order.indexOf(cur) + 1) % order.length];
-  const res = await api('PUT', '/auth/update-info', { preferences: { theme: next } });
-  if (guard(res)) { state.me = res.json.data; applyThemeFont(); showSettings(); }
-}
-async function cycleFont() {
-  const order = ['small', 'medium', 'large'];
-  const cur = state.me?.preferences?.fontSize || 'medium';
-  const next = order[(order.indexOf(cur) + 1) % order.length];
-  const res = await api('PUT', '/auth/update-info', { preferences: { fontSize: next } });
-  if (guard(res)) { state.me = res.json.data; applyThemeFont(); showSettings(); }
+function pickPref(key, values, labels, title) {
+  const cur = state.me?.preferences?.[key];
+  sheet(`<div class="grab"></div><h3>${esc(title)}</h3>
+    <div style="margin-top:14px">${values.map(v => `
+      <button class="choice ${v === cur ? 'on' : ''}" data-val="${v}">
+        <span class="txt"><b>${labels[v]}</b></span>
+        <span class="mark">${I.check}</span>
+      </button>`).join('')}</div>`);
+  $$('[data-val]').forEach(b => b.addEventListener('click', async () => {
+    const res = await api('PUT', '/auth/update-info', { preferences: { [key]: b.dataset.val } });
+    closeSheet();
+    if (guard(res)) { state.me = res.json.data; applyPrefs(); showSettings(); }
+  }));
 }
 
 function showSettingsGoal() {
-  const options = [10, 15, 20, 25, 30, 40, 50];
   const cur = state.me?.dailyGoal ?? 20;
-  $('#screen').innerHTML = topbar('Günlük Kelime Hedefi') + `
-    <div class="screen-pad">
-      <p class="muted gap-8" style="margin-bottom:16px">Her gün kaç kelime çalışmak istersin?</p>
-      <select id="goal-select">${options.map(o => `<option value="${o}" ${o === cur ? 'selected' : ''}>${o} kelime</option>`).join('')}</select>
-      <button class="btn btn-primary gap-16" id="btn-save-goal">Kaydet</button>
-    </div>`;
-  $('#btn-save-goal').addEventListener('click', async () => {
-    const res = await api('PUT', '/auth/update-info', { dailyGoal: Number($('#goal-select').value) });
-    if (guard(res, 'Günlük hedef güncellendi')) { state.me = res.json.data; back(); }
+  const opts = [[5, 'Rahat'], [10, 'Orta'], [20, 'Ciddi'], [40, 'Yoğun']];
+  paint(topbar() + `<div class="pad">
+      <h1 class="title-xl">Günlük Kelime Hedefi</h1>
+      <p class="lead">Günde kaç kelime çalışacaksın?</p>
+      ${opts.map(([n, label]) => `
+        <button class="choice ${n === cur ? 'on' : ''}" data-goal="${n}">
+          <span class="txt"><b>${label}</b><span>${n} kelime/gün</span></span>
+          <span class="mark">${I.check}</span>
+        </button>`).join('')}
+      <p class="tiny gap-16">Hedefini gün içinde artırırsan havuz aynı gün genişler; azaltırsan yeni hedef yarın geçerli olur.</p>
+    </div>
+    <div class="footer"><button class="btn btn-primary" id="b-save">Kaydet</button></div>`);
+  let picked = cur;
+  $$('[data-goal]').forEach(b => b.addEventListener('click', () => {
+    picked = Number(b.dataset.goal);
+    $$('[data-goal]').forEach(x => x.classList.toggle('on', x === b));
+  }));
+  $('#b-save').addEventListener('click', async () => {
+    const res = await api('PUT', '/auth/update-info', { dailyGoal: picked });
+    if (guard(res, 'Günlük hedefin güncellendi')) { state.me = res.json.data; back(); }
   });
 }
 
-function showSettingsPasswordCurrent() {
-  $('#screen').innerHTML = topbar('Şifreyi Değiştir') + `
-    <div class="screen-pad">
-      <h1 class="scr-title">Mevcut Şifren</h1>
-      <p class="muted gap-8" style="margin-bottom:20px">Devam etmek için mevcut şifreni gir.</p>
-      <div class="field"><div class="wrap"><input id="in-pw" type="password" placeholder="Mevcut şifren"><button type="button" class="eye" data-toggle-eye="in-pw">👁</button></div></div>
-      <div class="err-line" id="pw-err"></div>
-      <button class="btn btn-primary gap-8" id="btn-verify">Devam Et</button>
-    </div>`;
-  wireEyeToggle();
-  $('#btn-verify').addEventListener('click', async () => {
-    const password = $('#in-pw').value, err = $('#pw-err');
+// Öğrenme Seviyeni Değiştir — kilit AÇMA değil, açık seviyeler arasında SEÇİM
+async function showSettingsLevel() {
+  const tk = activeToken;
+  loading(topbar());
+  const res = await api('GET', '/progress');
+  if (stale(tk)) return;
+  if (!guard(res)) return back();
+  render(res.json.data);
+
+  function render(d) {
+    const STATE_TAG = {
+      locked: '<span class="tag plain">Kilitli</span>',
+      active: '<span class="tag bad">Şu anki seviyen</span>',
+      completed: '<span class="tag ok">Tamamlandı</span>',
+      available: ''
+    };
+    paint(topbar() + `<div class="pad">
+        <h1 class="title-xl">Öğrenme Seviyen</h1>
+        <p class="lead">Günlük dersin bu seviyeden gelir. İlerlemen kaybolmaz — dilediğin an geri dönebilirsin.</p>
+        <div class="wordlist">
+          ${d.levels.map(l => `
+            <div class="wordrow" style="cursor:default;align-items:flex-start;gap:14px;${l.state === 'locked' ? 'opacity:.6' : ''}">
+              ${badge(l.jlptLevel, l.state === 'locked' ? 'ghost' : '')}
+              <span class="jp" style="flex:1">
+                <b style="font-family:inherit;font-size:15.5px">${esc(l.jlptLevel)} • ${esc(l.label)}</b>
+                <span>${l.state === 'locked' ? esc(l.unlockHint || '') : `${l.totalWords} kelime · %${l.completionRate} ilerleme`}</span>
+                ${l.state !== 'locked' ? `<span class="meter" style="height:6px;margin-top:8px;display:block"><i style="width:${l.completionRate}%"></i></span>` : ''}
+              </span>
+              ${l.canSelect ? `<button class="link" data-pick="${l.jlptLevel}">Geç</button>` : STATE_TAG[l.state]}
+            </div>`).join('')}
+        </div>
+        <div class="card soft gap-16" style="display:flex;gap:10px;align-items:flex-start">
+          ${I.info}<p style="margin:0;font-size:13px;line-height:1.55;color:var(--brand)">Bir sonraki seviyenin kilidi, listeyi %${d.completionThreshold} oranında tamamlayınca açılır.</p>
+        </div>
+      </div>`);
+    $$('[data-pick]').forEach(b => b.addEventListener('click', () => {
+      const lvl = d.levels.find(x => x.jlptLevel === b.dataset.pick);
+      sheet(`<div class="grab"></div><h3>${esc(lvl.jlptLevel)} • ${esc(lvl.label)} seviyesine geçilsin mi?</h3>
+        <p>İlerlemen kaybolmaz, serilerin bozulmaz. Günlük dersin bundan sonra bu seviyeden gelir.</p>
+        <button class="btn btn-primary" id="sh-yes">Onayla</button>
+        <button class="btn btn-ghost" id="sh-no">Vazgeç</button>`);
+      $('#sh-no').addEventListener('click', closeSheet);
+      $('#sh-yes').addEventListener('click', async () => {
+        const r = await api('PUT', '/progress/active-level', { jlptLevel: lvl.jlptLevel });
+        closeSheet();
+        if (!guard(r, 'Seviyen güncellendi')) return;
+        // Yanıt GET /progress ile aynı gövde — ikinci istek atılmaz
+        if (state.me) state.me.activeLevel = lvl.jlptLevel;
+        if (state.home) state.home.activeLevel = lvl.jlptLevel;
+        render(r.json.data);
+      });
+    }));
+  }
+}
+
+function showSettingsPassword() {
+  formScreen({
+    title: 'Şifre Girin', lead: 'Lütfen mevcut şifrenizi giriniz.', action: 'Devam Et',
+    body: `<div class="input" id="w-pw">${I.key}<input id="in-pw" type="password" placeholder="Şifreniz">
+             <button type="button" class="eye" data-eye="in-pw">${I.eye}</button></div>
+           <div class="errline" id="err"></div>`
+  });
+  wireEyes();
+  $('#f-action').addEventListener('click', async () => {
+    const password = $('#in-pw').value;
     const res = await api('POST', '/auth/verify-password', { password });
-    if (!res.ok) { err.textContent = res.json.message || 'Şifreniz yanlış. Lütfen tekrar deneyin.'; return; }
-    state.verifiedOldPassword = password;
+    if (!res.ok) {
+      $('#w-pw').classList.add('bad');
+      $('#err').textContent = res.json.message || 'Şifreniz yanlış. Lütfen tekrar deneyin.';
+      return;
+    }
+    state.verifiedPassword = password;
     go('settings-password-new');
   });
 }
 
 function showSettingsPasswordNew() {
-  $('#screen').innerHTML = topbar('Şifreyi Değiştir') + `
-    <div class="screen-pad">
-      <h1 class="scr-title">Yeni Şifre Oluştur</h1>
-      <p class="muted gap-8" style="margin-bottom:20px">Lütfen şifreni gir ve doğrula.</p>
-      <div class="field">
-        <label>Şifre</label>
-        <div class="wrap"><input id="in-pw" type="password" placeholder="En az 8 karakter"><button type="button" class="eye" data-toggle-eye="in-pw">👁</button></div>
-      </div>
-      <div id="pw-strength"></div>
-      <div class="field gap-12"><label>Şifre (tekrar)</label><input id="in-pw2" type="password"></div>
-      <div class="err-line" id="pw-err"></div>
-      <button class="btn btn-primary gap-8" id="btn-continue">Şifreyi Değiştir</button>
-    </div>`;
-  const pw = $('#in-pw'), box = $('#pw-strength');
-  box.innerHTML = pwBarsHtml(0);
-  wirePwStrength(pw, box);
-  wireEyeToggle();
-  $('#btn-continue').addEventListener('click', async () => {
-    const p1 = $('#in-pw').value, p2 = $('#in-pw2').value, err = $('#pw-err');
+  formScreen({
+    title: 'Yeni Şifre Oluştur', lead: 'Lütfen şifreni gir ve doğrula.', action: 'Şifreyi Değiştir',
+    body: `<div class="field"><label>Şifre</label>${pwField('in-pw')}</div>
+           <div id="pwbox"></div>
+           <div class="field gap-12"><label>Şifre (tekrar)</label>${pwField('in-pw2', 'Şifreni tekrar gir')}</div>
+           <div class="errline" id="err"></div>`
+  });
+  wireEyes(); wireStrength('in-pw', 'pwbox');
+  $('#f-action').addEventListener('click', async () => {
+    const p1 = $('#in-pw').value, p2 = $('#in-pw2').value, err = $('#err');
     if (p1.length < 8) { err.textContent = 'Şifre en az 8 karakter olmalı'; return; }
     if (p1 !== p2) { err.textContent = 'Şifreler eşleşmiyor'; return; }
     const res = await api('PUT', '/auth/change-password', {
-      oldPassword: state.verifiedOldPassword, newPassword: p1, deviceName: 'web-simülatör'
+      oldPassword: state.verifiedPassword, newPassword: p1, deviceName: 'web-simülatör'
     });
     if (!res.ok) { err.textContent = res.json.message || 'Şifre değiştirilemedi'; return; }
+    // Değişiklik TÜM oturumları kapatır; bu cihaz için taze token çifti döner
     setTokens(res.json.data.accessToken, res.json.data.refreshToken);
+    state.verifiedPassword = null;
     reset('settings-password-success');
   });
 }
 
 function showSettingsPasswordSuccess() {
   statusScreen({
-    icon: '✱', kind: 'brand', title: 'Şifreniz Değiştirildi',
-    body: 'Başarıyla işleminiz tamamlandı. Öğrenmeye kaldığınız yerden devam edebilirsiniz!',
-    buttonLabel: 'Ana Sayfaya Dön', onContinue: () => reset('home')
+    title: 'Şifren Değiştirildi',
+    body: 'İşlemin başarıyla tamamlandı. Öğrenmeye kaldığın yerden devam edebilirsin!',
+    primary: { label: 'Ana Sayfaya Dön', onClick: () => reset('home') }
   });
 }
 
 function showSettingsNotifications() {
-  const ns = state.me?.notificationSettings || {};
-  $('#screen').innerHTML = topbar('Bildirim Ayarları') + `
-    <div class="screen-pad">
-      <div class="toggle-row"><span class="lbl">Günlük Kelime Bildirimleri</span><div class="switch ${ns.dailyReminder !== false ? 'on' : ''}" data-key="dailyReminder"><i></i></div></div>
-      <div class="toggle-row"><span class="lbl">Hatırlatma Bildirimleri</span><div class="switch ${ns.streakReminder !== false ? 'on' : ''}" data-key="streakReminder"><i></i></div></div>
-      <div class="toggle-row"><span class="lbl">Seviye Bildirimleri</span><div class="switch ${ns.wordLevelDown !== false ? 'on' : ''}" data-key="wordLevelDown"><i></i></div></div>
-      <button class="btn btn-primary gap-16" id="btn-save-notif">Kaydet</button>
-    </div>`;
+  const n = state.me?.notificationSettings || {};
+  const rows = [
+    ['dailyWord', 'Günlük Kelimeler', 'Her gün seçtiğin saatte yeni bir kelime.'],
+    ['streakReminder', 'Seri Koruma Uyarısı', 'Serin tehlikedeyken haber verir.'],
+    ['dailyReminder', 'Pratik Anımsatıcısı', 'Günün görevini hatırlatır.'],
+    ['wordLevelDown', 'Tekrar Gereken Kelimeler', 'Unutulmaya başlayan kelimeler için.']
+  ];
+  paint(topbar() + `<div class="pad">
+      <h1 class="title-xl">Bildirim Ayarları</h1>
+      <p class="lead">Dört bildirim türü birbirinden bağımsızdır; biri diğerini kapatmaz.</p>
+      <div class="group">
+        ${rows.map(([key, label, desc]) => `
+          <div class="switch-row">
+            <span class="txt"><b>${label}</b><span>${desc}</span></span>
+            <span class="switch ${n[key] !== false ? 'on' : ''}" data-key="${key}"><i></i></span>
+          </div>`).join('')}
+      </div>
+      <div class="grouplabel">Hatırlatma Saati</div>
+      <div class="input">${I.bellRing}<input id="in-time" type="time" value="${esc(n.reminderTime || '20:00')}"></div>
+      <p class="tiny gap-8">Bu saat hem "Pratik Anımsatıcısı" hem "Günlük Kelimeler" için zamanlama kaynağıdır.</p>
+    </div>
+    <div class="footer"><button class="btn btn-primary" id="b-save">Kaydet</button></div>`);
   $$('.switch').forEach(s => s.addEventListener('click', () => s.classList.toggle('on')));
-  $('#btn-save-notif').addEventListener('click', async () => {
-    const notificationSettings = {};
+  $('#b-save').addEventListener('click', async () => {
+    const notificationSettings = { reminderTime: $('#in-time').value };
     $$('.switch').forEach(s => { notificationSettings[s.dataset.key] = s.classList.contains('on'); });
     const res = await api('PUT', '/auth/update-info', { notificationSettings });
-    if (guard(res, 'Bildirim ayarları kaydedildi')) { state.me = res.json.data; back(); }
+    if (guard(res, 'Bildirim ayarların kaydedildi')) { state.me = res.json.data; back(); }
   });
 }
 
-function showSettingsAbout() {
-  const lorem = 'Lorem ipsum dolor sit amet consectetur adipiscing elit. In cursus id tellus vitae pellentesque. Tempus leo an aenean pretium volutpat placerat. In curius massa lacinia integer posuere, ad litora torquent per conubia nostra inceptos himenaeos.';
-  $('#screen').innerHTML = topbar('Hakkında') + `
-    <div class="screen-pad legal-text">
-      <h2>Kullanıcı Sözleşmesi</h2><p>${lorem}</p>
-      <div class="hairline"></div>
-      <h2>Gizlilik Politikası</h2><p>${lorem}</p>
-      <div class="hairline"></div>
-      <h2>KVKK Aydınlatma &amp; Açık Rıza Metni</h2><p>${lorem}</p>
-      <div class="center gap-16 muted">Uygulama Versiyonu 1.0.0<br>© Gökyüzü Herkesindir 2026</div>
-    </div>`;
+// Hukuki metinler backend'den gelir (uygulamaya gömülü DEĞİL) — düzeltme
+// mağaza onayı beklemeden yayına girsin diye
+async function showSettingsLegal() {
+  const tk = activeToken;
+  loading(topbar());
+  const res = await api('GET', '/legal', undefined, { auth: false });
+  if (stale(tk)) return;
+  if (!guard(res)) return back();
+  // GET /api/legal → { lang, company, docs: [...] } — dizi DEĞİL
+  const { docs = [], company = '' } = res.json.data;
+  paint(topbar() + `<div class="pad">
+      <h1 class="title-xl">Hakkında</h1>
+      <div class="group gap-16">
+        ${docs.map(d => `<button class="row-item" data-doc="${esc(d.key)}">
+          <span class="ic">${I.doc}</span>
+          <span class="lbl">${esc(d.title)}<span style="display:block;font-size:12px;color:var(--muted);margin-top:2px">Sürüm ${esc(d.version)} · ${esc(d.effectiveDate)}</span></span>
+          <span class="chev">${I.chevR}</span></button>`).join('')}
+      </div>
+      <p class="tiny gap-24" style="text-align:center">Uygulama Sürümü 1.0.0<br>${esc(company)}</p>
+    </div>`);
+  $$('[data-doc]').forEach(b => b.addEventListener('click', () => go('legal-doc', { key: b.dataset.doc })));
+}
+
+async function showLegalDoc({ key }) {
+  const tk = activeToken;
+  loading(topbar());
+  const res = await api('GET', '/legal/' + key, undefined, { auth: false });
+  if (stale(tk)) return;
+  if (!guard(res)) return back();
+  const d = res.json.data;
+  paint(topbar() + `<div class="pad prose">
+      <h1 class="title-xl">${esc(d.title)}</h1>
+      <p class="tiny">Sürüm ${esc(d.version)} · Yürürlük ${esc(d.effectiveDate)}</p>
+      <p class="gap-16">${esc(d.intro)}</p>
+      ${d.sections.map(s => `<h3>${esc(s.heading)}</h3><p>${esc(s.body)}</p>`).join('')}
+    </div>`);
 }
 
 function showSettingsDelete() {
-  $('#screen').innerHTML = topbar('Hesabı Sil') + `
-    <div class="screen-pad">
-      <h1 class="scr-title">Hesabını Sil</h1>
-      <p class="muted gap-8" style="margin-bottom:20px">Bu işlem geri alınamaz. Tüm ilerlemen, kelimelerin ve istatistiklerin kalıcı olarak silinir.</p>
-      <div class="field"><label>Şifren</label><input id="in-pw" type="password" placeholder="Onaylamak için şifreni gir"></div>
-      <div class="err-line" id="del-err"></div>
-      <button class="btn btn-danger gap-8" id="btn-delete">Hesabı Kalıcı Olarak Sil</button>
-    </div>`;
-  $('#btn-delete').addEventListener('click', async () => {
-    const password = $('#in-pw').value, err = $('#del-err');
-    if (!password) { err.textContent = 'Şifre gerekli'; return; }
-    const res = await api('DELETE', '/auth/delete-account', { password });
-    if (!res.ok) { err.textContent = res.json.message || 'Silinemedi'; return; }
-    setTokens(null, null); state.me = null; state.checkedPlacement = false;
-    toast('Hesap silindi', 'ok');
-    reset('welcome');
+  formScreen({
+    title: 'Hesabını Sil',
+    lead: 'Bu işlem geri alınamaz. Tüm ilerlemen, kelimelerin ve istatistiklerin kalıcı olarak silinir.',
+    action: 'Hesabı Kalıcı Olarak Sil',
+    body: `<div class="field"><label>Şifren</label>${pwField('in-pw', 'Onaylamak için şifreni gir')}</div>
+           <div class="errline" id="err"></div>`
+  });
+  wireEyes();
+  $('#f-action').addEventListener('click', () => {
+    const password = $('#in-pw').value;
+    if (!password) { $('#err').textContent = 'Şifre gerekli'; return; }
+    sheet(`<div class="grab"></div>
+      <div class="blob">${I.trash}</div>
+      <h3>Hesabın silinsin mi?</h3>
+      <p>Bu işlem geri alınamaz ve tüm verilerin (KVKK gereği) kalıcı olarak silinir.</p>
+      <button class="btn btn-primary" id="sh-yes">Evet, Hesabımı Sil</button>
+      <button class="btn btn-ghost" id="sh-no">Vazgeç</button>`);
+    $('#sh-no').addEventListener('click', closeSheet);
+    $('#sh-yes').addEventListener('click', async () => {
+      const res = await api('DELETE', '/auth/delete-account', { password });
+      closeSheet();
+      if (!res.ok) { $('#err').textContent = res.json.message || 'Silinemedi'; return; }
+      setTokens(null, null); state.me = null; state.home = null;
+      toast('Hesabın silindi', 'ok');
+      reset('welcome');
+    });
   });
 }
 
 // ═══════════════════════════════════════════════════════════════
-// Ekran tablosu + önyükleme
+// Ekran tablosu
 // ═══════════════════════════════════════════════════════════════
-
 const SHOW = {
   welcome: showWelcome,
   'reg-email': showRegEmail, 'reg-name': showRegName, 'reg-password': showRegPassword, 'reg-success': showRegSuccess,
   'verify-ok': showVerifyOk, 'verify-fail': showVerifyFail, 'verify-nudge': showVerifyNudge,
   login: showLogin, 'forgot-email': showForgotEmail, 'forgot-newpass': showForgotNewPass, 'reset-success': showResetSuccess,
-  home: showHome, notifications: showNotifications,
-  lesson: renderLessonScreen, 'quiz-question': showQuizQuestion, 'quiz-result': showQuizResult,
+
+  home: showHome, notifications: showNotifications, mistakes: showMistakes,
+  lesson: renderLesson,
+  'quiz-intro': showQuizIntro, 'quiz-question': showQuizQuestion, 'quiz-result': showQuizResult,
   library: showLibrary, 'word-detail': showWordDetail,
-  levels: showLevels, 'level-detail': showLevelDetail,
-  settings: showSettings, 'settings-goal': showSettingsGoal,
-  'settings-password-current': showSettingsPasswordCurrent, 'settings-password-new': showSettingsPasswordNew,
-  'settings-password-success': showSettingsPasswordSuccess, 'settings-notifications': showSettingsNotifications,
-  'settings-about': showSettingsAbout, 'settings-delete': showSettingsDelete
+  memory: showMemory, 'memory-box': showMemoryBox,
+
+  settings: showSettings, 'settings-goal': showSettingsGoal, 'settings-level': showSettingsLevel,
+  'settings-password': showSettingsPassword, 'settings-password-new': showSettingsPasswordNew,
+  'settings-password-success': showSettingsPasswordSuccess,
+  'settings-notifications': showSettingsNotifications,
+  'settings-legal': showSettingsLegal, 'legal-doc': showLegalDoc, 'settings-delete': showSettingsDelete
 };
 
+// ═══════════════════════════════════════════════════════════════
+// Geliştirici çubuğu
+// ═══════════════════════════════════════════════════════════════
 function renderDevBar() {
   const bar = $('#dev-bar');
   if (!state.access) { bar.hidden = true; return; }
   bar.hidden = false;
-  $('#dev-email').textContent = state.profile?.email || state.wizard.email || state.me?.email || '(oturum açık)';
+  $('#dev-email').textContent = state.me?.email || state.wizard.email || '(oturum açık)';
 }
-$('#dev-bar')?.addEventListener('click', async (e) => {
+$('#dev-bar').addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-dev]');
   if (!btn) return;
-  if (btn.dataset.dev === 'reset') {
-    await api('POST', '/auth/logout', { refreshToken: state.refresh }).catch(() => {});
-    setTokens(null, null); state.me = null; state.checkedPlacement = false;
-    reset('welcome');
-  }
+  if (btn.dataset.dev === 'reset') return doLogout();
   if (btn.dataset.dev === 'fresh') {
-    setTokens(null, null); state.me = null; state.checkedPlacement = false; state.wizard = {};
+    setTokens(null, null);
+    state.me = null; state.home = null; state.promptedPlacement = false; state.wizard = {};
     reset('welcome'); go('reg-email');
-    setTimeout(() => { $('#in-email').value = `test${Date.now().toString(36)}@musubi.dev`; }, 0);
+    setTimeout(() => { const i = $('#in-email'); if (i) i.value = `test${Date.now().toString(36)}@musubi.dev`; }, 0);
   }
 });
 
