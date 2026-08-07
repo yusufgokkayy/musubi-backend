@@ -2338,6 +2338,118 @@ describe('Kelime havuzu sıralaması (müfredat/frequencyRank)', () => {
     });
 });
 
+describe('Kütüphane (liste, arama, sayfalama)', () => {
+    let token;
+
+    before(async () => {
+        await Word.insertMany([
+            {
+                kanji: '電車', kana: 'でんしゃ', romaji: 'densha', meaning: 'train', meaningTr: 'tren',
+                type: 'isim', jlptLevel: 'N5', isCore: true, frequencyRank: 501,
+                example: '毎朝**電車**で学校へ行きます。',
+                exampleFurigana: '毎朝[まいあさ]**電車[でんしゃ]**で学校[がっこう]へ行[い]きます。'
+            },
+            {
+                kanji: '駅', kana: 'えき', romaji: 'eki', meaning: 'station', meaningTr: 'istasyon',
+                type: 'isim', jlptLevel: 'N5', isCore: true, frequencyRank: 502
+            },
+            {
+                kanji: '危険', kana: 'きけん', romaji: 'kiken', meaning: 'danger', meaningTr: 'tehlike',
+                type: 'isim', jlptLevel: 'N4', isCore: true, frequencyRank: 503
+            },
+            // "tren" araması için tuzak: anlamı birebir "tren" DEĞİL ama İngilizce
+            // anlamındaki "trend" kelimesi "tren" içeriyor. frequencyRank=1 ile
+            // 電車'nın (501) çok önünde — yalnızca müfredat sırasına bakan bir
+            // sıralama bu tesadüfi eşleşmeyi ilk sıraya koyardı.
+            {
+                kanji: '傾向', kana: 'けいこう', romaji: 'keikou', meaning: 'trend, tendency',
+                meaningTr: 'eğilim', type: 'isim', jlptLevel: 'N2', isCore: true, frequencyRank: 1
+            },
+            // Anlamı virgülle ayrılmış liste: parçadan arama bunun üzerinde sınanır
+            {
+                kanji: '停車場', kana: 'ていしゃじょう', romaji: 'teishajou', meaning: 'railway station',
+                meaningTr: 'istasyon, durak yeri', type: 'isim', jlptLevel: 'N1', isCore: true, frequencyRank: 900
+            }
+        ]);
+        await createVerifiedUser('kutuphane@test.com');
+        token = (await login('kutuphane@test.com')).accessToken;
+    });
+
+    it('sayfalama kararlıdır: sayfalar arasında kelime tekrar etmez veya kaybolmaz', async () => {
+        const total = (await api('GET', '/words?limit=1', { token })).json.data.total;
+
+        const gorulen = [];
+        const sayfaSayisi = Math.ceil(total / 20);
+        for (let p = 1; p <= sayfaSayisi; p++) {
+            const res = await api('GET', `/words?page=${p}&limit=20`, { token });
+            assert.equal(res.status, 200);
+            gorulen.push(...res.json.data.words.map(w => w._id));
+        }
+
+        assert.equal(gorulen.length, total, 'tüm sayfaların toplamı total ile eşleşmeli');
+        assert.equal(new Set(gorulen).size, total, 'aynı kelime iki sayfada birden çıkmamalı');
+    });
+
+    it('Türkçe anlamdan arar (kullanıcı gördüğü kelimeyi yazar)', async () => {
+        // 危険'in İngilizce anlamı "danger" — "tehlike" YALNIZCA meaningTr'de
+        // geçiyor, yani sonuç Türkçe alanın arandığını kanıtlar
+        const res = await api('GET', '/words?q=tehlike', { token });
+        assert.equal(res.status, 200);
+        assert.deepEqual(res.json.data.words.map(w => w.kanji), ['危険']);
+    });
+
+    it('kanadan arar', async () => {
+        const res = await api('GET', '/words?q=でんしゃ', { token });
+        assert.deepEqual(res.json.data.words.map(w => w.kanji), ['電車']);
+    });
+
+    it('arama sayfalıdır: total döner ve seviye filtresiyle birleşir', async () => {
+        const hepsi = await api('GET', '/words?q=語五', { token });
+        assert.equal(hepsi.json.data.total, 30, 'arama kesilmeden gerçek toplamı bildirmeli');
+        assert.equal(hepsi.json.data.words.length, 20, 'ilk sayfa limit kadar döner');
+
+        const n4 = await api('GET', '/words?q=語&jlptLevel=N4', { token });
+        assert.equal(n4.json.data.total, 50);
+        assert.ok(n4.json.data.words.every(w => w.jlptLevel === 'N4'));
+    });
+
+    it('core olmayan kelime aramaya girmez', async () => {
+        const res = await api('GET', '/words?q=非核', { token });
+        assert.equal(res.json.data.total, 0);
+    });
+
+    it('tam eşleşme, kelime ortasında geçen sonuçların ÖNÜNE gelir', async () => {
+        const res = await api('GET', '/words?q=tren', { token });
+        assert.equal(res.json.data.words[0].kanji, '電車', 'anlamı birebir "tren" olan kelime ilk sırada olmalı');
+        assert.ok(res.json.data.words.some(w => w.kanji === '傾向'), 'kısmi eşleşme yine de listede kalmalı');
+    });
+
+    it('virgülle ayrılmış anlamlarda parçadan da bulur', async () => {
+        const res = await api('GET', '/words?q=durak', { token });
+        assert.deepEqual(res.json.data.words.map(w => w.kanji), ['停車場']);
+    });
+
+    it('seviye içinde müfredat sırasını korur', async () => {
+        const res = await api('GET', '/words?q=語三', { token });
+        assert.equal(res.json.data.total, 0, 'olmayan kelime boş döner');
+
+        const n3 = await api('GET', '/words?jlptLevel=N3&limit=3', { token });
+        assert.deepEqual(n3.json.data.words.map(w => w.kanji), ['医者', '看護師', '外科医']);
+    });
+
+    it('detayda her iki anlam da döner — dili istemci seçer', async () => {
+        const liste = await api('GET', '/words?q=densha', { token });
+        const id = liste.json.data.words[0]._id;
+
+        const res = await api('GET', `/words/${id}`, { token });
+        assert.equal(res.status, 200);
+        assert.equal(res.json.data.meaning, 'train');
+        assert.equal(res.json.data.meaningTr, 'tren');
+        assert.equal(res.json.data.exampleFurigana, '毎朝[まいあさ]**電車[でんしゃ]**で学校[がっこう]へ行[い]きます。');
+        assert.equal(res.json.data.example, '毎朝**電車**で学校へ行きます。', 'example işaretlemesiz kalmalı');
+    });
+});
+
 describe('Ayarlar ekranı', () => {
     let token;
 

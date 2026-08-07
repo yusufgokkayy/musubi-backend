@@ -533,31 +533,74 @@ Hata: `401 "Password is incorrect"` / `401 "Kimlik doğrulanamadı"`.
   "kanji": "駅",
   "kana": "えき",          // detay kartında kanjinin altındaki okunuş; eski kayıtta boşsa romaji'ye düşün
   "romaji": "eki",
-  "meaning": "istasyon",
+  "meaning": "station",              // İNGİLİZCE
+  "meaningTr": "istasyon, tren istasyonu",  // TÜRKÇE
   "type": "isim",
   "jlptLevel": "N5",       // N5 | N4 | N3 | N2 | N1
-  "audioUrl": null,        // varsa "Dinle" butonu ("Yavaş" client'ta oynatma hızıyla)
-  "isCore": true           // aktif oyun havuzunda mı (3000 çekirdek kelime)
+  "example": "東京**駅**で会いましょう。",
+  "exampleFurigana": "東京[とうきょう]**駅[えき]**で会[あ]いましょう。",
+  "exampleTr": "Tokyo istasyonunda buluşalım.",
+  "isKana": false,         // kanji alanında hiç ideograf yok (それから, いつも)
+  "isCore": true           // aktif oyun havuzunda mı
 }
 ```
 
+**Boş alanlar yanıtta bulunmaz, `null` olarak gelmez.** Yukarıdaki örnekte `audioUrl`
+(varsa "Dinle" butonu; "Yavaş" client'ta oynatma hızıyla) ve `imageUrl` yok — ikisi de
+bugün her kelimede boş. Client `x === null` değil, **alanın varlığını** kontrol etmeli.
+
+Veri setindeki 5816 kelimenin tamamı çekirdektir (`isCore: true`), yani `includeAll`
+bugün bir fark yaratmaz; parametre ileride çekirdek dışı kelime eklenirse diye duruyor.
+
+**Anlam alanları — hangisini göstereceğine client karar verir.** Yanıt her zaman ikisini
+birden taşır: `meaning` İngilizce, `meaningTr` Türkçe. Sunucu dile göre seçim yapmaz,
+çünkü aynı hesap iki cihazda farklı dilde açılabilir. Uygulamanın dili Türkçeyse
+`meaningTr`, İngilizceyse `meaning` okunmalı. `meaningTr` boş gelen eski kayıtlarda
+`meaning`'e düşülebilir (çekirdek sette hepsi dolu).
+
+**Örnek cümle işaretlemesi.** `example` ve `exampleFurigana` aynı cümlenin iki gösterimi:
+
+| Alan | İçerik | Kullanım |
+|---|---|---|
+| `example` | `東京**駅**で会いましょう。` | işaretlemesiz düz cümle gerektiğinde |
+| `exampleFurigana` | `東京[とうきょう]**駅[えき]**で会[あ]いましょう。` | kütüphane detay kartı (tasarımdaki hâli) |
+
+- `[...]` içindeki okunuş, **kendinden önceki karaktere** aittir → ruby olarak üstüne yazılır.
+- `**...**` cümledeki **hedef kelimeyi** işaretler → tasarımdaki kırmızı vurgu.
+- Okunuşu olmayan (tamamı kana) cümlelerde `exampleFurigana` yalnızca `**` taşır; hiç
+  örnek cümlesi olmayan kelimede alan gelmez.
+
 ### GET /words 🔒✉️
-Query: `?jlptLevel=N5&type=isim&page=1&limit=20&includeAll=false` (hepsi opsiyonel; `limit` en fazla 100; `includeAll=true` çekirdek olmayan ~4900 kelimeyi de dahil eder).
+Kütüphane listesi **ve** araması bu uçtan gelir.
+
+Query (hepsi opsiyonel): `?q=tren&jlptLevel=N5&type=isim&page=1&limit=20&includeAll=false`
+- `q` — `kanji`, `kana`, `romaji`, `meaning` (İng.) ve `meaningTr` (Tür.) alanlarında arar.
+  Yani kullanıcı hem `駅`, hem `えき`, hem `eki`, hem `station`, hem `istasyon` yazarak bulabilir.
+- `limit` en fazla 100; `includeAll=true` çekirdek olmayan kelimeleri de dahil eder
+  (bugün böyle bir kelime yok — yukarıdaki nota bak).
+
 ```jsonc
 // 200
 {
   "success": true,
   "data": {
     "words": [ /* Word[] */ ],
-    "total": 300,
+    "total": 300,     // filtreye uyan TÜM kayıt sayısı (sayfadaki değil)
     "page": 1,
     "totalPages": 15
   }
 }
 ```
 
-### GET /words/search?q=mizu 🔒✉️
-`q` kanji, romaji veya anlamda arar (en fazla 20 sonuç, yalnızca çekirdek set).
+Sıralama `frequencyRank` (seviye içi müfredat sırası, küçük = önce öğretilir), eşitlikte
+`_id`. **Sayfalama bu sıraya güvenir**; `?jlptLevel=` ile çağırdığında kelimeler
+öğretilme sırasında gelir. Seviye filtresi verilmezse seviyeler bu sıraya göre iç içe geçer.
+
+### GET /words/search?q=mizu 🔒✉️ (eski uç)
+`GET /words?q=` ile aynı arama alanlarını kullanır ama **sayfalama yok**: sabit en fazla
+20 sonuç döner ve `total` bilgisi vermez — yani sonuç 20'yi aşınca kullanıcı sessizce
+eksik liste görür. Yeni ekranlarda `GET /words?q=` kullan; bu uç geriye dönük uyumluluk
+için duruyor.
 ```jsonc
 // 200
 { "success": true, "data": [ /* Word[] */ ] }
