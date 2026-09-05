@@ -14,7 +14,7 @@ const { MongoMemoryServer } = require('mongodb-memory-server');
 
 let mongod, server, BASE, uploadDir;
 let User, Word, UserWord, Notification, QuizAttempt, Event, Progress, Streak, DeviceSession;
-let UserWordService, NotificationService, ProgressService, StreakService, StudySessionService, AuthService, sendEmail;
+let UserWordService, NotificationService, ProgressService, StreakService, StudySessionService, AuthService, WordService, sendEmail;
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
 
@@ -116,6 +116,7 @@ before(async () => {
     StreakService = require('../modules/streak/streak.service');
     StudySessionService = require('../modules/studysession/studysession.service');
     AuthService = require('../modules/auth/auth.service');
+    WordService = require('../modules/word/word.service');
 
     // Test kelime seti: 30 N5 + 50 N4 core kelime (quiz çeldiricileri için yeterli havuz)
     const words = [];
@@ -2579,6 +2580,123 @@ describe('Seviyeler ekranı', () => {
 
         const bad = await api('GET', '/userwords/list?masteryLevel=9', { token });
         assert.equal(bad.status, 400);
+    });
+});
+
+// Kayıt akışı her hesaba 5 seviye kaydı açar; bu blok kayıtların HERHANGİ bir
+// sebeple eksik olduğu hesabı tarif eder (akış dışında doğmuş hesap, koleksiyon
+// temizliği, eski veri). Eskiden sonuç sessiz yanlış davranıştı: liste boş,
+// anasayfa bandı yok, %75'i geçen kullanıcının cevabı 500.
+describe('Seviye kayıtları eksik hesap (onarım)', () => {
+    // createVerifiedUser'ın initializeProgress ÇAĞIRMAYAN hâli
+    const createUserWithoutProgress = async (email) => {
+        const user = await User.create({
+            name: 'Test', surname: 'User', email,
+            password: 'Testsifre123!', isEmailVerified: true
+        });
+        await StreakService.initializeStreak(user._id);
+        return user;
+    };
+
+    it('seviye listesi BOŞ dönmez: eksik kayıtlar okuma anında onarılır', async () => {
+        const user = await createUserWithoutProgress('kayitsiz@test.com');
+        assert.equal(await Progress.countDocuments({ user: user._id }), 0, 'senaryo: hiç kayıt yok');
+
+        const token = (await login('kayitsiz@test.com')).accessToken;
+        const res = await api('GET', '/progress', { token });
+
+        assert.equal(res.status, 200);
+        assert.equal(res.json.data.levels.length, 5, 'liste boş dönerdi — asıl hata buydu');
+        assert.deepEqual(
+            res.json.data.levels.map(l => l.jlptLevel),
+            ['N1', 'N2', 'N3', 'N4', 'N5'],
+            'sıra tasarımdaki gibi kalmalı (kilitli üstte, N5 altta)'
+        );
+
+        const n5 = res.json.data.levels.find(l => l.jlptLevel === 'N5');
+        assert.ok(n5.isUnlocked, 'kayıttaki kural: yalnızca N5 açık doğar');
+        assert.equal(n5.state, 'active');
+        assert.equal(res.json.data.levels.find(l => l.jlptLevel === 'N4').isUnlocked, false);
+
+        assert.equal(await Progress.countDocuments({ user: user._id }), 5,
+            'onarım DB\'ye yazılmalı, yalnızca yanıtı süslememeli');
+    });
+
+    it('onarım mevcut ilerlemeyi BOZMAZ: açık seviye ve oran yerinde kalır', async () => {
+        const user = await createVerifiedUser('kayit-eksik@test.com');
+        await Progress.updateOne(
+            { user: user._id, jlptLevel: 'N4' },
+            { isUnlocked: true, unlockedAt: new Date(), unlockedBy: 'quiz' }
+        );
+        await Progress.updateOne({ user: user._id, jlptLevel: 'N5' }, { completionRate: 60 });
+        // Tek kayıt eksilsin: onarım tetiklenir ama diğer dördüne dokunmamalı
+        await Progress.deleteOne({ user: user._id, jlptLevel: 'N3' });
+
+        const token = (await login('kayit-eksik@test.com')).accessToken;
+        const res = await api('GET', '/progress', { token });
+        const byLevel = Object.fromEntries(res.json.data.levels.map(l => [l.jlptLevel, l]));
+
+        assert.equal(res.json.data.levels.length, 5);
+        assert.equal(byLevel.N4.isUnlocked, true, 'quiz ile açılmış seviye tekrar kilitlenemez');
+        assert.equal(byLevel.N5.completionRate, 60, 'ilerleme sıfırlanamaz');
+        assert.equal(byLevel.N3.isUnlocked, false, 'yeni doğan kayıt kilitli olmalı');
+        assert.equal((await Progress.findOne({ user: user._id, jlptLevel: 'N4' })).unlockedBy, 'quiz');
+    });
+
+    it('seviye değiştirme eksik kayıtlı hesapta 404 vermez', async () => {
+        await createUserWithoutProgress('kayitsiz-gecis@test.com');
+        const token = (await login('kayitsiz-gecis@test.com')).accessToken;
+
+        const res = await api('PUT', '/progress/active-level', { token, body: { jlptLevel: 'N5' } });
+        assert.equal(res.status, 200, 'eskiden "Progress not found" 404\'ü dönüyordu');
+        assert.equal(res.json.data.activeLevel, 'N5');
+        assert.equal(res.json.data.levels.length, 5);
+    });
+
+    it('%75 eşiğini geçen kayıtsız hesapta cevap akışı 500 vermez', async () => {
+        const user = await createUserWithoutProgress('kayitsiz-esik@test.com');
+        // N5'in tamamı ezberlenmiş: eşik aşılır, seviye kilidi kontrolü çalışır
+        const n5 = await Word.find({ jlptLevel: 'N5', isCore: true });
+        await UserWord.insertMany(n5.map(w => ({
+            user: user._id, word: w._id, masteryLevel: 5, status: 'learned'
+        })));
+
+        // Eskiden burası TypeError atıyordu: findOne null dönüyor, isUnlocked okunuyordu
+        const result = await ProgressService.checkAndUnlockNextLevel(user._id, 'N5');
+        assert.deepEqual(result, { unlocked: true, level: 'N4' });
+        assert.equal((await Progress.findOne({ user: user._id, jlptLevel: 'N5' })).completionRate, 100,
+            'oran da yazılabilmeli (kayıt yokken hiçbir yere yazılamıyordu)');
+    });
+});
+
+// Uygulamadaki her kelime sorgusu isCore:true filtreler. Alan sonradan
+// eklendiği için ondan ÖNCE yazılmış kayıtlarda alan hiç yoktur (mongoose'un
+// default: false değeri var olan dokümanlara uygulanmaz) — bu kayıtlar
+// uygulamaya tamamen görünmezdir ve hiçbir uç hata vermez.
+describe('Çekirdek kelime sayımı (seed teşhisi)', () => {
+    it('seviye başına isCore sayısı döner — açılış logu bunu basar', async () => {
+        const counts = await WordService.coreWordCounts();
+        assert.deepEqual(Object.keys(counts), ['N5', 'N4', 'N3', 'N2', 'N1']);
+        assert.equal(counts.N5, 30);
+        assert.equal(counts.N4, 50);
+        assert.equal(counts.N3, 30);
+    });
+
+    it('isCore alanı olmayan kelime ne sayıma ne listeye girer', async () => {
+        const eski = await Word.collection.insertOne({
+            kanji: '旧語', romaji: 'kyuugo', meaning: 'sema oncesi kayit',
+            type: 'isim', jlptLevel: 'N5'
+        });
+        try {
+            const counts = await WordService.coreWordCounts();
+            assert.equal(counts.N5, 30, 'isCore alanı olmayan kayıt çekirdek sayılmaz');
+
+            const token = (await login('seviye@test.com')).accessToken;
+            const list = await api('GET', '/words?q=kyuugo', { token });
+            assert.equal(list.json.data.total, 0, 'kütüphanede de görünmez');
+        } finally {
+            await Word.collection.deleteOne({ _id: eski.insertedId });
+        }
     });
 });
 

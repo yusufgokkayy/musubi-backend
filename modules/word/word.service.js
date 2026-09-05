@@ -101,6 +101,22 @@ const WordService = {
         return word;
     },
 
+    // Seviye başına çekirdek kelime sayısı. Uygulamadaki TÜM kelime sorguları
+    // (ders havuzu, kütüphane, quiz, hafıza, seviye listesi) isCore:true
+    // filtreler; bir seviyede çekirdek kelime yoksa o seviye her yerde boş
+    // görünür ama hiçbir uç hata vermez — "totalWords: 0" ve boş ders 200 OK
+    // döner. Bu sayım açılışta loglanır (bkz. server.js), teşhis dakikalar
+    // değil saniyeler sürsün.
+    async coreWordCounts() {
+        const rows = await Word.aggregate([
+            { $match: { isCore: true } },
+            { $group: { _id: '$jlptLevel', count: { $sum: 1 } } }
+        ]);
+        const counts = { N5: 0, N4: 0, N3: 0, N2: 0, N1: 0 };
+        rows.forEach(r => { if (r._id in counts) counts[r._id] = r.count; });
+        return counts;
+    },
+
     // Eski uç (GET /api/words/search): yalnız kelime dizisi döndürür, sayfa yok.
     // Yerini GET /api/words?q= aldı — mobil taraf geçene kadar duruyor, ama
     // arama alanları artık ortak (kana ve meaningTr burada da geçerli).

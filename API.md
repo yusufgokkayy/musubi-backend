@@ -982,6 +982,10 @@ liste sırası: kilitli üstte, tamamlanan altta).
   }
 }
 ```
+`levels` **her zaman 5 satırdır** — sunucu eksik seviye kayıtlarını okuma anında
+tamamlar (yalnızca eksik olan doğar, var olan ilerlemeye dokunulmaz). İstemci
+boş liste ihtimalini hesaba katmamalıdır.
+
 `state` ile `canSelect` ayrı şeylerdir: **açık ve şu an seçili olmayan her
 seviye seçilebilir**, tamamlananlar dahil — kullanıcı eski seviyesine dönebilir.
 `completed` ile `active` de ayrıktır: %75'i geçmiş seviyede çalışmaya devam eden

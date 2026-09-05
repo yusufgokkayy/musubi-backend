@@ -11,7 +11,30 @@ if (process.env.NODE_ENV === 'production' && !process.env.CLIENT_URL) {
     console.error('UYARI: CLIENT_URL tanımlı değil — doğrulama/sıfırlama mailleri gönderilemez');
 }
 
-connectDatabase();
+// Açılışta kelime seed'inin durumu loglanır. Seed manuel çalıştırılıyor
+// (npm run seed) ve çalıştırılmadığında uygulama HATA VERMEZ: kütüphane boş,
+// ders boş, seviye listesinde totalWords 0 — hepsi 200 OK. Eksikliğin tek
+// görünür olduğu yer burası olsun.
+// Zincire .catch EKLENMEZ: bağlantı hatası eskisi gibi unhandledRejection'a
+// düşüp süreci kapatmalı. Sayımın kendi hatası aşağıda yutulur.
+connectDatabase().then(async () => {
+    try {
+        const WordService = require('./modules/word/word.service');
+        const counts = await WordService.coreWordCounts();
+        const bos = Object.entries(counts).filter(([, n]) => n === 0).map(([lvl]) => lvl);
+        const ozet = Object.entries(counts).map(([lvl, n]) => `${lvl}:${n}`).join(' ');
+
+        if (bos.length === 5) {
+            console.error('[seed] HİÇ çekirdek kelime yok — "npm run seed" çalıştırılmadı. Kütüphane, ders ve quiz boş gelecek.');
+        } else if (bos.length) {
+            console.error(`[seed] çekirdek kelimesi olmayan seviye(ler): ${bos.join(', ')} — ${ozet}`);
+        } else {
+            console.log(`[seed] çekirdek kelime sayımı: ${ozet}`);
+        }
+    } catch (err) {
+        console.error('[seed] kelime sayımı yapılamadı:', err.message);
+    }
+});
 
 require('./config/firebase');
 

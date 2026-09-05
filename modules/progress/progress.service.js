@@ -38,6 +38,24 @@ const unlockHintFor = (jlptLevel) => {
     return prev ? `${LEVEL_GENITIVE[prev]} %${COMPLETION_THRESHOLD}'i ile açılır` : null;
 };
 
+// 5 seviye kaydını yazar; YALNIZCA eksik olan doğar ($setOnInsert), var olan
+// dokümana asla dokunulmaz. Kayıt anı ile onarım aynı kuralı paylaşsın diye
+// tek yerde: "hangi seviyeler, hangisi açık doğar" iki kez tanımlanmasın.
+const writeLevels = (userId) => Progress.bulkWrite(
+    LEVELS.map(jlptLevel => ({
+        updateOne: {
+            filter: { user: userId, jlptLevel },
+            update: {
+                $setOnInsert: jlptLevel === 'N5'
+                    // Kayıttaki kural: yalnızca N5 açık doğar
+                    ? { isUnlocked: true, unlockedAt: new Date(), unlockedBy: 'study' }
+                    : { isUnlocked: false }
+            },
+            upsert: true
+        }
+    }))
+);
+
 const ProgressService = {
     // Seviye adları dışarıdan da okunur (anasayfadaki "N4 • Temel Seviyesi
     // Hazır" bandı) — iki yerde iki sözlük tutulmasın.
@@ -47,34 +65,49 @@ const ProgressService = {
     COMPLETION_THRESHOLD,
     MASTERY_COUNTED_MIN,
 
+    // Kullanıcı kayıt olunca 5 seviye kaydı doğar, yalnızca N5 açık.
+    // ensureProgress ÇAĞRILMAZ: kayıt bir onarım değildir, uyarı loglamamalı.
     async initializeProgress(userId) {
-        // Kullanıcı kayıt olunca sadece N5 açık
-        await Progress.create({
-            user: userId,
-            jlptLevel: 'N5',
-            isUnlocked: true,
-            unlockedAt: new Date(),
-            unlockedBy: 'study'
-        });
+        await writeLevels(userId);
+    },
 
-        // Diğer seviyeler kilitli
-        const lockedLevels = ['N4', 'N3', 'N2', 'N1'].map(level => ({
-            user: userId,
-            jlptLevel: level,
-            isUnlocked: false
-        }));
+    // Eksik seviye kayıtlarını tamamlar ve GÜNCEL listeyi döner.
+    //
+    // Neden okuma yolunda bir onarım var: seviye listesi, anasayfa bandı ve
+    // seviye kilidi tamamen bu 5 dokümana dayanıyor. Doküman eksikse hiçbiri
+    // hata vermiyor, sessizce yanlış davranıyordu — liste BOŞ geliyor, anasayfa
+    // bandı kayboluyor, kullanıcı %75'i geçtiğinde ise checkAndUnlockNextLevel
+    // null'a çarpıp 500 veriyordu. Kayıt akışı bu dokümanları oluşturuyor ama
+    // akışın dışında doğmuş bir hesap (elle açılmış kayıt, koleksiyon
+    // temizliği, eski veri) ekranı kalıcı olarak boş bırakıyor.
+    //
+    // İki güvence:
+    // - $setOnInsert: var olan dokümana ASLA dokunulmaz. Onarım kullanıcının
+    //   açtığı seviyeyi kilitleyemez, completionRate'ini sıfırlayamaz.
+    // - Çağıran elindeki dokümanları geçebilir; 5'i tamsa tek ek sorgu bile
+    //   yapılmaz, yani mutlu yolun maliyeti sıfırdır.
+    async ensureProgress(userId, docs) {
+        const current = docs || await Progress.find({ user: userId }).sort({ jlptLevel: 1 });
+        if (current.length === LEVELS.length) return current;
 
-        await Progress.insertMany(lockedLevels);
+        await writeLevels(userId);
+
+        // Onarım sessiz kalmasın: bozuk hesap deploy loglarında görünsün
+        console.warn(`[progress] eksik seviye kaydı onarıldı: user=${userId} (${current.length}/${LEVELS.length})`);
+
+        return Progress.find({ user: userId }).sort({ jlptLevel: 1 });
     },
 
     // Ayarlar > "Öğrenme Seviyen" ekranının tamamı. Sıra N1→N5'tir (jlptLevel
     // alfabetik = tasarımdaki liste sırası: kilitli üstte, tamamlanan altta).
     async getProgress(userId) {
-        const [progress, user] = await Promise.all([
+        const [found, user] = await Promise.all([
             Progress.find({ user: userId }).sort({ jlptLevel: 1 }),
             User.findById(userId).select('activeLevel')
         ]);
         const activeLevel = user?.activeLevel || 'N5';
+        // Eksik kayıt varsa liste boş dönerdi; onarım burada (bkz. ensureProgress)
+        const progress = await ProgressService.ensureProgress(userId, found);
 
         const levels = await Promise.all(
             progress.map(async (p) => {
@@ -122,6 +155,9 @@ const ProgressService = {
             throw new AppError('jlptLevel N5-N1 arasında olmalı', 400);
         }
 
+        // Eksik kayıtlı hesap burada 404 "Progress not found" alıyordu; önce onar
+        await ProgressService.ensureProgress(userId);
+
         const target = await Progress.findOne({ user: userId, jlptLevel });
         if (!target) throw new AppError('Progress not found', 404);
         if (!target.isUnlocked) throw new AppError('Bu seviye henüz kilitli', 403);
@@ -149,6 +185,10 @@ const ProgressService = {
     },
 
     async checkAndUnlockNextLevel(userId, jlptLevel) {
+        // Her cevaptan sonra çalışır. Kayıtlar eksikse hem oran hiçbir yere
+        // yazılamıyor hem de aşağıdaki nextProgress null geliyordu (500).
+        await ProgressService.ensureProgress(userId);
+
         const completionRate = await ProgressService.calculateCompletionRate(userId, jlptLevel);
 
         // Tamamlanma oranını güncelle
@@ -168,6 +208,10 @@ const ProgressService = {
                 user: userId,
                 jlptLevel: nextLevel
             });
+
+            // ensureProgress'ten sonra normalde dolu; yine de bir cevap isteği
+            // eksik kayıt yüzünden 500 vermesin
+            if (!nextProgress) return { unlocked: false };
 
             if (!nextProgress.isUnlocked) {
                 nextProgress.isUnlocked = true;

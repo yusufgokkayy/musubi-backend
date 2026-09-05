@@ -75,7 +75,7 @@ const HomeService = {
         };
 
         const [
-            todaySession, streak, progress, reviewCount, tomorrowReviews,
+            todaySession, streak, foundProgress, reviewCount, tomorrowReviews,
             todayMistakeCount, mistakePreview, todayPools, weekSessions, unreadNotifications
         ] = await Promise.all([
             // Bugünün session'ı
@@ -122,6 +122,10 @@ const HomeService = {
             // Zil ikonunun rozeti
             Notification.countDocuments({ user: userId, read: false })
         ]);
+
+        // Seviye kayıtları eksik olan hesapta "Şimdi Geç" bandı ve progress
+        // dizisi sessizce kayboluyordu; seviye listesindeki onarımın aynısı
+        const progress = await ProgressService.ensureProgress(userId, foundProgress);
 
         // Çemberin paydası = BUGÜNÜN HAVUZU (günün sözleşmesi). dailyGoal canlı
         // tercih değeridir: gün içinde değişince payda anında oynamamalı —
