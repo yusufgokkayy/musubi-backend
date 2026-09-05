@@ -56,8 +56,6 @@ const HomeService = {
         // şeritte HİÇBİR güne isToday düşmezdi (alev kaybolurdu).
         const now = new Date();
         const today = startOfDayInTz(tz, now);
-        const tomorrow = addDays(today, 1);
-        const tomorrowEnd = addDays(today, 2);
 
         // Seri şeridi: içinde bulunulan takvim haftası (Pzt→Paz)
         const weekDates = weekDatesInTz(tz, now);
@@ -75,7 +73,7 @@ const HomeService = {
         };
 
         const [
-            todaySession, streak, foundProgress, reviewCount, tomorrowReviews,
+            todaySession, streak, foundProgress,
             todayMistakeCount, mistakePreview, todayPools, weekSessions, unreadNotifications
         ] = await Promise.all([
             // Bugünün session'ı
@@ -87,19 +85,8 @@ const HomeService = {
             // Streak
             Streak.findOne({ user: userId }),
 
-            // Tüm seviyelerin ilerlemesi
+            // Seviye bandı ve "Şimdi Geç" kartı için (yanıtta DÖNMEZ, bkz. aşağıda)
             Progress.find({ user: userId }),
-
-            // Bekleyen tekrar sayısı
-            UserWord.countDocuments({
-                user: userId,
-                nextReviewDate: { $lte: new Date() },
-                status: { $in: ['learning', 'learned'] }
-            }),
-            UserWord.countDocuments({
-                user: userId,
-                nextReviewDate: { $gte: tomorrow, $lt: tomorrowEnd }
-            }),
 
             // "Bugünün Hataları — 8 Hata" başlığındaki sayı
             UserWord.countDocuments(mistakeFilter),
@@ -165,7 +152,18 @@ const HomeService = {
 
         // "Seviyeni Öğrenelim Mi?" modalı. Ayrı bir /quiz/status isteği
         // gerekmesin diye burada: modal anasayfa açılışında çıkıyor.
-        const placementPrompt = await QuizService.shouldPromptPlacement(userId, user);
+        // İkisi FARKLI sorulardır ve ikisi de lazım:
+        //   placementPrompt   → "modal kendiliğinden açılsın mı" (hiç girmemiş
+        //                       ve ertelememiş kullanıcı)
+        //   placementAvailable→ "sınava şu an girilebilir mi" (14 günlük
+        //                       cooldown). Ayarlardaki satır koşulsuz görünür,
+        //                       Başla butonu buna bakar.
+        // İkincisi eskiden yalnız /quiz/status'ta vardı; anasayfa modalı için
+        // istemci ikinci bir istek atmak zorunda kalıyordu.
+        const [placementPrompt, placement] = await Promise.all([
+            QuizService.shouldPromptPlacement(userId, user),
+            QuizService.placementAvailability(userId)
+        ]);
 
         return {
             name: user?.name || '',        // "Merhaba Emirhan" başlığı
@@ -178,6 +176,9 @@ const HomeService = {
             // true ise "Seviyeni Öğrenelim Mi?" modalı açılır. "Daha Sonra"
             // POST /quiz/placement/defer çağırır ve bayrak kalıcı olarak söner.
             placementPrompt,
+            placementAvailable: placement.available,
+            // available:false ise geri sayımın bitiş anı; true ise null
+            nextAttemptAllowedAt: placement.available ? null : placement.nextAllowedAt,
             // Kullanıcı avatarı henüz YÜKLENEMİYOR (upload uçları admin'e
             // kapalı, sosyal girişte de fotoğraf saklanmıyor) — alan sözleşmede
             // duruyor ki yükleme geldiğinde istemci başlığı yeniden kurmasın.
@@ -217,18 +218,13 @@ const HomeService = {
                     jlptLevel: uw.word.jlptLevel
                 })),
 
-            // --- Aşağıdakilerin yeni anasayfa tasarımında karşılığı YOK ---
+            // KALDIRILDI: progress / pendingReviews / tomorrowReviews.
             // 04.08.2026 revizyonunda "Yarın N Kart Bekliyor" bandı ve seviye
-            // ilerleme listesi ekrandan kalktı. Alanlar yalnızca yayındaki
-            // uygulamayı kırmamak için duruyor; yeni istemci kodu OKUMAMALI.
-            // (Seviye ilerlemesinin asıl yeri zaten /progress uçlarıdır.)
-            progress: progress.map(p => ({
-                jlptLevel: p.jlptLevel,
-                isUnlocked: p.isUnlocked,
-                completionRate: p.completionRate
-            })),
-            pendingReviews: reviewCount,
-            tomorrowReviews
+            // ilerleme listesi ekrandan kalkmıştı; alanlar yayındaki uygulamayı
+            // kırmamak için duruyordu. Mobil taraf 07.08.2026'da hiçbirinin
+            // okunmadığını yazılı olarak teyit etti, arkalarındaki iki
+            // countDocuments sorgusuyla birlikte silindiler. Seviye
+            // ilerlemesinin asıl yeri /progress uçlarıdır.
         };
     },
 

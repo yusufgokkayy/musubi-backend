@@ -947,15 +947,25 @@ async function startLesson() {
 
 function applyTodayPayload(d) {
   const L = state.lesson;
-  const queue = [];
-  d.reviewWords.forEach(uw => { if (!uw.answeredToday && uw.word) queue.push({ id: uw.word._id, word: uw.word, review: true }); });
-  d.newWords.forEach(w => { if (!w.answeredToday) queue.push({ id: w._id, word: w, review: false }); });
-  L.queue = queue; L.idx = 0;
-  // Sayaçlar HER ZAMAN backend'den okunur, istemcide toplanmaz — Anasayfa ile
-  // aynı kaynak. Yerel toplama, "gir-çık'ta oran sıçrıyor" bug sınıfının kökü.
-  L.done = d.today.completedWords;
-  L.total = d.goal;
-  L.pending = d.today.emptyCount;
+  // Kuyruğun sırasını SUNUCU belirler (d.queue = bu turda kalanlar, sırasıyla).
+  // İstemci kendi sırasını kurmaz: uygulama silinip kurulsa bile ders aynı
+  // yerden devam etsin. d.postponedIds bu turda ertelenenlerdir ve kuyrukta
+  // DEĞİLDİR — kullanıcının "sonra" dediği kelime hemen geri gelmez.
+  const byId = new Map();
+  d.reviewWords.forEach(uw => { if (uw.word) byId.set(String(uw.word._id), { word: uw.word, review: true }); });
+  d.newWords.forEach(w => byId.set(String(w._id), { word: w, review: false }));
+  L.queue = (d.queue || [])
+    .map(id => { const e = byId.get(String(id)); return e && { id: String(id), ...e }; })
+    .filter(Boolean);
+  L.idx = 0;
+
+  // Sayaçlar HER ZAMAN backend'den okunur, istemcide toplanmaz.
+  // BAR TURUN İLERLEMESİDİR (progress), günün toplamı (today) DEĞİL: gün
+  // sayacı turlar arası birikiyor, bara bağlanınca taze turun ilk sorusunda
+  // "20/20 %100" yazıyordu.
+  L.done = d.progress.completed;
+  L.total = d.progress.total;
+  L.pending = d.progress.postponed;
 }
 
 function renderLesson() {
@@ -1049,9 +1059,11 @@ async function submitAnswer(payload) {
   }
 
   const d = res.json.data;
-  L.done = d.today.completedWords;
-  L.total = d.goal;
-  L.pending = d.today.emptyCount;
+  // Cevap yanıtı da aynı tur bloğunu taşır — bar için ayrıca /userwords/today
+  // çekmeye gerek yok (bkz. applyTodayPayload: bar TURU gösterir, günü değil)
+  L.done = d.progress.completed;
+  L.total = d.progress.total;
+  L.pending = d.progress.postponed;
   L.streak = (d.result === 'correct' || d.result === 'easy') ? L.streak + 1 : 0;
 
   const tone = d.result === 'wrong' ? 'bad' : d.result === 'empty' ? 'warn' : 'good';
@@ -1097,9 +1109,11 @@ function nextWord() {
   renderQuestion();
 }
 
-// Yerel kuyruk bitince körlemesine "bitti" denmez: "Şimdilik Geç" ile
-// ertelenmiş kelimeler gün içinde yeniden sorulmalıdır (backend bunları
-// answeredToday:false tutar ve ertelenmişken /sessions/complete 409 döner).
+// Yerel kuyruk bitince sunucudan taze kuyruk istenir (araya başka bir cihaz
+// girmiş olabilir). Bu turda ERTELENEN kelimeler queue'ya dahil DEĞİLDİR:
+// "Şimdilik Geç" aynı turda bir daha sorulmaz demektir. Kuyruk boşsa ders
+// biter — /sessions/complete artık 409 dönmüyor, ertelenenler bir sonraki
+// tura taşınıp turun başına geçiyor.
 async function refreshQueueOrFinish() {
   const tk = activeToken;
   loading();
@@ -1128,7 +1142,6 @@ async function finishLesson() {
   loading();
   const res = await api('PUT', '/sessions/complete');
   if (stale(tk)) return;
-  if (res.status === 409) { toast(res.json.message, 'err'); return refreshQueueOrFinish(); }
   if (!guard(res)) return reset('home');
   const sum = await api('GET', '/home/summary');
   if (stale(tk)) return;
