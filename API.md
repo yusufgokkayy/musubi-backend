@@ -2,7 +2,7 @@
 
 Mobil entegrasyon için tam sözleşme. Tüm yollar `/api` önekiyle başlar, tüm gövdeler JSON'dur (`Content-Type: application/json`).
 
-**Zarf:** Her başarılı yanıt `{ "success": true, ... }`, her hata `{ "success": false, "message": "..." }` biçimindedir. Bazı hatalar ayrıca `details` nesnesi taşır — istemcinin üzerine iş yapabileceği makine-okur veri (örn. `PUT /sessions/complete` → `{ "pendingWords": 3 }`). `details` isteğe bağlıdır, yokluğunda hata biçimi değişmez.
+**Zarf:** Her başarılı yanıt `{ "success": true, ... }`, her hata `{ "success": false, "message": "..." }` biçimindedir. Bazı hatalar ayrıca `details` nesnesi taşır — istemcinin üzerine iş yapabileceği makine-okur veri (örn. `POST /quiz/start` cooldown'ında `nextAttemptAllowedAt`). `details` isteğe bağlıdır, yokluğunda hata biçimi değişmez.
 
 **Kimlik doğrulama:** 🔒 işaretli endpoint'ler `Authorization: Bearer <accessToken>` başlığı ister. ✉️ işaretli olanlar ayrıca doğrulanmış e-posta gerektirir (aksi halde `403 "Please verify your email first"`). Access token ~15 dk geçerlidir; `401 "Token expired"` alınca `/auth/refresh` çağrılır, o da 401 dönerse login ekranına dönülür.
 
@@ -699,11 +699,18 @@ kadar genişler — kontenjana önce **vadesi gelmiş tekrarlar**, kalan yer yen
 kelimelerle dolar (cevaplanmışlar korunur). Hedef azalırsa bugünü etkilemez,
 yarınki havuz yeni hedefle kurulur.
 
-**Yeni tur (şimdilik):** `PUT /sessions/complete` ile günün oturumu
-tamamlandıktan sonra bu uç nokta tekrar çağrılırsa, aynı gün içinde bile
-**taze bir havuz** üretilir — önceki havuzdaki (hem tekrar hem yeni) kelimeler
-hariç tutulur, aynı kurallarla (frequencyRank sıralı yeni, vade sıralı tekrar)
-yeniden seçilir. Session da otomatik yeniden açılır (`isCompleted:false`).
+**Yeni tur:** `PUT /sessions/complete` ile günün oturumu tamamlandıktan sonra
+bu uç nokta tekrar çağrılırsa, aynı gün içinde bile **taze bir havuz** üretilir —
+önceki havuzdaki (hem tekrar hem yeni) kelimeler hariç tutulur, aynı kurallarla
+(frequencyRank sıralı yeni, vade sıralı tekrar) yeniden seçilir.
+
+**İSTİSNA — ertelenenler taşınır:** o gün "Şimdilik Geç" denmiş ve hâlâ gerçek
+cevap bekleyen kelimeler hariç tutulmaz, yeni turun **başına** konur ve
+kontenjandan sayılır (taşınan + taze = `goal`, payda büyümez). Taşınmasalardı
+`complete` sonrası günün geri kalanında bir daha hiç sorulmazlardı — "Şimdilik
+Geç" sessiz bir silme tuşuna dönerdi. Yeni turda bu kelimeler "bu turda henüz
+dokunulmamış" sayılır (`queue`'ya girer, `progress.postponed`'da görünmez), ama
+gün kapsamındaki işaretleri durur (`todayResult: "empty"`, `today.emptyCount`). Session da otomatik yeniden açılır (`isCompleted:false`).
 Günün toplam sayaçları (`/sessions/today`) turlar arasında birikmeye devam eder.
 
 `newWords` **rastgele değil**, `frequencyRank` (müfredat/omurga sırası, küçük
@@ -711,12 +718,18 @@ Günün toplam sayaçları (`/sessions/today`) turlar arasında birikmeye devam 
 kelimeden (örn. "cerrah") önce sorulur. `reviewWords` sırası ayrı bir mantığa
 tabidir (vadesi en eski + en kırılgan önce).
 
-Kaldığın yerden devam: her öğede `answeredToday`/`todayResult`, kökte `progress`
-sayaçları vardır. Ders yarıda kalıp yeniden açıldığında istemci
-`answeredToday: false` olan kelimelerden sürdürmelidir — baştan başlamak yerine.
-`answeredToday` yalnızca günün **nihai cevabı** (correct/easy/wrong) verildiyse
-true olur; **"Şimdilik Geç" (empty) ertelemedir**: kelime `remaining`'de kalır
-(`todayResult: "empty"` ile işaretli) ve yeniden sorulmalıdır.
+**Kaldığın yerden devam artık tamamen sunucudadır.** Yanıtın kökündeki `queue`
+kalan kelimelerin **sunucunun belirlediği sırasıdır**; istemci kendi sırasını
+kurmaz ve hiçbir şey hatırlamak zorunda değildir — uygulama silinip kurulsa
+bile ders aynı yerden devam eder. Aynı bilgi `GET /sessions/current`'tan
+kelime gövdeleri olmadan da alınabilir.
+
+Her öğe ayrıca `answeredToday` / `todayResult` taşır (bu ikisi **gün**
+kapsamlıdır): `answeredToday` yalnızca günün **nihai cevabı**
+(correct/easy/wrong) verildiyse true olur, `todayResult` ise kelimenin o güne
+kayıtlı sonucudur ve **"bugün bu kelimeyi boş geçmiştin" rozetinin tek
+kaynağıdır**. `reviewWords` ve `newWords` öğelerinin ikisi de bu alanları
+taşır; hiç dokunulmamış kelimede `todayResult: null`'dur.
 ```jsonc
 // 200
 {
@@ -740,13 +753,23 @@ true olur; **"Şimdilik Geç" (empty) ertelemedir**: kelime `remaining`'de kalı
     ],
     "newWords": [ /* Word[] + answeredToday/todayResult — bugüne atanmış yeni kelimeler */ ],
 
-    // DİKKAT: answered burada "kaç kelimeye DOKUNULDU"dur, ertelenenler DAHİL.
-    // İlerleme göstergesi için bunu DEĞİL, aşağıdaki today.completedWords'ü kullan.
-    "progress": { "total": 30, "answered": 12, "remaining": 18 },
+    // ——— TURUN durumu (ders ekranı YALNIZCA bunu okur) ———
+    "roundStartedAt": "2026-09-05T06:12:00.000Z",
+    "queue": ["665f2b...", "665f2c..."],  // kalan sıra, SUNUCU belirler
+    "postponedIds": ["665f2d..."],        // bu turda "Şimdilik Geç" denenler
+    "completedIds": ["665f2e..."],        // bu turda nihai cevabı verilenler
+    "progress": {
+      "total": 30,       // bu turun boyutu (= goal)
+      "completed": 9,    // DERS BARININ PAYI — nihai cevap verilenler
+      "postponed": 3,    // şu an ertelenmiş durumda olanlar
+      "remaining": 18,   // bu turda hiç dokunulmamışlar (= queue.length)
+      "answered": 12     // DEPRECATED — completed+postponed, ilerleme sanma
+    },
 
+    // ——— GÜNÜN durumu (anasayfa çemberi bunu okur) ———
     "goal": 30,                  // bu turun boyutu = progress.total
     "today": {                   // /home/summary ile AYNI kaynak ve şekil
-      "completedWords": 9,       // "X/Y Tamamlandı" ifadesinin PAYI
+      "completedWords": 9,       // ÇEMBERİN PAYI — turlar arası birikir
       "totalWords": 12,          // dokunulan kelime sayısı (erteleme dahil)
       "correctCount": 7,
       "wrongCount": 2,
@@ -756,7 +779,17 @@ true olur; **"Şimdilik Geç" (empty) ertelemedir**: kelime `remaining`'de kalı
   }
 }
 ```
-Ders ekranı kendi yerel sayacını **tutmamalı**: her `/userwords/answer` yanıtı da aynı `goal` + `today` bloğunu döner, başlık her cevapta oradan tazelenir. İki ekranın ayrı kaynaktan beslenip farklı "X/Y" göstermesi böylece imkânsız olur. `completedWords`'ün tanımı ve neden `totalWords` olmadığı için [Hangi sayı ilerlemedir](#ana-ekran--home) notuna bak.
+
+**`progress` ile `today` bilerek FARKLIDIR — hangisi nerede kullanılır:**
+
+| | Kapsam | Sıfırlanma | Kullanıcısı |
+|---|---|---|---|
+| `progress` / `queue` / `postponedIds` / `completedIds` | **TUR** (`roundStartedAt`'ten beri) | her yeni turda | Ders barı ve kuyruğu |
+| `goal` / `today` | **GÜN** (`StudySession`) | hiç (turlar arası birikir) | Anasayfa çemberi, bitiş ekranı |
+
+Turun ilkinde ikisi birebir aynı sayıyı verir. **İkinci turda ayrışırlar** ve bu doğrudur: 20 kelimelik turu bitirip yeni tur açan kullanıcıda `today.completedWords` 20'de kalır (gün sayacı), `progress.completed` ise 0'dan başlar (taze tur). Ders barı `today.completedWords`'ü okursa taze turun ilk sorusunda **"20/20 · %100 Tamamlandı"** yazar — barın payı `progress.completed`, paydası `progress.total`'dır.
+
+Ders ekranı kendi yerel sayacını **tutmamalı**: her `/userwords/answer` yanıtı da aynı `progress` + `goal` + `today` bloklarını döner, bar her cevapta oradan tazelenir; ayrıca `/userwords/today` çekmeye gerek yoktur. `completedWords`'ün tanımı ve neden `totalWords` olmadığı için [Hangi sayı ilerlemedir](#ana-ekran--home) notuna bak.
 Not: tüm `Word` yanıtlarında türetilmiş `isKana` alanı vardır — `true` ise kelime
 kana-only'dir (それから, いつも): istemci "kanji" etiketini ve kanjiyle aynı olan
 okunuş satırını gizlemelidir.
@@ -772,8 +805,11 @@ noktaya istek atarak sınırsız/rastgele kelime cevaplama girişimini kapatır.
 // VEYA yazma sorusunda result yerine yazılan metin gönderilir; puanlamayı
 // BACKEND yapar ("to see / watch" gibi çok varyantlı anlamlarda her varyant
 // tek başına kabul edilir, parantez içleri opsiyoneldir, büyük/küçük harf
-// ve noktalama önemsizdir). Boş metin "empty" sayılır.
+// ve noktalama önemsizdir). Boş METİN ("") "empty" sayılır.
 { "wordId": "665f2b...", "answer": "to see" }
+
+// İkisinden de yoksa 400: `result` yok + `answer` yok/null belirsiz bir
+// istektir, sessizce "boş geçildi" sayılmaz (bkz. aşağıdaki not).
 
 // 200 — güncellenmiş SRS durumu
 {
@@ -792,13 +828,35 @@ noktaya istek atarak sınırsız/rastgele kelime cevaplama girişimini kapatır.
     "lastResult": "correct",
     "levelDropped": false,     // true ise UI seviye düşüşü animasyonu gösterebilir
     "previousLevel": 3,
-    "result": "correct",       // kullanılan sonuç — answer gönderildiyse puanlama budur
+
+    "result": "correct",       // BU CEVABIN puanı — "Doğru!/Yanlış!" bundan çizilir
+    "todayResult": "correct",  // kelimenin GÜNE KAYITLI sonucu — rozet bundan çizilir
     "correctAnswer": "to see", // yalnızca answer gönderildiyse: "Cevap: ..." satırı için
-    "counted": true            // false ise cevap kaydedilmedi (tekrar çalışma turu)
+    "counted": true,           // false ise cevap kaydedilmedi (tekrar çalışma turu)
+
+    // Ders barı için TURUN durumu (bkz. /userwords/today'deki tablo)
+    "goal": 20,
+    "progress": { "total": 20, "completed": 9, "postponed": 3, "remaining": 8, "answered": 12 },
+    // Anasayfa çemberi için GÜNÜN durumu — /home/summary ile aynı kaynak
+    "today": {
+      "completedWords": 9, "totalWords": 12,
+      "correctCount": 7, "wrongCount": 2, "emptyCount": 3, "isCompleted": false
+    }
   }
 }
 ```
-Hatalar: `400 "Invalid result, use: correct, easy, empty, wrong"`, `404 "Word not found"`.
+Hatalar: `400 "result veya answer gönderilmeli"`, `400 "Invalid result, use: correct, easy, empty, wrong"`, `404 "Word not found"`.
+
+**`counted`, `goal`, `progress` ve `today` sözleşmenin parçasıdır** ve kaldırılmayacaktır. Amaçları istemcinin her cevaptan sonra ayrı bir `/home/summary` ya da `/userwords/today` çağırmasını gereksiz kılmak: ders barı ile anasayfa çemberinin farklı sayı göstermesi böylece yapısal olarak imkânsız olur.
+
+**`result` ile `todayResult` farklı şeylerdir, karıştırma:**
+
+| Alan | Anlamı | Nerede kullanılır |
+|---|---|---|
+| `result` | **Bu gönderimin** puanı | "Doğru! / Yanlış! / Cevap: …" geri bildirimi |
+| `todayResult` | Kelimenin **güne kayıtlı** sonucu (`correct`/`wrong`/`empty`/`null`) | "Bugün bu kelimeyi boş geçmiştin" rozeti |
+
+Tekrar çalışma turunda (`counted: false`) `result` yine puanlanıp döner ama `todayResult` **değişmez** — rozeti `result`'a bağlamak, nötr bir tekrar cevabının kelimeyi "ertelendi" göstermesine yol açıyordu. `todayResult`, `/userwords/today`'deki aynı isimli alanla birebir aynı anlamdadır.
 
 **Günün cevabı kuralı** (kullanıcının saat diliminde):
 
@@ -911,24 +969,59 @@ Hata: `404 "No active session found"`.
 ### PUT /sessions/complete 🔒✉️
 ```jsonc
 // 200 — gövde yok; isCompleted=true, duration hesaplanır.
-// accuracy: bitiş ekranındaki "Accuracy %" — correctCount/totalWords'ten
-// hazır yüzde olarak döner, istemci hesaplamamalıdır
-{ "success": true, "data": { /* StudySession */, "accuracy": 40 } }
+{ "success": true, "data": { /* StudySession */,
+  // Bitiş ekranındaki "Accuracy %" — hazır yüzde, istemci hesaplamamalı.
+  // Payda correctCount+wrongCount'tur, totalWords DEĞİL: "Şimdilik Geç"e
+  // basmak doğruluk oranını düşürmemeli.
+  "accuracy": 71,
+  // Sonraya bırakılmış kelime sayısı — "3 kelimeyi sonraya bıraktın" satırı
+  // için. Bitirmeyi ENGELLEMEZ (aşağıya bak).
+  "pendingWords": 3
+} }
 ```
 
-**Ertelenmiş kelime varken ders bitirilemez.** "Şimdilik Geç" (`empty`) nihai cevap değildir; o kelimeler gün içinde yeniden sorulmalıdır. Tur burada kapatılsaydı (`roundClosedAt`) havuzdan düşer ve kullanıcı cevaplamadığı hâlde "Tamamlandı" ekranını görürdü.
+**Ertelenmiş kelime artık dersi bitirmeyi engellemez (07.08.2026, 409 kalktı).**
+Eskiden `empty` durumunda kelime kalmışsa `409` dönüyordu; gerekçe, turun
+kapanmasının (`roundClosedAt`) o kelimeleri günün havuzundan düşürmesiydi.
+Artık **ertelenen kelimeler bir sonraki tura taşınıyor** (bkz.
+`GET /userwords/today` → yeni tur) — kayıp yok, kelime yeni turun **başında**
+geri geliyor. 409'un tek etkisi, "Şimdilik Geç"e basan kullanıcıyı dersten
+çıkamaz hale getirmekti.
 
-```jsonc
-// 409 — hâlâ ertelenmiş kelime var
-{
-  "success": false,
-  "message": "Ertelenmiş 3 kelime var, ders tamamlanamaz",
-  "details": { "pendingWords": 3 }
-}
-```
-Doğru akış: `/userwords/today`'i tazele, `answeredToday:false` olanları yeniden sor, kuyruk boşalınca `complete` çağır.
+Akış: kuyruk (`queue`) boşalınca `complete` çağır. Ertelenenler `postponedIds`'tedir ve aynı turda tekrar sorulmaz.
 
 Hata: `404 "No active session found"`.
+
+### GET /sessions/current 🔒✉️
+Dersin **tam durumu, kelime gövdeleri olmadan**. Uygulama silinip kurulsa bile
+istemcinin hiçbir şey hatırlaması gerekmez: kuyruk, sıra ve ilerleme sunucudadır.
+
+**Tamamen okumadır** — havuz açmaz, tur yenilemez, oturum başlatmaz. Bugün için
+havuz yoksa (ya da tur kapalıysa) `data: null` döner; istemci o zaman normal
+akışa girer: `POST /sessions/start` → `GET /userwords/today`.
+
+```jsonc
+// 200
+{
+  "success": true,
+  "data": {
+    "sessionId": "665f4d...",   // GÜNÜN oturum kimliği — tur kimliği DEĞİL
+                                // (gün başına tek StudySession var, tur kapanınca
+                                //  aynı kayıt yeniden açılır). Tur değişimi
+                                //  roundStartedAt'ten anlaşılır.
+    "jlptLevel": "N5",          // kullanıcının activeLevel'ı
+    "roundStartedAt": "2026-09-05T06:12:00.000Z",
+    "queue": ["665f2b...", "665f2c..."],  // kalan sıra, sunucu belirler
+    "currentIndex": 0,          // HER ZAMAN 0: queue "kalan"dır, kaldığın yer queue[0]
+    "postponedIds": ["665f2d..."],
+    "completedIds": ["665f2e..."],
+    "progress": { "total": 20, "completed": 7, "postponed": 3, "remaining": 10, "answered": 10 }
+  }
+}
+```
+Aynı dört alan (`queue`, `postponedIds`, `completedIds`, `progress`) `GET /userwords/today` yanıtının kökünde de vardır — ders açılışı tek istekte biter, bu uç yalnızca "sadece durumu öğren" için.
+
+Kuyruk sırası **deterministiktir** (tekrarlar havuzun seçim sırasında: vadesi en eski + en kırılgan önce; yeni kelimeler `frequencyRank` artan). İki çağrı aynı sırayı verir.
 
 ### GET /sessions/today 🔒✉️
 ```jsonc
@@ -1420,6 +1513,12 @@ Anasayfanın tek istekte tüm verisi. **Hikâye şeridi buna dahil değildir** �
     // bayrak kalıcı olarak söner (erteleme eskiden istemcide tutuluyordu ve
     // modal her anasayfa açılışında geri geliyordu).
     "placementPrompt": false,
+    // "Sınava Başla" butonu aktif mi (14 günlük tekrar girme aralığı).
+    // placementPrompt ile KARIŞTIRMA: o "modal kendiliğinden açılsın mı",
+    // bu "şu an girilebilir mi". Eskiden yalnız /quiz/status'ta vardı ve
+    // istemci modal için ikinci bir istek atmak zorunda kalıyordu.
+    "placementAvailable": true,
+    "nextAttemptAllowedAt": null,   // available:false ise geri sayımın bitişi
 
     "goal": 20,                     // ilerleme çemberinin PAYDASI: bugünün havuz
                                     // boyutu (havuz yoksa dailyGoal)
@@ -1450,10 +1549,7 @@ Anasayfanın tek istekte tüm verisi. **Hikâye şeridi buna dahil değildir** �
         "meaning": "to eat", "meaningTr": "yemek yemek", "jlptLevel": "N5" }
     ],
 
-    // --- Aşağıdakilerin yeni tasarımda karşılığı YOK, okumayın (deprecated) ---
-    "progress": [ { "jlptLevel": "N5", "isUnlocked": true, "completionRate": 42 } ],
-    "pendingReviews": 12,
-    "tomorrowReviews": 20
+    // NOT: progress / pendingReviews / tomorrowReviews KALDIRILDI (aşağıya bak)
   }
 }
 ```
@@ -1481,7 +1577,7 @@ Gün etiketleri (`Pzt`, `Salı`…) `date`'ten yerel olarak biçimlendirilir; `w
 
 `completedWords` her zaman `correctCount + wrongCount`'a eşittir; istemci bunu **kendisi hesaplamamalı**, alanı okumalıdır.
 
-**Deprecated alanlar.** `progress`, `pendingReviews` ve `tomorrowReviews` 04.08.2026 tasarım revizyonunda anasayfadan kalktı ("Yarın N Kart Bekliyor" bandı ve seviye ilerleme listesi artık çizilmiyor). Yayındaki uygulamayı kırmamak için yanıtta duruyorlar; **yeni istemci kodu okumamalı.** Seviye ilerlemesinin asıl yeri `/progress` uçlarıdır.
+**Kaldırılan alanlar (07.08.2026).** `progress`, `pendingReviews` ve `tomorrowReviews` yanıttan **silindi**. 04.08.2026 tasarım revizyonunda anasayfadan kalkmışlardı ("Yarın N Kart Bekliyor" bandı ve seviye ilerleme listesi artık çizilmiyor) ve yayındaki uygulamayı kırmamak için duruyorlardı; mobil taraf hiçbirinin okunmadığını yazılı olarak teyit edince arkalarındaki iki `countDocuments` sorgusuyla birlikte kaldırıldılar. Seviye ilerlemesinin yeri `/progress` uçlarıdır.
 
 ### GET /home/calendar 🔒✉️
 ```jsonc

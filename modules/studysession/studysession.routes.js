@@ -7,6 +7,7 @@ const router = express.Router();
 router.post('/start',       StudySessionController.startSession);
 router.put('/update',       StudySessionController.updateSession);
 router.put('/complete',     StudySessionController.completeSession);
+router.get('/current',      StudySessionController.getCurrentRound);
 router.get('/today',        StudySessionController.getTodaySession);
 router.get('/history',      StudySessionController.getSessionHistory);
 

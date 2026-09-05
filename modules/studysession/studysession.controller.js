@@ -1,5 +1,8 @@
 const catchAsync = require('../../utils/catchAsync');
 const StudySessionService = require('./studysession.service');
+// Turun durumu (kuyruk/ilerleme) günün havuzundan türer, havuz da
+// UserWordService'in sorumluluğunda — burada ikinci bir kopyası olmasın.
+const UserWordService = require('../userword/userword.service');
 
 const StudySessionController = {
     startSession: catchAsync(async (req, res) => {
@@ -17,6 +20,14 @@ const StudySessionController = {
     completeSession: catchAsync(async (req, res) => {
         const session = await StudySessionService.completeSession(req.user.id);
         res.status(200).json({ success: true, data: session });
+    }),
+
+    // Yan etkisiz: havuz açmaz, tur yenilemez, oturum başlatmaz.
+    // Havuz yoksa data:null döner — istemci POST /sessions/start +
+    // GET /userwords/today ile normal akışa girer.
+    getCurrentRound: catchAsync(async (req, res) => {
+        const data = await UserWordService.getCurrentRound(req.user.id);
+        res.status(200).json({ success: true, data });
     }),
 
     getTodaySession: catchAsync(async (req, res) => {

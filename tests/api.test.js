@@ -2008,8 +2008,13 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
         const today = await api('GET', '/userwords/today', { token });
         const d = today.json.data;
 
-        assert.deepEqual(d.progress, { total: 20, answered: 2, remaining: 18 },
+        // progress TURUN durumudur (today ise GÜNÜN) — ikisi bilerek ayrıdır
+        assert.deepEqual(d.progress,
+            { total: 20, completed: 2, postponed: 0, remaining: 18, answered: 2 },
             'havuzdan yalnızca w0 ve w1 cevaplandı');
+        assert.equal(d.queue.length, 18, 'kuyruk = bu turda dokunulmamışlar, sunucu sırasıyla');
+        assert.deepEqual(d.completedIds.map(String).sort(), [String(w0._id), String(w1._id)].sort());
+        assert.deepEqual(d.postponedIds, []);
 
         const a0 = d.newWords.find(w => w._id === w0._id);
         const a1 = d.newWords.find(w => w._id === w1._id);
@@ -2061,16 +2066,17 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
         assert.equal(again.json.data.progress.total, 25);
     });
 
-    it('ertelenmiş kelime dururken ders TAMAMLANAMAZ', async () => {
-        // migi (右) "Şimdilik Geç" ile ertelenmişti ve hâlâ gerçek cevap
-        // bekliyor. Tur burada kapatılsaydı kelime günün havuzundan düşer,
-        // kullanıcı cevaplamadığı hâlde "Tamamlandı" ekranını görürdü.
+    it('ertelenmiş kelime dururken ders TAMAMLANABİLİR (409 kalktı)', async () => {
+        // migi (右) "Şimdilik Geç" ile ertelenmiş durumda. Eskiden burada 409
+        // dönüyor ve kullanıcı dersten çıkamıyordu; artık tur kapanır,
+        // ertelenen kelime bir sonraki tura taşınır (kayıp yok).
         const res = await api('PUT', '/sessions/complete', { token });
-        assert.equal(res.status, 409);
-        assert.equal(res.json.details.pendingWords, 1, 'kalan sayısı istemciye dönmeli');
+        assert.equal(res.status, 200, '"Şimdilik Geç" dersten çıkmayı engellememeli');
+        assert.equal(res.json.data.pendingWords, 1,
+            'bitiş ekranı "1 kelimeyi sonraya bıraktın" diyebilsin diye sayı yine döner');
 
         const summary = await api('GET', '/home/summary', { token });
-        assert.equal(summary.json.data.today.isCompleted, false, 'oturum kapanmamış olmalı');
+        assert.equal(summary.json.data.today.isCompleted, true);
     });
 
     it('sessions/complete hazır accuracy yüzdesi döner', async () => {
@@ -2086,7 +2092,10 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
         assert.equal(d.totalWords, 7);
         assert.equal(d.correctCount, 5);
         assert.equal(d.emptyCount, 0);
+        // Payda cevaplananlardır (correct+wrong), totalWords DEĞİL: "Şimdilik
+        // Geç"e basmak doğruluk oranını düşürmemeli
         assert.equal(d.accuracy, 71);
+        assert.equal(d.pendingWords, 0);
         assert.equal(d.isCompleted, true);
     });
 
@@ -2180,6 +2189,53 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
     });
 });
 
+describe('Cevap sözleşmesi (result / todayResult / belirsiz gövde)', () => {
+    let token;
+
+    before(async () => {
+        await createVerifiedUser('cevap@test.com', { dailyGoal: 20 });
+        token = (await login('cevap@test.com')).accessToken;
+        await api('GET', '/userwords/today', { token });
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
+    });
+
+    it('belirsiz gövde reddedilir: result yok + answer yok → 400 (sessizce "empty" sayılmaz)', async () => {
+        // 07.08.2026 raporu: "doğru cevapladım ama result: empty döndü".
+        // Kaynak buydu — gövdesiz/boş bir ikinci istek 'empty' puanlanıyordu.
+        // İlk dokunuşta olsaydı emptyCount'u da şişirirdi.
+        const w = await Word.create({ kanji: '私', romaji: 'watashi', meaning: 'I', meaningTr: 'ben', type: 'zamir', jlptLevel: 'N5' });
+
+        let res = await api('POST', '/userwords/answer', { token, body: { wordId: w._id } });
+        assert.equal(res.status, 400, 'ne result ne answer varsa istek belirsizdir');
+
+        res = await api('POST', '/userwords/answer', { token, body: { wordId: w._id, answer: null } });
+        assert.equal(res.status, 400, 'answer:null "boş geçtim" DEMEK DEĞİLDİR');
+
+        // Ama yazma sorusunda kutuyu boş bırakıp göndermek gerçekten empty'dir
+        res = await api('POST', '/userwords/answer', { token, body: { wordId: w._id, answer: '' } });
+        assert.equal(res.status, 200);
+        assert.equal(res.json.data.result, 'empty');
+    });
+
+    it('result BU CEVABIN puanı, todayResult GÜNE KAYITLI sonuç — tekrar turu rozeti bozmaz', async () => {
+        const w = await Word.create({ kanji: '君', romaji: 'kimi', meaning: 'you', meaningTr: 'sen', type: 'zamir', jlptLevel: 'N5' });
+
+        let res = await api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'correct' } });
+        assert.equal(res.json.data.result, 'correct');
+        assert.equal(res.json.data.todayResult, 'correct');
+        assert.equal(res.json.data.counted, true);
+
+        // Tekrar çalışma turu: nihai cevap zaten var, hiçbir şey yazılmaz.
+        // result bu gönderimin puanını verir ("Doğru!/Yanlış!" için), ama günün
+        // kayıtlı sonucu DEĞİŞMEZ — rozet todayResult'a bakmalı.
+        res = await api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'empty' } });
+        assert.equal(res.json.data.counted, false);
+        assert.equal(res.json.data.result, 'empty', 'bu gönderimin puanı');
+        assert.equal(res.json.data.todayResult, 'correct', 'günün kayıtlı sonucu ezilmemeli');
+    });
+
+});
+
 describe('Session güvenilirliği (zorunlu session + idempotent bitirme + yeni tur)', () => {
     let token, w0, w1, w2;
 
@@ -2271,7 +2327,15 @@ describe('Ana ekran (Home)', () => {
         assert.equal(d.today.wrongCount, 1);
         assert.equal(d.todayMistakeCount, 1, '"Bugünün Hataları — N Hata" başlığı için');
         assert.equal(d.streak.current, 1);
-        assert.ok(typeof d.tomorrowReviews === 'number', '"Yarın N Kart Bekliyor" bandı için');
+
+        // Seviye Tespit Sınavı modalı için ayrı bir /quiz/status isteği gerekmesin
+        assert.equal(d.placementAvailable, true, 'Başla butonu aktif mi');
+        assert.equal(d.nextAttemptAllowedAt, null, 'cooldown yoksa null');
+
+        // Yeni tasarımda karşılığı olmayan alanlar yanıttan KALDIRILDI
+        assert.ok(!('tomorrowReviews' in d), 'okunmayan alan yanıtta durmamalı');
+        assert.ok(!('pendingReviews' in d));
+        assert.ok(!('progress' in d));
     });
 
     it('başlık bloğu: Japonca selamlama, avatar alanı ve zil rozeti', async () => {
@@ -2390,7 +2454,7 @@ describe('Ders sayacı — "Şimdilik Geç" ilerleme sayılmaz', () => {
         await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
     });
 
-    it('hepsi ertelenince sayaç 0/20 kalır (20/20 DEĞİL) ve ders bitmez', async () => {
+    it('hepsi ertelenince sayaç 0/20 kalır (20/20 DEĞİL)', async () => {
         for (const w of words) {
             await api('POST', '/userwords/answer', { token, body: { wordId: w._id, result: 'empty' } });
         }
@@ -2400,17 +2464,49 @@ describe('Ders sayacı — "Şimdilik Geç" ilerleme sayılmaz', () => {
         assert.equal(d.today.totalWords, 20, 'dokunulan kelime sayısı ise 20');
         assert.equal(d.today.emptyCount, 20);
 
-        // Ders ekranının kuyruğu: nihai cevabı olmayan kelimeler
-        const kalan = d.newWords.filter(w => !w.answeredToday).length;
-        assert.equal(kalan, 20, 'yirmisi de yeniden sorulmalı');
+        // Turun kendi sayaçları: 20'si de ertelenmiş, kuyruk boş
+        assert.equal(d.progress.completed, 0);
+        assert.equal(d.progress.postponed, 20);
+        assert.equal(d.progress.remaining, 0);
+        assert.equal(d.queue.length, 0, '"Şimdilik Geç" aynı turda tekrar sorulmaz');
 
         // Anasayfa çemberi ile ders başlığı AYNI payı kullanmalı
         const s = (await api('GET', '/home/summary', { token })).json.data;
         assert.equal(s.today.completedWords, 0, 'çember de %0 göstermeli');
+    });
 
+    it('ertelenmiş 20 kelime varken ders bitirilebilir ve hepsi sonraki tura TAŞINIR', async () => {
         const bitir = await api('PUT', '/sessions/complete', { token });
-        assert.equal(bitir.status, 409, 'ertelenmiş 20 kelime varken bitirilemez');
-        assert.equal(bitir.json.details.pendingWords, 20);
+        assert.equal(bitir.status, 200, 'kullanıcı dersten çıkabilmeli');
+        assert.equal(bitir.json.data.pendingWords, 20);
+
+        // Yeni tur: taşınan kelimeler AYNI kelimelerdir ve turun başındadır.
+        // Taşıma olmasaydı 20'si de "önceki havuz" diye hariç tutulur, gün
+        // bitene kadar bir daha hiç sorulmazdı — "Şimdilik Geç" sessiz bir
+        // silme tuşuna dönüşürdü.
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
+        const d = (await api('GET', '/userwords/today', { token })).json.data;
+
+        const gelenler = new Set([
+            ...d.newWords.map(w => String(w._id)),
+            ...d.reviewWords.map(uw => String(uw.word._id))
+        ]);
+        for (const w of words) {
+            assert.ok(gelenler.has(String(w._id)), `${w.kanji} yeni tura taşınmalı`);
+        }
+        assert.equal(d.progress.total, 20, 'taşınanlar kontenjandan sayılır: payda 20 kalır');
+
+        // TUR kapsamı: yeni turda henüz dokunulmadı → hepsi kuyrukta
+        assert.equal(d.progress.remaining, 20);
+        assert.equal(d.progress.postponed, 0, 'erteleme işareti yeni tura taşınmaz');
+        assert.equal(d.queue.length, 20);
+
+        // GÜN kapsamı: erteleme gerçeği duruyor, rozet kaybolmamalı
+        assert.equal(d.today.emptyCount, 20, 'gün sayacı turdan etkilenmez');
+        const ilk = d.newWords.find(w => String(w._id) === String(words[0]._id))
+            || d.reviewWords.find(uw => String(uw.word._id) === String(words[0]._id));
+        assert.equal((ilk.todayResult ?? ilk.todayResult), 'empty',
+            '"bugün bu kelimeyi boş geçmiştin" rozeti tur değişince kaybolmamalı');
     });
 
     it('ertelenenler gerçekten cevaplanınca 20/20 olur ve ders biter', async () => {
@@ -2422,11 +2518,13 @@ describe('Ders sayacı — "Şimdilik Geç" ilerleme sayılmaz', () => {
         assert.equal(d.today.completedWords, 20, 'artık gerçekten 20/20');
         assert.equal(d.today.totalWords, 20, 'erteleme yükseltmesi toplamı şişirmez');
         assert.equal(d.today.emptyCount, 0);
-        assert.equal(d.newWords.filter(w => !w.answeredToday).length, 0, 'kuyruk boş');
+        assert.equal(d.progress.completed, 20, 'turun payı da dolu');
+        assert.equal(d.queue.length, 0, 'kuyruk boş');
 
         const bitir = await api('PUT', '/sessions/complete', { token });
         assert.equal(bitir.status, 200);
         assert.equal(bitir.json.data.isCompleted, true);
+        assert.equal(bitir.json.data.pendingWords, 0);
     });
 });
 
@@ -2544,6 +2642,81 @@ describe('Anasayfa — çoklu tur: payda SABİT kalır, pay hedefi aşabilir', (
         today = await api('GET', '/userwords/today', { token });
         assert.equal(today.json.data.today.totalWords, 6);
         assert.equal(today.json.data.goal, 5);
+
+        // DERS BARI GÜN SAYACINI OKUMAZ. today.completedWords gün geneli olduğu
+        // için 2. turun ilk sorusunda 6 diyor; bar bunu okuyunca taze turda
+        // "6/5 · %100 Tamamlandı" yazıyordu. Barın payı TURUN payıdır.
+        assert.equal(today.json.data.today.completedWords, 6, 'gün sayacı birikir (çember)');
+        assert.equal(today.json.data.progress.completed, 1, 'turun payı ise 1 (ders barı)');
+        assert.equal(today.json.data.progress.total, 5);
+        assert.equal(today.json.data.progress.remaining, 4);
+        assert.equal(ans.json.data.progress.completed, 1, 'cevap yanıtı da aynı tur bloğunu taşır');
+        assert.equal(ans.json.data.progress.total, 5);
+    });
+});
+
+describe('Oturum durumu sunucuda (GET /sessions/current)', () => {
+    let token, words;
+
+    before(async () => {
+        await createVerifiedUser('oturum@test.com', { dailyGoal: 5 });
+        token = (await login('oturum@test.com')).accessToken;
+    });
+
+    it('havuz yokken null döner — yan etkisi yoktur (havuz/oturum AÇMAZ)', async () => {
+        const res = await api('GET', '/sessions/current', { token });
+        assert.equal(res.status, 200);
+        assert.equal(res.json.data, null, 'istemci normal akışa girsin: start + today');
+
+        const pools = await mongoose.connection.db.collection('dailywordpools')
+            .countDocuments({ user: (await User.findOne({ email: 'oturum@test.com' }))._id });
+        assert.equal(pools, 0, 'okuma ucu havuz AÇMAMALI');
+        const s = await api('GET', '/sessions/today', { token });
+        assert.equal(s.json.data, null, 'oturum da açmamalı');
+    });
+
+    it('kuyruk sunucudan gelir: cevaplanan düşer, ertelenen kuyruğa değil postponedIds\'e gider', async () => {
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
+        words = (await api('GET', '/userwords/today', { token })).json.data.newWords;
+        assert.equal(words.length, 5);
+
+        let d = (await api('GET', '/sessions/current', { token })).json.data;
+        assert.equal(d.queue.length, 5);
+        assert.equal(d.currentIndex, 0, 'queue "kalan"dır, kaldığın yer her zaman queue[0]');
+        assert.equal(d.jlptLevel, 'N5');
+        assert.ok(d.sessionId, 'GÜNÜN oturum kimliği');
+        assert.deepEqual(d.progress, { total: 5, completed: 0, postponed: 0, remaining: 5, answered: 0 });
+
+        await api('POST', '/userwords/answer', { token, body: { wordId: words[0]._id, result: 'correct' } });
+        await api('POST', '/userwords/answer', { token, body: { wordId: words[1]._id, result: 'empty' } });
+
+        d = (await api('GET', '/sessions/current', { token })).json.data;
+        assert.deepEqual(d.completedIds.map(String), [String(words[0]._id)]);
+        assert.deepEqual(d.postponedIds.map(String), [String(words[1]._id)]);
+        assert.equal(d.queue.length, 3, 'cevaplanan da ertelenen de kuyrukta DEĞİL');
+        assert.ok(!d.queue.map(String).includes(String(words[1]._id)),
+            '"Şimdilik Geç" aynı turda tekrar sorulmamalı');
+        assert.deepEqual(d.progress, { total: 5, completed: 1, postponed: 1, remaining: 3, answered: 2 });
+    });
+
+    it('kuyruk sırası SABİTTİR: iki çağrı aynı sırayı verir (uygulama silinse de aynı yerden devam)', async () => {
+        const a = (await api('GET', '/sessions/current', { token })).json.data.queue.map(String);
+        const b = (await api('GET', '/sessions/current', { token })).json.data.queue.map(String);
+        const c = (await api('GET', '/userwords/today', { token })).json.data.queue.map(String);
+        assert.deepEqual(a, b, '$in sırayı garanti etmez; havuz sırası korunmalı');
+        assert.deepEqual(a, c, '/sessions/current ile /userwords/today aynı kuyruğu vermeli');
+    });
+
+    it('tur kapanınca yeni turun kuyruğu taşınan kelimeyle BAŞLAR', async () => {
+        await api('PUT', '/sessions/complete', { token });
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
+        await api('GET', '/userwords/today', { token });
+
+        const d = (await api('GET', '/sessions/current', { token })).json.data;
+        assert.equal(String(d.queue[0]), String(words[1]._id),
+            'kullanıcının "sonra" dediği kelime yeni turda önce gelmeli');
+        assert.equal(d.progress.total, 5, 'taşınan kontenjandan sayılır, payda büyümez');
+        assert.equal(d.progress.postponed, 0, 'erteleme işareti YENİ tura taşınmaz');
     });
 });
 

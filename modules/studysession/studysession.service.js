@@ -85,29 +85,25 @@ const StudySessionService = {
 
         if (!session) throw new AppError('No active session found', 404);
 
-        // Ertelenmiş ("Şimdilik Geç") kelime dururken ders BİTİRİLEMEZ: turu
-        // kapatmak (roundClosedAt) o kelimeleri günün havuzundan düşürür ve
-        // kullanıcı gerçekte cevaplamadığı hâlde "Tebrikler, tamamlandı"
-        // ekranını görür. Kontrol istemcide de var (kuyruk boşalınca yeniden
-        // sorar) ama tek koruma orası olamaz — ikinci bir istemci ya da bir
-        // yeniden deneme sessizce yanlış özet üretirdi.
+        // ERTELENMİŞ KELİME ARTIK TURU KAPATMAYI ENGELLEMEZ (07.08.2026 ürün
+        // kararı). Eskiden 409 dönüyordu ve gerekçesi şuydu: turu kapatmak
+        // (roundClosedAt) ertelenen kelimeleri günün havuzundan düşürüyor,
+        // kullanıcı cevaplamadığı hâlde "Tebrikler" ekranını görüyordu.
         //
-        // Sayaç yerine UserWord sayılır: emptyCount türetilmiş bir sayaçtır,
-        // bitirmeyi engelleyen karar kaydın kendisine bakmalı.
-        if (!session.isCompleted) {
-            const pending = await UserWord.countDocuments({
-                user: userId,
-                lastReviewDate: { $gte: today },
-                lastResult: 'empty'
-            });
-            if (pending > 0) {
-                throw new AppError(
-                    `Ertelenmiş ${pending} kelime var, ders tamamlanamaz`,
-                    409,
-                    { pendingWords: pending }
-                );
-            }
-        }
+        // O gerekçe artık geçersiz: yeni tur açılırken ertelenenler havuza
+        // TAŞINIYOR (bkz. userword.service.js carry-over notu), yani kelime
+        // kaybolmuyor, turun başına geçiyor. 409'un tek yaptığı, "Şimdilik
+        // Geç"e basan kullanıcıyı dersten çıkamaz hale getirmekti — oysa
+        // "Şimdilik Geç" tam olarak "şimdi cevaplamak istemiyorum" demek.
+        //
+        // Sayı yine de yanıtta döner (pendingWords): bitiş ekranı "3 kelimeyi
+        // sonraya bıraktın" diyebilsin. Sayaç yerine UserWord sayılır —
+        // emptyCount türetilmiş bir sayaçtır, gerçeği kaydın kendisi söyler.
+        const pendingWords = await UserWord.countDocuments({
+            user: userId,
+            lastReviewDate: { $gte: today },
+            lastResult: 'empty'
+        });
 
         // İdempotent: zaten tamamlanmışsa completedAt/duration'ı yeniden
         // hesaplamadan (her tıklamada büyümesin) ve tekrar session_completed
@@ -139,11 +135,16 @@ const StudySessionService = {
             );
         }
 
-        // Bitiş ekranındaki "Accuracy %" hazır gelsin — istemci hesaplamasın
-        const accuracy = session.totalWords > 0
-            ? Math.round((session.correctCount / session.totalWords) * 100)
+        // Bitiş ekranındaki "Accuracy %" hazır gelsin — istemci hesaplamasın.
+        //
+        // Payda totalWords DEĞİL completedTotal'dır: totalWords ertelenenleri de
+        // sayar, yani "Şimdilik Geç"e basmak doğruluk oranını düşürüyordu.
+        // Doğruluk yalnızca gerçekten cevaplanan kelimeler üzerinden ölçülür.
+        const answered = StudySession.completedTotal(session);
+        const accuracy = answered > 0
+            ? Math.round((session.correctCount / answered) * 100)
             : 0;
-        return { ...session.toObject(), accuracy };
+        return { ...session.toObject(), accuracy, pendingWords };
     },
 
     async getTodaySession(userId) {

@@ -63,21 +63,109 @@ const computeMasteryLevel = ({ repetitions, interval }) => {
     return 2;                          // 1. başarılı tekrar
 };
 
-// Günün havuzunu "kaldığın yerden devam" bilgisiyle işaretler: ders yarıda
-// kalıp yeniden açıldığında istemci answeredToday=false olanlardan sürdürür,
-// progress sayaçlarıyla da çemberi çizer. Yanıt geriye uyumludur (alan ekler).
-const decorateTodayWords = async (userId, today, reviewWordsRaw, newWordsRaw) => {
-    // answeredToday = günün NİHAİ cevabı verildi (correct/easy/wrong). Bu
-    // bayrak "kelime hâlâ gerçek cevap bekliyor mu" (istemcinin re-queue
-    // kararı) için kullanılır — "Şimdilik Geç" (empty) bilerek false kalır ki
-    // kelime remaining kuyruğunda durup gün içinde tekrar sorulsun.
+// TURUN ilerlemesi + kuyruğu. Gün sayaçlarından (goal/today) BİLEREK ayrıdır,
+// bkz. aşağıdaki "iki ayrı sözleşme" notu.
+//
+// items: kuyruk sırasında [{ id (Word id), lastReviewDate, lastResult }]
+const buildRoundState = (rawItems, roundStart) => {
+    const queue = [];
+    const postponedIds = [];
+    const completedIds = [];
+
+    // Silinmiş bir kelimeye asılı kalan kayıt populate sonrası id'siz gelir;
+    // kuyruğa null düşürmektense havuzdan sayılmaz (total da onu içermez)
+    const items = rawItems.filter(it => it.id);
+
+    for (const it of items) {
+        const touched = !!it.lastReviewDate && it.lastReviewDate >= roundStart;
+        if (!touched) queue.push(it.id);
+        else if (FINAL_RESULTS.includes(it.lastResult)) completedIds.push(it.id);
+        else if (it.lastResult === 'empty') postponedIds.push(it.id);
+        else queue.push(it.id); // beklenmedik lastResult: kelimeyi kaybetme, sıraya al
+    }
+
+    return {
+        queue,
+        postponedIds,
+        completedIds,
+        progress: {
+            total: items.length,
+            completed: completedIds.length,
+            postponed: postponedIds.length,
+            remaining: queue.length,
+            // DEPRECATED — eski {total, answered, remaining} sözleşmesinin kalıntısı.
+            // Turun ilk tekrarında completed+postponed ile aynı sayıdır; ders
+            // barında KULLANILMAMALI (ertelenenleri ilerleme sayar).
+            answered: completedIds.length + postponedIds.length
+        }
+    };
+};
+
+// Turun durumunu KELİME GÖVDELERİ OLMADAN okur — /userwords/answer ve
+// /sessions/current için. decorateTodayWords ile aynı kuralları (buildRoundState)
+// paylaşır; iki uç aynı tur için farklı sayı söyleyemesin diye hesap tek yerde.
+const readRoundState = async (userId, pool, today) => {
+    const roundStart = pool.roundStartedAt || today;
+
+    const [reviewDocs, newDocs, newStates] = await Promise.all([
+        UserWord.find({ _id: { $in: pool.reviewWordIds } }).select('word lastResult lastReviewDate'),
+        Word.find({ _id: { $in: pool.newWordIds } }).sort({ frequencyRank: 1 }).select('_id'),
+        pool.newWordIds.length > 0
+            ? UserWord.find({
+                user: userId,
+                word: { $in: pool.newWordIds },
+                lastReviewDate: { $gte: today }
+            }).select('word lastResult lastReviewDate')
+            : []
+    ]);
+
+    const reviewById = new Map(reviewDocs.map(uw => [String(uw._id), uw]));
+    const newStateByWord = new Map(newStates.map(uw => [String(uw.word), uw]));
+
+    const items = [
+        // Havuzun sırası korunur (bkz. readPoolWords)
+        ...pool.reviewWordIds
+            .map(id => reviewById.get(String(id)))
+            .filter(Boolean)
+            .map(uw => ({ id: uw.word, lastReviewDate: uw.lastReviewDate, lastResult: uw.lastResult })),
+        ...newDocs.map(w => {
+            const state = newStateByWord.get(String(w._id));
+            return { id: w._id, lastReviewDate: state?.lastReviewDate, lastResult: state?.lastResult };
+        })
+    ];
+
+    return { ...buildRoundState(items, roundStart), roundStartedAt: roundStart };
+};
+
+// Günün havuzunu "kaldığın yerden devam" bilgisiyle işaretler.
+//
+// İKİ AYRI SÖZLEŞME döner, karıştırılmamalıdır:
+//
+//   progress / queue / postponedIds / completedIds  →  TURUN durumu.
+//        Kapsamı pool.roundStartedAt'tir, her turda sıfırlanır.
+//        Ders ekranının barı ve kuyruğu YALNIZCA bunu okumalıdır.
+//
+//   goal / today                                    →  GÜNÜN durumu.
+//        Kapsamı StudySession'dır, turlar arası hiç sıfırlanmaz.
+//        Anasayfa çemberi ve bitiş ekranı bunu okur.
+//
+// Ayrımın sebebi somut bir hata: 20 kelimelik turu bitirip yeni tur açan
+// kullanıcıda today.completedWords 20'de kalıyor (doğru — gün sayacı), ama
+// ders barı da onu okuduğu için TAZE turun ilk sorusunda "20/20 · %100
+// Tamamlandı" yazıyordu. Bar turun payını (progress.completed) okumalı.
+const decorateTodayWords = async (userId, today, reviewWordsRaw, newWordsRaw, roundStart) => {
+    // roundStart yoksa (eski havuz kaydı) gün başlangıcına düşülür: bu alan
+    // gelmeden önceki davranışın birebir aynısı.
+    roundStart = roundStart || today;
+
+    // answeredToday = GÜNÜN nihai cevabı verildi (correct/easy/wrong). Gün
+    // kapsamlıdır ve öyle kalmalı: "günün cevabı kuralı" (bkz. submitAnswer)
+    // gün kapsamlıdır, bir kelime o gün ikinci kez SM-2'ye işlemez.
+    // "Şimdilik Geç" (empty) bilerek false bırakır — kelime hâlâ gerçek cevap
+    // bekliyor. todayResult de gün kapsamlıdır: "bugün bu kelimeyi boş
+    // geçmiştin" rozeti tur değişince kaybolmamalı.
     //
-    // progress.answered ise AYRI bir şey: "bugün kaç kelimeye DOKUNDUN"
-    // sorusuna cevap verir ve StudySession.totalWords ile aynı kurala göre
-    // sayılır (empty dahil) — touchedToday bunun için. Eskiden ikisi aynı
-    // bayrağı (answeredToday) paylaşıyordu; bu da Anasayfa'nın (StudySession
-    // bazlı, empty dahil) ve Ders ekranının (bu fonksiyon bazlı, empty hariç)
-    // aynı gün için FARKLI "X/Y Tamamlandı" göstermesine yol açıyordu.
+    // touchedToday ise DEPRECATED: tur kapsamlı karşılığı buildRoundState'te.
     const reviewWords = reviewWordsRaw.map(uw => {
         const touched = !!uw.lastReviewDate && uw.lastReviewDate >= today;
         return {
@@ -88,54 +176,67 @@ const decorateTodayWords = async (userId, today, reviewWordsRaw, newWordsRaw) =>
         };
     });
 
-    // Yeni kelimelerin bugünkü cevabı (ilk cevapta UserWord oluşur) tek sorguyla
+    // Yeni kelimelerin bugünkü cevabı (ilk cevapta UserWord oluşur) tek sorguyla.
+    // lastReviewDate de çekilir: tur kapsamlı sayaçlar (buildRoundState) onu
+    // gün başlangıcıyla değil roundStart ile karşılaştırır.
     const answeredNew = newWordsRaw.length > 0
         ? await UserWord.find({
             user: userId,
             word: { $in: newWordsRaw.map(w => w._id) },
             lastReviewDate: { $gte: today }
-        }).select('word lastResult')
+        }).select('word lastResult lastReviewDate')
         : [];
-    const newResultByWord = new Map(answeredNew.map(uw => [String(uw.word), uw.lastResult ?? null]));
+    const newStateByWord = new Map(answeredNew.map(uw => [String(uw.word), uw]));
 
     const newWords = newWordsRaw.map(w => {
         // $sample'dan gelen düz objeler hydrate ile doc'a çevrilir ki
         // isKana virtual'ı burada da hesaplansın
         const obj = typeof w.toObject === 'function' ? w.toObject() : Word.hydrate(w).toObject();
-        const touched = newResultByWord.has(String(w._id));
-        const todayResult = touched ? newResultByWord.get(String(w._id)) : null;
+        const state = newStateByWord.get(String(w._id));
+        const todayResult = state ? state.lastResult ?? null : null;
         return {
             ...obj,
             answeredToday: FINAL_RESULTS.includes(todayResult),
-            touchedToday: touched,
+            touchedToday: !!state,
             todayResult
         };
     });
 
-    const answered = reviewWords.filter(w => w.touchedToday).length
-        + newWords.filter(w => w.touchedToday).length;
-    const total = reviewWords.length + newWords.length;
+    // Kuyruk sırası SUNUCU sırasıdır: önce tekrarlar (havuzdaki seçim sırası =
+    // vadesi en eski + en kırılgan önce), sonra yeni kelimeler (frequencyRank).
+    // İstemci kendi sırasını tutmaz — uygulama silinip kurulsa bile ders aynı
+    // yerden devam eder.
+    const round = buildRoundState([
+        ...reviewWordsRaw.map(uw => ({
+            id: uw.word?._id ?? uw.word,
+            lastReviewDate: uw.lastReviewDate,
+            lastResult: uw.lastResult
+        })),
+        ...newWordsRaw.map(w => {
+            const state = newStateByWord.get(String(w._id));
+            return {
+                id: w._id,
+                lastReviewDate: state?.lastReviewDate,
+                lastResult: state?.lastResult
+            };
+        })
+    ], roundStart);
 
-    // Gün geneli sayaç (goal/today): Anasayfa'nın (/home/summary) kullandığı
-    // AYNI kaynak ve şekil — StudySession bazlı, turlar arası hiç sıfırlanmaz.
-    // Ders ekranı artık kendi yerel toplamını TUTMAMALI, her yanıtta buradaki
-    // sayılara güvenmeli; iki ekranın farklı kaynaktan beslenip tutarsız
-    // "X/Y Tamamlandı" göstermesi (defalarca yakalanan bug sınıfı) böylece
-    // yapısal olarak imkânsız hale gelir. goal = bu turun gerçek boyutu
-    // (progress.total ile aynı); yeni tur açılınca SABİT kalır, büyümez —
-    // kullanıcı hedefini aşarsa today.totalWords bunu geçebilir (istenen davranış).
     const session = await StudySessionService.getTodaySession(userId);
 
     return {
         reviewWords,
         newWords,
-        progress: { total, answered, remaining: total - answered },
-        goal: total,
+        ...round,                    // queue, postponedIds, completedIds, progress
+        roundStartedAt: roundStart,
+        // goal = bu turun gerçek boyutu (progress.total ile aynı). Yeni tur
+        // açılınca SABİT kalır, büyümez — kullanıcı hedefini aşarsa
+        // today.totalWords bunu geçebilir (istenen davranış).
+        goal: round.progress.total,
         today: {
-            // Ders başlığındaki "X/Y Tamamlandı"nın PAYI — ertelenenler hariç.
-            // Bitiş koşuluyla (her kelimenin nihai cevabı var mı) aynı şeyi
-            // saymak ZORUNDA: totalWords kullanıldığında başlık 20/20 derken
-            // kuyrukta 18 ertelenmiş kelime kalıyordu.
+            // Anasayfa çemberinin PAYI — ertelenenler hariç (bkz.
+            // StudySession.completedTotal). Ders barı için DEĞİL: bar turun
+            // payını (progress.completed) okur.
             completedWords: StudySession.completedTotal(session),
             totalWords: session?.totalWords || 0,
             correctCount: session?.correctCount || 0,
@@ -146,10 +247,38 @@ const decorateTodayWords = async (userId, today, reviewWordsRaw, newWordsRaw) =>
     };
 };
 
+// Havuzdaki kelimeleri HAVUZUN SIRASIYLA okur.
+//
+// $in dizinin sırasını KORUMAZ. Sıra istemcinin işiyken bu zararsızdı; kuyruğu
+// (queue) artık sunucu belirlediği için sıra sözleşmenin parçası: aynı kullanıcı
+// iki çağrıda farklı sıra alsaydı "kaldığın yerden devam" kaldığı yerden devam
+// etmezdi. Havuz seçim sırasını zaten saklıyor (vadesi en eski + en kırılgan
+// önce), burada yalnızca geri kuruluyor.
+const readPoolWords = async (pool) => {
+    const [reviewDocs, newDocs] = await Promise.all([
+        UserWord.find({ _id: { $in: pool.reviewWordIds } }).populate('word'),
+        // newWords müfredat sırasında (frequencyRank, küçük = önce öğretilir);
+        // havuza yazılırken de bu sırada yazıldığı için ikisi çakışmaz
+        Word.find({ _id: { $in: pool.newWordIds } }).sort({ frequencyRank: 1 })
+    ]);
+
+    const byId = new Map(reviewDocs.map(uw => [String(uw._id), uw]));
+    const reviewWords = pool.reviewWordIds
+        .map(id => byId.get(String(id)))
+        .filter(Boolean);   // silinmiş UserWord kaydı havuzu bozmasın
+
+    return { reviewWords, newWords: newDocs };
+};
+
 // Havuz için tekrar+yeni kelime seçimi — hem ilk kurulumda hem session bitip
 // yeni tur açılırken (excludeReviewIds/excludeWordIds ile önceki havuz hariç
 // tutularak) kullanılır. jlptLevel çağıran yerde zaten doğrulanmış/zorunlu.
 const selectPoolWords = async (userId, jlptLevel, goal, { excludeReviewIds = [], excludeWordIds = [] } = {}) => {
+    // Kontenjan yoksa hiç sorgulama. Mongoose'ta .limit(0) "sınırsız" demektir:
+    // goal=0 ile çağrılsaydı (ertelenenler turun tamamını doldurduğunda olur)
+    // vadesi gelmiş TÜM kelimeler havuza dolardı.
+    if (goal <= 0) return { reviewWordsRaw: [], newWordsRaw: [] };
+
     const reviewLimit = Math.ceil(goal * 0.7);
     const levelWordIds = await Word.find({ jlptLevel }).distinct('_id');
 
@@ -225,33 +354,60 @@ const UserWordService = {
             // ulaşmadan silinmiş olurdu — roundClosedAt bu çağrı sırasından
             // tamamen bağımsız, sadece bu fonksiyon temizler.
             if (pool.roundClosedAt) {
+                // ERTELENENLER YENİ TURA TAŞINIR (07.08.2026 ürün kararı).
+                // /sessions/complete artık ertelenmiş kelime varken de turu
+                // kapatıyor; taşıma olmasaydı o kelimeler HARİÇ TUTULANLAR
+                // listesine düşer ve gün bitene kadar bir daha hiç sorulmazdı —
+                // "Şimdilik Geç" sessiz bir silme tuşuna dönüşürdü.
+                //
+                // Kontenjandan sayılırlar (taşınan + taze = goal): üstüne
+                // eklenselerdi tur boyutu her kapanışta büyür, ders barının
+                // paydası "23/20" gibi oynardı.
+                const levelWordIds = await Word.find({ jlptLevel }).distinct('_id');
+                const carried = await UserWord.find({
+                    user: userId,
+                    word: { $in: levelWordIds },
+                    lastReviewDate: { $gte: today },
+                    lastResult: 'empty'
+                })
+                    .sort({ lastReviewDate: 1 })   // en önce ertelenen en önce sorulur
+                    .limit(goal);
+
+                const carriedWordIds = carried.map(uw => uw.word);
                 const excludeWordIds = [
                     ...(await UserWord.find({ _id: { $in: pool.reviewWordIds } }).distinct('word')),
-                    ...pool.newWordIds
+                    ...pool.newWordIds,
+                    ...carriedWordIds        // taşınanlar taze seçimde ikinci kez çıkmasın
                 ];
-                const { reviewWordsRaw, newWordsRaw } = await selectPoolWords(userId, jlptLevel, goal, {
-                    excludeReviewIds: pool.reviewWordIds,
-                    excludeWordIds
-                });
+                const { reviewWordsRaw, newWordsRaw } = await selectPoolWords(
+                    userId, jlptLevel, Math.max(0, goal - carried.length), {
+                        excludeReviewIds: [...pool.reviewWordIds, ...carried.map(uw => uw._id)],
+                        excludeWordIds
+                    }
+                );
 
                 // Ürün kararı: yeni tur açılınca payda (günün hedefi) SABİT
                 // kalır, büyümez — kullanıcı hedefini aşarsa pay (StudySession.
                 // totalWords, turlar arası hiç sıfırlanmaz) paydayı geçebilir
                 // ("23/20" gibi). Bkz. home.service.js'deki poolGoalTotal.
-                pool.reviewWordIds = reviewWordsRaw.map(uw => uw._id);
+                //
+                // Taşınanlar turun BAŞINA konur: kullanıcının bilerek "sonra"
+                // dediği kelimeler yeni turda gerçekten önce gelsin.
+                pool.reviewWordIds = [...carried.map(uw => uw._id), ...reviewWordsRaw.map(uw => uw._id)];
                 pool.newWordIds = newWordsRaw.map(w => w._id);
                 pool.roundClosedAt = null;
+                pool.roundStartedAt = new Date();
                 pool.targetGoal = goal;
                 await pool.save();
                 await StudySessionService.startSession(userId, jlptLevel);
 
                 logEvent(userId, 'daily_pool_created', {
-                    jlptLevel, reviewCount: reviewWordsRaw.length, newCount: newWordsRaw.length, goal, newRound: true
+                    jlptLevel, reviewCount: reviewWordsRaw.length, newCount: newWordsRaw.length,
+                    carriedCount: carried.length, goal, newRound: true
                 });
 
-                const reviewWords = await UserWord.find({ _id: { $in: pool.reviewWordIds } }).populate('word');
-                const newWords = await Word.find({ _id: { $in: pool.newWordIds } }).sort({ frequencyRank: 1 });
-                return decorateTodayWords(userId, today, reviewWords, newWords);
+                const { reviewWords, newWords } = await readPoolWords(pool);
+                return decorateTodayWords(userId, today, reviewWords, newWords, pool.roundStartedAt);
             }
 
             // Hedef gün içinde ARTTIYSA havuz fark kadar yeni kelimeyle genişler
@@ -313,18 +469,9 @@ const UserWordService = {
                 }
             }
 
-            // Havuz sabit listeyi döndürür (gün içinde aynı kelimeler).
-            // newWords müfredat sırasında (frequencyRank) gösterilir — $in sorgusu
-            // sırayı garanti etmediği için her çağrıda yeniden sıralanır.
-            const reviewWords = await UserWord.find({
-                _id: { $in: pool.reviewWordIds }
-            }).populate('word');
-
-            const newWords = await Word.find({
-                _id: { $in: pool.newWordIds }
-            }).sort({ frequencyRank: 1 });
-
-            return decorateTodayWords(userId, today, reviewWords, newWords);
+            // Havuz sabit listeyi ve SABİT SIRAYI döndürür (bkz. readPoolWords)
+            const { reviewWords, newWords } = await readPoolWords(pool);
+            return decorateTodayWords(userId, today, reviewWords, newWords, pool.roundStartedAt || today);
         }
 
         // Havuz yok, yeni oluştur.
@@ -343,14 +490,18 @@ const UserWordService = {
                 jlptLevel,
                 reviewWordIds: reviewWordsRaw.map(uw => uw._id),
                 newWordIds: newWordsRaw.map(w => w._id),
-                targetGoal: goal
+                targetGoal: goal,
+                // Günün İLK turu bilerek gün başlangıcından başlatılır: tur
+                // kapsamı ile gün kapsamı ilk turda birebir örtüşsün, bu alan
+                // gelmeden önceki sayılar aynen çıksın. Sonraki turlar gerçek
+                // zaman damgası alır.
+                roundStartedAt: today
             });
         } catch (err) {
             if (err.code !== 11000) throw err;
             const existingPool = await DailyWordPool.findOne({ user: userId, date: today, jlptLevel });
-            const reviewWords = await UserWord.find({ _id: { $in: existingPool.reviewWordIds } }).populate('word');
-            const newWords = await Word.find({ _id: { $in: existingPool.newWordIds } }).sort({ frequencyRank: 1 });
-            return decorateTodayWords(userId, today, reviewWords, newWords);
+            const { reviewWords, newWords } = await readPoolWords(existingPool);
+            return decorateTodayWords(userId, today, reviewWords, newWords, existingPool.roundStartedAt || today);
         }
 
         logEvent(userId, 'daily_pool_created', {
@@ -366,7 +517,51 @@ const UserWordService = {
         // üreticiyle birlikte aynı gün iki kart oluşabiliyordu. Tek üretici artık
         // hatırlatma saatindeki cron (notification.service.js) ve o da yalnızca
         // gerçekten iş kaldıysa gönderiyor.
-        return decorateTodayWords(userId, today, reviewWordsRaw, newWordsRaw);
+        return decorateTodayWords(userId, today, reviewWordsRaw, newWordsRaw, today);
+    },
+
+    // GET /sessions/current — "kaldığın yerden devam"ın tamamı.
+    //
+    // TAMAMEN OKUMADIR: havuz açmaz, tur yenilemez, oturum başlatmaz. Bu iş
+    // getTodayWords'ün (yan etkili) işi ve iki yerde iki kopya olsaydı
+    // ayrışırlardı. Havuz yoksa null döner; istemci normal akışa girer
+    // (POST /sessions/start → GET /userwords/today).
+    //
+    // Kuyruğun sırasını SUNUCU belirler ve deterministiktir (tekrarlar havuz
+    // sırasında, yeni kelimeler frequencyRank'te), yani uygulama silinip
+    // kurulsa bile ders aynı yerden devam eder — istemcinin hiçbir şey
+    // hatırlaması gerekmez.
+    async getCurrentRound(userId) {
+        const user = await User.findById(userId).select('timezone activeLevel');
+        const today = startOfDayInTz(user?.timezone);
+        const jlptLevel = user?.activeLevel || 'N5';
+
+        // Gün içinde seviye değiştiyse bugüne ait iki havuz olabilir (anahtar
+        // {user, gün, jlptLevel}); ders her zaman activeLevel'ın havuzudur.
+        const pool = await DailyWordPool.findOne({ user: userId, date: today, jlptLevel });
+        if (!pool || pool.roundClosedAt) return null;
+
+        const [session, round] = await Promise.all([
+            StudySessionService.getTodaySession(userId),
+            readRoundState(userId, pool, today)
+        ]);
+
+        return {
+            // GÜNÜN oturum kimliği — tur kimliği DEĞİL. Gün başına tek
+            // StudySession var, tur kapanınca yenisi açılmaz (aynı kayıt
+            // yeniden açılır). Tur değişimi roundStartedAt'ten anlaşılır.
+            sessionId: session?._id || null,
+            jlptLevel,
+            roundStartedAt: round.roundStartedAt,
+            queue: round.queue,
+            // queue "KALAN"dır (cevaplanan kelime kuyruktan düşer), yani kaldığın
+            // yer her zaman queue[0]'dır. Alan sözleşmede duruyor ki ileride
+            // gerçek bir imleç gerekirse istemci yeniden kurmasın.
+            currentIndex: 0,
+            postponedIds: round.postponedIds,
+            completedIds: round.completedIds,
+            progress: round.progress
+        };
     },
 
     async submitAnswer(userId, wordId, result, answer) {
@@ -377,8 +572,22 @@ const UserWordService = {
         // Yazma sorusunda istemci result yerine yazılan metni (answer) gönderir;
         // puanlama quiz ile aynı mantıkla BURADA yapılır (tek doğruluk kaynağı:
         // "to see / watch" gibi çok varyantlı anlamlarda her varyant kabul edilir)
+        //
+        // BELİRSİZ GÖVDE REDDEDİLİR. Eskiden `result` yokken `answer` null da
+        // gelse puanlama çalışıyor ve sonuç sessizce 'empty' oluyordu — yani
+        // "kullanıcı hiçbir şey göndermedi" ile "kullanıcı Şimdilik Geç'e
+        // bastı" aynı şeye indirgeniyordu. Mobil tarafın 07.08.2026'da
+        // bildirdiği "doğru cevapladım, result: empty döndü" vakasının kaynağı
+        // bu: kelimeye ait ikinci bir istek gövdesiz gelip cevabı 'empty'
+        // puanlatıyordu. İlk dokunuşta olsaydı emptyCount'u da şişirirdi.
+        //
+        // BOŞ METİN ('') hâlâ 'empty'dir ve öyle kalmalı: yazma sorusunda
+        // kutuyu boş bırakıp göndermek gerçekten "boş geçtim" demektir.
         let correctAnswer;
-        if (result == null && answer !== undefined) {
+        if (result == null && answer == null) {
+            throw new AppError('result veya answer gönderilmeli', 400);
+        }
+        if (result == null) {
             const variants = wordAnswerVariants(wordExists);
             correctAnswer = variants[0];
             result = !normalizeAnswer(answer) ? 'empty'
@@ -397,8 +606,9 @@ const UserWordService = {
             throw new AppError('Önce oturum başlatılmalı: POST /sessions/start', 400);
         }
 
-        const user = await User.findById(userId).select('timezone');
+        const user = await User.findById(userId).select('timezone activeLevel');
         const today = startOfDayInTz(user?.timezone);
+        const activeLevel = user?.activeLevel || 'N5';
 
         // goal/today: Anasayfa ile AYNI kaynak+şekil (bkz. decorateTodayWords).
         // İstemci her cevaptan sonra kendi yerel toplamını artırmak yerine
@@ -406,14 +616,29 @@ const UserWordService = {
         // beslenip tutarsız görünmesi (defalarca yakalanan bug sınıfı) böylece
         // yapısal olarak imkânsız olur. Her dönüşte taze okunur (retry
         // sırasında başka bir isteğin güncellediği durumu da doğru yansıtır).
-        const pool = await DailyWordPool.findOne({ user: userId, date: today, jlptLevel: wordExists.jlptLevel });
-        const goal = pool ? pool.newWordIds.length + pool.reviewWordIds.length : 0;
+        //
+        // Havuz kullanıcının DERS seviyesinden (activeLevel) okunur. Eskiden
+        // cevaplanan kelimenin jlptLevel'ıyla aranıyordu: kullanıcı dersi dışı
+        // bir kelimeye cevap verdiğinde (örn. hata listesinden) havuz
+        // bulunamıyor ve `goal: 0` dönüyordu — ders barının paydası bir anda
+        // sıfırlanıyordu.
+        const pool = await DailyWordPool.findOne({ user: userId, date: today, jlptLevel: activeLevel });
+
+        // İki ayrı sözleşme, bkz. decorateTodayWords:
+        //   progress → TURUN durumu (ders barı bunu okur)
+        //   goal/today → GÜNÜN durumu (anasayfa çemberi bunu okur)
+        // Her dönüşte taze okunur (retry sırasında başka bir isteğin
+        // güncellediği durumu da doğru yansıtır).
         const dayShape = async () => {
-            const s = await StudySessionService.getTodaySession(userId);
+            const [s, round] = await Promise.all([
+                StudySessionService.getTodaySession(userId),
+                pool ? readRoundState(userId, pool, today) : null
+            ]);
             return {
-                goal,
+                goal: round ? round.progress.total : 0,
+                progress: round ? round.progress : { total: 0, completed: 0, postponed: 0, remaining: 0, answered: 0 },
                 today: {
-                    completedWords: StudySession.completedTotal(s), // başlığın PAYI
+                    completedWords: StudySession.completedTotal(s), // anasayfa çemberinin PAYI
                     totalWords: s?.totalWords || 0,
                     correctCount: s?.correctCount || 0,
                     wrongCount: s?.wrongCount || 0,
@@ -452,9 +677,23 @@ const UserWordService = {
             const finalToday = touchedToday && FINAL_RESULTS.includes(userWord.lastResult);
             const emptyToday = touchedToday && userWord.lastResult === 'empty';
 
+            // result ile todayResult FARKLI şeylerdir, karıştırılmamalı:
+            //
+            //   result      → BU GÖNDERİMİN puanı. "Doğru!/Yanlış!" geri
+            //                 bildirimi bundan çizilir. Tekrar çalışma turunda
+            //                 da dolu gelir ama hiçbir yere yazılmaz.
+            //   todayResult → Kelimenin GÜNE KAYITLI sonucu. "Bugün bu kelimeyi
+            //                 boş geçmiştin" rozetinin tek kaynağı; /userwords/
+            //                 today'deki aynı isimli alanla birebir aynı.
+            //
+            // Rozeti `result`e bağlamak, tekrar turunda verilen nötr bir cevabın
+            // kelimeyi "ertelenmiş" göstermesine yol açıyordu (07.08.2026 raporu).
             const baseResponse = () => ({
                 ...userWord.toObject(),
-                result, // backend puanlamasında istemci sonucu buradan öğrenir
+                result,
+                todayResult: (!!userWord.lastReviewDate && userWord.lastReviewDate >= today)
+                    ? userWord.lastResult ?? null
+                    : null,
                 ...(correctAnswer !== undefined && { correctAnswer })
             });
 

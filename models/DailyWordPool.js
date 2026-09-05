@@ -22,6 +22,23 @@ const DailyWordPoolSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Word'
     }],
+    // Turun başlama anı. "Bu TURDA dokunuldu mu" sorusunun tek ölçüsü:
+    // ders barının payı (progress.completed), kuyruk (queue) ve "bu turda
+    // ertelenenler" (postponedIds) bununla hesaplanır.
+    //
+    // Neden gün başlangıcı YETMİYOR: tur kapanırken ertelenmiş kelimeler yeni
+    // tura TAŞINIYOR (bkz. userword.service.js carry-over notu) ve taşınan
+    // kelimenin lastResult'ı hâlâ 'empty'. Gün kapsamıyla ölçseydik kelime
+    // yeni turda da "ertelenmiş" görünür, kuyruğa hiç girmez, yani taşımanın
+    // amacı tersine dönerdi. Tur kapsamında ise "bu turda henüz dokunulmadı"
+    // olur ve sırasını bekler. Gün sayaçları (StudySession.emptyCount)
+    // bundan etkilenmez — onlar bilerek gün kapsamlıdır.
+    //
+    // Eski kayıtlarda yok: okurken gün başlangıcına düşülür, yani bu alan
+    // gelmeden önceki davranış birebir korunur.
+    roundStartedAt: {
+        type: Date
+    },
     // Session tamamlandığında set edilir (studysession.service.js), tur
     // yenilendiğinde (userword.service.js) null'a döner. StudySession.isCompleted
     // KULLANILMAZ: /sessions/start her çağrıldığında onu hemen false'a
