@@ -59,6 +59,34 @@ döner). Ama burada ilerleme **%85 (17/20)** idi, yani kart "Devam" halindeydi.
 Kesin olan: **ertelenmiş 3 kelime hiçbir modda görünmüyor.** Kullanıcı
 ertelediği kelimeyi bir daha göremiyor.
 
+### Ek kanıt — 21.09 akşamı, backend yayına alındıktan SONRA
+
+Aynı davranış yeni sözleşmeyle de sürüyor. Sunucunun gönderdiği:
+
+```
+progress = {total: 20, completed: 16, postponed: 4, remaining: 0, touched: 20}
+canFinish: true, canOpenNextPool: false, goal: 20
+```
+
+Yani: 20 kelimenin hepsine dokunulmuş, 16'sı cevaplanmış, 4'ü ertelenmiş,
+dokunulmamış kelime yok. Uygulamanın aynı anda yaptığı:
+
+```
+ders → sorulacak 20 kelime: 私, あなた, これ, ... (hepsi)
+ders → gün ilerlemesi: 16/20, bar başlangıcı: 0
+```
+
+`remaining: 0` okunmuş, "gün ilerlemesi 16/20" diye doğru yazılmış, ama kuyruk
+yine sıfırdan kurulmuş.
+
+**Olması gereken:** `queue` alanı okunsaydı elinde 4 kelime olurdu — kullanıcının
+ertelediği kelimeler. Onlar cevaplanınca `canOpenNextPool` true olur ve
+"Çalışmaya Devam Et" butonu çıkar.
+
+Aynı kayıtta 5. maddenin de tekrarı var: zaten doğru cevaplanmış bir kelime
+yeniden sorulmuş, kullanıcı "Şimdilik Geç"e basmış ve
+`result: empty, todayResult: correct, counted: false` dönmüş.
+
 ## 3. "Dersi Bitir" sunucuya istek atmıyor
 
 Tüm log boyunca `PUT /sessions/complete` **sıfır kez** çağrıldı.
