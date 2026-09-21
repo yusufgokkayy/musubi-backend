@@ -205,7 +205,7 @@ const readDayShape = async (userId, today, jlptLevel) => {
 //
 // Ayrımın sebebi somut bir hata: ders barı gün sayacını okuduğu için ikinci
 // havuzun ilk sorusunda "20/20 · %100 Tamamlandı" yazıyordu.
-const decorateTodayWords = async (userId, today, pool, reviewWordsRaw, newWordsRaw) => {
+const decorateTodayWords = async (userId, today, pool, reviewWordsRaw, newWordsRaw, levelStartsTomorrow = false) => {
     // answeredToday = GÜNÜN nihai cevabı verildi (correct/easy/wrong).
     // "Şimdilik Geç" (empty) bilerek false bırakır — kelime hâlâ gerçek cevap
     // bekliyor. todayResult ise "bugün bu kelimeyi boş geçmiştin" rozetinin
@@ -267,6 +267,11 @@ const decorateTodayWords = async (userId, today, pool, reviewWordsRaw, newWordsR
     return {
         poolNo: pool.poolNo,
         startedAt: pool.startedAt,
+        // Dersin seviyesi. activeLevel'dan FARKLI olabilir: kullanıcı bugün
+        // derse başladıktan sonra seviye değiştirdiyse bugün eski seviyede
+        // devam eder, yenisi yarın başlar (levelStartsTomorrow: true).
+        jlptLevel: pool.jlptLevel,
+        levelStartsTomorrow,
         reviewWords,
         newWords,
         ...poolState,   // queue, postponedIds, completedIds, progress, canFinish, canOpenNextPool
@@ -344,6 +349,46 @@ const selectPoolWords = async (userId, jlptLevel, goal, { excludeReviewIds = [],
     return { reviewWordsRaw, newWordsRaw };
 };
 
+// DERSİN SEVİYESİ — gün içinde seviye değişiminin kuralı (21.09.2026 kararı).
+//
+// Kullanıcı Ayarlar'dan seviye değiştirdiğinde `activeLevel` ANINDA değişir
+// (seviye listesi, rozetler, "Şimdi Geç" kartı hepsi yeni seviyeyi gösterir).
+// Ama BUGÜNÜN DERSİ bugün başlamışsa eski seviyede kalır, yeni seviye YARIN
+// başlar; istemci "Bugünkü dersine başladığın için N4 yarın başlayacak" der.
+//
+// Neden: havuz kimliği {user, gün, seviye, havuz no}. Kural olmasaydı seviye
+// değişimi aynı güne İKİNCİ bir havuz açardı — anasayfa çemberinin paydası
+// iki havuzu toplayıp 40 gösterirken ders ekranı 20 gösteriyordu (21.09
+// bulgusu H2). Havuzun karışık seviyeli olması da istenmiyor.
+//
+// Bugün hiç cevap verilmemişse beklemeye gerek yok: kurulmuş ama dokunulmamış
+// havuz silinir, ders anında yeni seviyeden kurulur.
+const resolveLessonLevel = async (userId, today, activeLevel) => {
+    const pools = await DailyWordPool.find({ user: userId, date: today });
+    const yabanci = pools.filter(p => p.jlptLevel !== activeLevel);
+    if (yabanci.length === 0) return { jlptLevel: activeLevel, levelStartsTomorrow: false };
+
+    // Eski seviyenin havuzunda bugün dokunulmuş kelime var mı?
+    for (const level of [...new Set(yabanci.map(p => p.jlptLevel))]) {
+        const seviyeHavuzlari = yabanci.filter(p => p.jlptLevel === level);
+        const wordIds = [
+            ...seviyeHavuzlari.flatMap(p => p.newWordIds),
+            ...(await UserWord.find({ _id: { $in: seviyeHavuzlari.flatMap(p => p.reviewWordIds) } })
+                .distinct('word'))
+        ];
+        const dokunulan = await UserWord.countDocuments({
+            user: userId, word: { $in: wordIds }, lastReviewDate: { $gte: today }
+        });
+        if (dokunulan > 0) {
+            return { jlptLevel: level, levelStartsTomorrow: true };
+        }
+    }
+
+    // Hiç dokunulmamış: o havuzlar hiç kullanılmadı, silinir (güne tek havuz)
+    await DailyWordPool.deleteMany({ _id: { $in: yabanci.map(p => p._id) } });
+    return { jlptLevel: activeLevel, levelStartsTomorrow: false };
+};
+
 // Hedef gün içinde ARTTIYSA GÜNÜN havuzu (poolNo 1) fark kadar genişler
 // ("30 yaptım ama 20'de kaldı"). Azalma bugünü etkilemez: cevaplanmış kelimeler
 // havuzdan atılamaz, yeni hedef yarın uygulanır.
@@ -398,6 +443,8 @@ const expandPoolIfGoalRaised = async (userId, pool, jlptLevel, currentGoal) => {
 };
 
 const UserWordService = {
+    resolveLessonLevel,
+
     async getTodayWords(userId) {
         // Seviye SUNUCUDAN gelir (User.activeLevel), istemciden DEĞİL.
         // Havuzun kimliği {user, gün, seviye, havuz no} olduğu için istemcinin
@@ -405,9 +452,13 @@ const UserWordService = {
         // havuz açtırıyordu ("tekrar başlarken üstüne 20lik daha soruyor").
         // Tek yazıcı: ProgressService.setActiveLevel.
         const user = await User.findById(userId).select('dailyGoal timezone activeLevel');
-        const jlptLevel = user?.activeLevel || 'N5';
         const today = startOfDayInTz(user?.timezone);
         const goal = user?.dailyGoal || (NEW_WORD_DAILY_LIMIT + REVIEW_DAILY_LIMIT);
+
+        // Dersin seviyesi activeLevel'dır — bugünün dersi başlamadıysa. Başladıysa
+        // bugün eski seviyede devam eder, yenisi yarın başlar (bkz. resolveLessonLevel)
+        const { jlptLevel, levelStartsTomorrow } =
+            await resolveLessonLevel(userId, today, user?.activeLevel || 'N5');
 
         // AKTİF HAVUZ = bugünün en yüksek numaralı havuzu.
         //
@@ -425,7 +476,7 @@ const UserWordService = {
             // Ekstra havuz (2) sabit boyutludur, genişlemez.
             if (pool.poolNo === 1) await expandPoolIfGoalRaised(userId, pool, jlptLevel, goal);
             const { reviewWords, newWords } = await readPoolWords(pool);
-            return decorateTodayWords(userId, today, pool, reviewWords, newWords);
+            return decorateTodayWords(userId, today, pool, reviewWords, newWords, levelStartsTomorrow);
         }
 
         // Havuz yok: günün ilk havuzunu kur. Boyutunu kullanıcının günlük hedefi
@@ -451,7 +502,7 @@ const UserWordService = {
             if (err.code !== 11000) throw err;
             const existing = await DailyWordPool.findOne({ user: userId, date: today, jlptLevel, poolNo: 1 });
             const { reviewWords, newWords } = await readPoolWords(existing);
-            return decorateTodayWords(userId, today, existing, reviewWords, newWords);
+            return decorateTodayWords(userId, today, existing, reviewWords, newWords, levelStartsTomorrow);
         }
 
         logEvent(userId, 'daily_pool_created', {
@@ -465,7 +516,7 @@ const UserWordService = {
         // uygulamayı açtığında kuruluyor, yani kişi zaten içerideyken telefonuna
         // "bugün X kelime seni bekliyor" push'u gidiyordu. Tek üretici artık
         // hatırlatma saatindeki cron.
-        return decorateTodayWords(userId, today, pool, reviewWordsRaw, newWordsRaw);
+        return decorateTodayWords(userId, today, pool, reviewWordsRaw, newWordsRaw, levelStartsTomorrow);
     },
 
     // POST /sessions/next-pool — günün İKİNCİ havuzunu açar.
@@ -477,9 +528,9 @@ const UserWordService = {
     // ertelenen kelimeyi bir sonraki tura taşıma mekanizmasına da gerek kalmıyor.
     async openNextPool(userId) {
         const user = await User.findById(userId).select('dailyGoal timezone activeLevel');
-        const jlptLevel = user?.activeLevel || 'N5';
         const today = startOfDayInTz(user?.timezone);
         const dailyGoal = user?.dailyGoal || (NEW_WORD_DAILY_LIMIT + REVIEW_DAILY_LIMIT);
+        const { jlptLevel } = await resolveLessonLevel(userId, today, user?.activeLevel || 'N5');
 
         const pools = await DailyWordPool.find({ user: userId, date: today, jlptLevel })
             .sort({ poolNo: 1 });
@@ -549,10 +600,10 @@ const UserWordService = {
     async getCurrentRound(userId) {
         const user = await User.findById(userId).select('timezone activeLevel');
         const today = startOfDayInTz(user?.timezone);
-        const jlptLevel = user?.activeLevel || 'N5';
+        const { jlptLevel, levelStartsTomorrow } =
+            await resolveLessonLevel(userId, today, user?.activeLevel || 'N5');
 
-        // Gün içinde seviye değiştiyse bugüne ait birden çok havuz olabilir;
-        // ders her zaman activeLevel'ın havuzudur.
+        // Gün içinde seviye değiştiyse ders bugün ESKİ seviyede devam eder
         const pools = await DailyWordPool.find({ user: userId, date: today, jlptLevel })
             .sort({ poolNo: 1 });
         const pool = pools[pools.length - 1];
@@ -568,7 +619,8 @@ const UserWordService = {
             // GÜNÜN oturum kimliği — havuz kimliği DEĞİL. Gün başına tek
             // StudySession var, ikinci havuz açılınca yenisi açılmaz.
             sessionId: session?._id || null,
-            jlptLevel,
+            jlptLevel,              // DERSİN seviyesi (activeLevel'dan farklı olabilir)
+            levelStartsTomorrow,    // true ise yeni seviye yarın başlıyor
             poolNo: pool.poolNo,
             startedAt: pool.startedAt,
             queue: state.queue,
@@ -629,7 +681,8 @@ const UserWordService = {
 
         const user = await User.findById(userId).select('timezone activeLevel');
         const today = startOfDayInTz(user?.timezone);
-        const activeLevel = user?.activeLevel || 'N5';
+        const { jlptLevel: activeLevel } =
+            await resolveLessonLevel(userId, today, user?.activeLevel || 'N5');
 
         // Cevap yalnızca BUGÜNÜN HAVUZLARINDAKİ kelime için kabul edilir.
         //

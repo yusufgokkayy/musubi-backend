@@ -1667,19 +1667,50 @@ describe('Öğrenme seviyesi (Ayarlar > Öğrenme Seviyeni Değiştir)', () => {
         assert.equal(home.json.data.advanceableLevel, null);
     });
 
-    it('geri dönüş ilerlemeyi silmez: N5 havuzu olduğu gibi durur', async () => {
+    it('seviye değişimi: bugün hiç cevap yoksa ders ANINDA yeni seviyeden kurulur', async () => {
+        // Havuz kurulmuş ama hiç dokunulmamışsa beklemeye gerek yok: eski
+        // seviyenin havuzu silinir, güne yine TEK havuz düşer.
         const back = await api('PUT', '/progress/active-level', { token, body: { jlptLevel: 'N5' } });
         assert.equal(back.status, 200);
 
         const today = await api('GET', '/userwords/today', { token });
-        const levels = new Set(today.json.data.newWords.map(w => w.jlptLevel));
-        assert.deepEqual([...levels], ['N5']);
+        assert.deepEqual([...new Set(today.json.data.newWords.map(w => w.jlptLevel))], ['N5']);
+        assert.equal(today.json.data.jlptLevel, 'N5', 'dersin seviyesi de N5');
+        assert.equal(today.json.data.levelStartsTomorrow, false);
 
-        // Gün içinde seviye değiştirmek havuzları birbirine karıştırmaz:
-        // DailyWordPool anahtarı {user,date,jlptLevel}, her seviye kendi havuzunda
         const pools = await mongoose.connection.db.collection('dailywordpools')
             .countDocuments({ user: userId });
-        assert.equal(pools, 2, 'N4 ve N5 havuzları ayrı ayrı korunmalı');
+        assert.equal(pools, 1, 'dokunulmamış eski havuz silinir: güne tek havuz');
+    });
+
+    it('seviye değişimi: derse başlandıysa yeni seviye YARIN başlar', async () => {
+        // Bugünkü derse dokunulduysa havuz değişmez. Eskiden aynı güne ikinci
+        // bir havuz açılıyordu: anasayfa çemberi iki havuzu toplayıp 40,
+        // ders ekranı 20 gösteriyordu (21.09.2026 bulgusu H2).
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
+        const d = (await api('GET', '/userwords/today', { token })).json.data;
+        await api('POST', '/userwords/answer', { token, body: { wordId: d.queue[0], result: 'correct' } });
+
+        const gec = await api('PUT', '/progress/active-level', { token, body: { jlptLevel: 'N4' } });
+        assert.equal(gec.status, 200);
+        assert.equal(gec.json.data.activeLevel, 'N4', 'seviye ANINDA değişir');
+
+        const sonra = (await api('GET', '/userwords/today', { token })).json.data;
+        assert.equal(sonra.jlptLevel, 'N5', 'bugünkü ders eski seviyede devam eder');
+        assert.equal(sonra.levelStartsTomorrow, true, 'istemci "yarın başlayacak" diyebilsin');
+        assert.deepEqual([...new Set(sonra.newWords.map(w => w.jlptLevel))], ['N5']);
+
+        const pools = await mongoose.connection.db.collection('dailywordpools')
+            .countDocuments({ user: userId });
+        assert.equal(pools, 1, 'ikinci havuz AÇILMAZ');
+
+        // Anasayfa ile ders ekranı AYNI paydayı göstermeli (H2'nin kendisi)
+        const home = (await api('GET', '/home/summary', { token })).json.data;
+        assert.equal(home.activeLevel, 'N4', 'seviye bandı yeni seviyeyi gösterir');
+        assert.equal(home.lessonLevel, 'N5', 'ders bugün N5');
+        assert.equal(home.levelStartsTomorrow, true);
+        assert.equal(home.goal, sonra.goal, 'çemberin paydası ders ekranıyla aynı');
+        assert.equal(home.today.completedWords, sonra.today.completedWords);
     });
 });
 

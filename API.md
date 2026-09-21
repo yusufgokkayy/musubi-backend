@@ -699,6 +699,18 @@ kadar genişler — kontenjana önce **vadesi gelmiş tekrarlar**, kalan yer yen
 kelimelerle dolar (cevaplanmışlar korunur). Hedef azalırsa bugünü etkilemez,
 yarınki havuz yeni hedefle kurulur.
 
+**GÜN İÇİNDE SEVİYE DEĞİŞİMİ (21.09.2026).** `PUT /progress/active-level`
+çağrıldığında `activeLevel` **anında** değişir (seviye listesi, bandı, rozetler
+hepsi yeni seviyeyi gösterir). Ama **bugünkü derse başlanmışsa** (en az bir
+kelimeye dokunulmuşsa) bugünün havuzu eski seviyede kalır, yeni seviye **yarın**
+başlar; yanıt `levelStartsTomorrow: true` döner ve istemci "Bugünkü dersine
+başladığın için N4 yarın başlayacak" der. Bugün hiç cevap verilmemişse ders
+anında yeni seviyeden kurulur (dokunulmamış eski havuz silinir).
+
+Böylece **güne tek havuz** kuralı korunur: eskiden seviye değişimi aynı güne
+ikinci bir havuz açıyor, anasayfa çemberi iki havuzu toplayıp 40 gösterirken
+ders ekranı 20 gösteriyordu. Havuz asla karışık seviyeli olmaz.
+
 **GÜNDE EN FAZLA İKİ HAVUZ (21.09.2026).** Bu uç **asla kendiliğinden yeni
 havuz açmaz**. Eskiden oturum tamamlandıktan sonraki ilk `/today` çağrısı taze
 bir set üretiyordu; kullanıcı yalnızca ekrana dönerek üstüne yeni bir 20'lik
@@ -759,6 +771,8 @@ taşır; hiç dokunulmamış kelimede `todayResult: null`'dur.
     "newWords": [ /* Word[] + answeredToday/todayResult — bugüne atanmış yeni kelimeler */ ],
 
     // ——— AKTİF HAVUZUN durumu (ders ekranı YALNIZCA bunu okur) ———
+    "jlptLevel": "N5",                    // DERSİN seviyesi (activeLevel'dan farklı olabilir)
+    "levelStartsTomorrow": false,         // true ise yeni seviye yarın başlıyor
     "poolNo": 1,                          // 1 = günün havuzu, 2 = ekstra havuz
     "startedAt": "2026-09-21T06:12:00.000Z",
     "queue": ["665f2b...", "665f2c..."],  // kalan sıra: önce dokunulmamışlar, SONDA ertelenenler
@@ -1104,7 +1118,11 @@ liste sırası: kilitli üstte, tamamlanan altta).
   "success": true,
   "data": {
     "completionThreshold": 75,   // "Bir sonraki seviyeye geçmek için listeyi %75 oranında tamamlayın" kutusu
-    "activeLevel": "N4",         // günlük dersin çekildiği seviye
+    "activeLevel": "N4",
+    // BUGÜNKÜ DERSİN seviyesi. activeLevel anında değişir ama derse
+    // başlandıysa bugün eski seviyede devam eder (bkz. GET /userwords/today)
+    "lessonLevel": "N5",
+    "levelStartsTomorrow": true,         // günlük dersin çekildiği seviye
     "levels": [
       {
         "jlptLevel": "N3",

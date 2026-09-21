@@ -7,6 +7,10 @@ const DailyWordPool = require('../../models/DailyWordPool');
 const Notification = require('../../models/Notification');
 const ProgressService = require('../progress/progress.service');
 const QuizService = require('../quiz/quiz.service');
+// Dersin seviyesi activeLevel'dan farklı olabilir (bugün derse başlandıysa yeni
+// seviye yarın başlar). Çemberin paydası DERSİN havuzundan gelmeli, yoksa
+// anasayfa 40, ders ekranı 20 der (21.09.2026 bulgusu H2).
+const UserWordService = require('../userword/userword.service');
 const {
     startOfDayInTz, startOfDateInTz,
     localDateStr, localHourInTz, weekDatesInTz
@@ -71,7 +75,7 @@ const HomeService = {
 
         const [
             todaySession, streak, foundProgress,
-            todayMistakeCount, mistakePreview, todayPools, weekSessions, unreadNotifications
+            todayMistakeCount, mistakePreview, weekSessions, unreadNotifications
         ] = await Promise.all([
             // Bugünün session'ı
             StudySession.findOne({
@@ -95,9 +99,6 @@ const HomeService = {
                 .sort({ wrongCount: -1 })
                 .limit(MISTAKE_PREVIEW_LIMIT),
 
-            // Çemberin paydası için GÜNÜN havuzu (poolNo 1)
-            DailyWordPool.find({ user: userId, date: { $gte: today }, poolNo: 1 }),
-
             // Seri şeridinin yedi günü. Üst sınır YOK: gelecek tarihli oturum
             // oluşmuyor, koymak DST kenarında bir günü kırpma riski getirirdi.
             StudySession.find({ user: userId, date: { $gte: weekStart } })
@@ -110,6 +111,13 @@ const HomeService = {
         // Seviye kayıtları eksik olan hesapta "Şimdi Geç" bandı ve progress
         // dizisi sessizce kayboluyordu; seviye listesindeki onarımın aynısı
         const progress = await ProgressService.ensureProgress(userId, foundProgress);
+
+        // Dersin seviyesi: bugün derse başlandıysa yeni seviye yarın başlar
+        const ders = await UserWordService.resolveLessonLevel(
+            userId, today, user?.activeLevel || 'N5');
+        const todayPools = await DailyWordPool.find({
+            user: userId, date: { $gte: today }, jlptLevel: ders.jlptLevel, poolNo: 1
+        });
 
         // Çemberin paydası = GÜNÜN HEDEFİ = 1. havuzun boyutu. dailyGoal canlı
         // tercih değeridir: gün içinde değişince payda anında oynamamalı —
@@ -171,6 +179,11 @@ const HomeService = {
             greeting: greetingFor(localHourInTz(tz, now)), // ismin üstündeki Japonca satır
             activeLevel,
             activeLevelLabel: ProgressService.LEVEL_LABELS[activeLevel], // "N4 • Temel" bandı
+            // BUGÜNKÜ DERSİN seviyesi. activeLevel anında değişir, ama ders
+            // bugün başlamışsa bugün eski seviyede devam eder: istemci
+            // "Bugünkü dersine başladığın için N4 yarın başlayacak" der.
+            lessonLevel: ders.jlptLevel,
+            levelStartsTomorrow: ders.levelStartsTomorrow,
             advanceableLevel: nextUnlocked
                 ? { jlptLevel: nextLevel, label: ProgressService.LEVEL_LABELS[nextLevel] }
                 : null,
