@@ -9,6 +9,7 @@ const router = express.Router();
 // sayaçlarını artırabiliyordu. Sayaçları yalnızca /userwords/answer günceller.
 router.post('/start',       StudySessionController.startSession);
 router.put('/complete',     StudySessionController.completeSession);
+router.post('/next-pool',   StudySessionController.openNextPool);
 router.get('/current',      StudySessionController.getCurrentRound);
 router.get('/today',        StudySessionController.getTodaySession);
 router.get('/history',      StudySessionController.getSessionHistory);

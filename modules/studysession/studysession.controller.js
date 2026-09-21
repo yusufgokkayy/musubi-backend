@@ -11,9 +11,22 @@ const StudySessionController = {
         res.status(200).json({ success: true, data: session });
     }),
 
+    // Bitiş ekranı: oturum özeti + "yeni havuz açabilir miyim" bayrağı.
+    // canOpenNextPool havuzun durumundan türer (UserWordService), oturumdan
+    // değil — bitiş ekranındaki "Çalışmaya Devam Et" butonu buna bakar.
     completeSession: catchAsync(async (req, res) => {
         const session = await StudySessionService.completeSession(req.user.id);
-        res.status(200).json({ success: true, data: session });
+        const round = await UserWordService.getCurrentRound(req.user.id);
+        res.status(200).json({
+            success: true,
+            data: { ...session, canOpenNextPool: round?.canOpenNextPool ?? false }
+        });
+    }),
+
+    // Günün ikinci (ve son) havuzunu açar. Yalnızca kullanıcı isteğiyle.
+    openNextPool: catchAsync(async (req, res) => {
+        const data = await UserWordService.openNextPool(req.user.id);
+        res.status(201).json({ success: true, data });
     }),
 
     // Yan etkisiz: havuz açmaz, tur yenilemez, oturum başlatmaz.

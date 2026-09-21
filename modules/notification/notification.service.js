@@ -42,7 +42,9 @@ const DECAY_MIN_GAP_DAYS = 3;
 // gider: sabah 20/20'yi bitiren kullanıcıya öğlen "Bugün 20 ezberlenecek kelime
 // seni bekliyor!" demek rahatsız edici — üstelik sayı da yanlış olurdu.
 const remainingWorkToday = async (user, today) => {
-    const pools = await DailyWordPool.find({ user: user._id, date: { $gte: today } })
+    // Yalnızca GÜNÜN havuzu (poolNo 1). Kullanıcının kendi isteğiyle açtığı
+    // ekstra havuz "kalan iş" değildir; onu hatırlatmaya gerek yok.
+    const pools = await DailyWordPool.find({ user: user._id, date: { $gte: today }, poolNo: 1 })
         .select('newWordIds reviewWordIds');
     if (pools.length === 0) return user.dailyGoal || 20;
 

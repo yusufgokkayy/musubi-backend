@@ -699,19 +699,32 @@ kadar genişler — kontenjana önce **vadesi gelmiş tekrarlar**, kalan yer yen
 kelimelerle dolar (cevaplanmışlar korunur). Hedef azalırsa bugünü etkilemez,
 yarınki havuz yeni hedefle kurulur.
 
-**Yeni tur:** `PUT /sessions/complete` ile günün oturumu tamamlandıktan sonra
-bu uç nokta tekrar çağrılırsa, aynı gün içinde bile **taze bir havuz** üretilir —
-önceki havuzdaki (hem tekrar hem yeni) kelimeler hariç tutulur, aynı kurallarla
-(frequencyRank sıralı yeni, vade sıralı tekrar) yeniden seçilir.
+**GÜN İÇİNDE SEVİYE DEĞİŞİMİ (21.09.2026).** `PUT /progress/active-level`
+çağrıldığında `activeLevel` **anında** değişir (seviye listesi, bandı, rozetler
+hepsi yeni seviyeyi gösterir). Ama **bugünkü derse başlanmışsa** (en az bir
+kelimeye dokunulmuşsa) bugünün havuzu eski seviyede kalır, yeni seviye **yarın**
+başlar; yanıt `levelStartsTomorrow: true` döner ve istemci "Bugünkü dersine
+başladığın için N4 yarın başlayacak" der. Bugün hiç cevap verilmemişse ders
+anında yeni seviyeden kurulur (dokunulmamış eski havuz silinir).
 
-**İSTİSNA — ertelenenler taşınır:** o gün "Şimdilik Geç" denmiş ve hâlâ gerçek
-cevap bekleyen kelimeler hariç tutulmaz, yeni turun **başına** konur ve
-kontenjandan sayılır (taşınan + taze = `goal`, payda büyümez). Taşınmasalardı
-`complete` sonrası günün geri kalanında bir daha hiç sorulmazlardı — "Şimdilik
-Geç" sessiz bir silme tuşuna dönerdi. Yeni turda bu kelimeler "bu turda henüz
-dokunulmamış" sayılır (`queue`'ya girer, `progress.postponed`'da görünmez), ama
-gün kapsamındaki işaretleri durur (`todayResult: "empty"`, `today.emptyCount`). Session da otomatik yeniden açılır (`isCompleted:false`).
-Günün toplam sayaçları (`/sessions/today`) turlar arasında birikmeye devam eder.
+Böylece **güne tek havuz** kuralı korunur: eskiden seviye değişimi aynı güne
+ikinci bir havuz açıyor, anasayfa çemberi iki havuzu toplayıp 40 gösterirken
+ders ekranı 20 gösteriyordu. Havuz asla karışık seviyeli olmaz.
+
+**GÜNDE EN FAZLA İKİ HAVUZ (21.09.2026).** Bu uç **asla kendiliğinden yeni
+havuz açmaz**. Eskiden oturum tamamlandıktan sonraki ilk `/today` çağrısı taze
+bir set üretiyordu; kullanıcı yalnızca ekrana dönerek üstüne yeni bir 20'lik
+havuz alıyordu ("tekrar başlarken üstüne 20lik daha soruyor"). İkinci havuz
+artık yalnızca açık bir istekle açılır: `POST /sessions/next-pool`.
+
+Bu uç her zaman **aktif havuzu** döner (ikinci havuz açıldıysa o, değilse ilki)
+ve hangisi olduğunu `poolNo` söyler.
+
+**Ertelenenler aynı ders içinde geri gelir.** "Şimdilik Geç" denen kelime
+kuyruktan düşmez, kuyruğun **sonuna** gider (en önce ertelenen en önde). Aynı
+kelimeye tekrar "Şimdilik Geç" denirse sayaçlar oynamaz (`counted: false`) ama
+kelime yine sona taşınır — kullanıcı aynı kelimeyi arka arkaya görmez. Kelimeyi
+geri vermemek, ikinci havuzun kapısını sonsuza kadar kapatırdı (aşağıya bak).
 
 `newWords` **rastgele değil**, `frequencyRank` (müfredat/omurga sırası, küçük
 = önce öğretilir) artan sırada gelir — ön koşul kelime (örn. "doktor") sonraki
@@ -757,23 +770,29 @@ taşır; hiç dokunulmamış kelimede `todayResult: null`'dur.
     ],
     "newWords": [ /* Word[] + answeredToday/todayResult — bugüne atanmış yeni kelimeler */ ],
 
-    // ——— TURUN durumu (ders ekranı YALNIZCA bunu okur) ———
-    "roundStartedAt": "2026-09-05T06:12:00.000Z",
-    "queue": ["665f2b...", "665f2c..."],  // kalan sıra, SUNUCU belirler
-    "postponedIds": ["665f2d..."],        // bu turda "Şimdilik Geç" denenler
-    "completedIds": ["665f2e..."],        // bu turda nihai cevabı verilenler
+    // ——— AKTİF HAVUZUN durumu (ders ekranı YALNIZCA bunu okur) ———
+    "jlptLevel": "N5",                    // DERSİN seviyesi (activeLevel'dan farklı olabilir)
+    "levelStartsTomorrow": false,         // true ise yeni seviye yarın başlıyor
+    "poolNo": 1,                          // 1 = günün havuzu, 2 = ekstra havuz
+    "startedAt": "2026-09-21T06:12:00.000Z",
+    "queue": ["665f2b...", "665f2c..."],  // kalan sıra: önce dokunulmamışlar, SONDA ertelenenler
+    "postponedIds": ["665f2d..."],        // "Şimdilik Geç" denenler (kuyruğun sonundalar)
+    "completedIds": ["665f2e..."],        // nihai cevabı verilenler
     "progress": {
-      "total": 30,       // bu turun boyutu (= goal)
-      "completed": 9,    // DERS BARININ PAYI — nihai cevap verilenler
+      "total": 30,       // bu havuzun boyutu
+      "completed": 9,    // nihai cevap verilenler (doğru + yanlış)
       "postponed": 3,    // şu an ertelenmiş durumda olanlar
-      "remaining": 18,   // bu turda hiç dokunulmamışlar (= queue.length)
+      "remaining": 18,   // bu havuzda hiç dokunulmamışlar
       "touched": 12      // DERS BARININ PAYI — completed + postponed (dokunulan)
     },
+    "canFinish": true,           // PUT /sessions/complete çağrılabilir mi (touched > 0)
+    "canOpenNextPool": false,    // POST /sessions/next-pool çağrılabilir mi
 
     // ——— GÜNÜN durumu (anasayfa çemberi bunu okur) ———
-    "goal": 30,                  // bu turun boyutu = progress.total
+    "goal": 30,                  // GÜNÜN HEDEFİ = 1. havuzun boyutu; ekstra havuz bunu BÜYÜTMEZ
     "today": {                   // /home/summary ile AYNI kaynak ve şekil
-      "completedWords": 9,       // ÇEMBERİN PAYI — turlar arası birikir
+      "completedWords": 9,       // ÇEMBERİN PAYI — havuzlar arası birikir
+      "extra": 0,                // hedefin ÜSTÜNE yapılan iş ("+4 ekstra")
       "totalWords": 12,          // dokunulan kelime sayısı (erteleme dahil)
       "correctCount": 7,
       "wrongCount": 2,
@@ -786,12 +805,14 @@ taşır; hiç dokunulmamış kelimede `todayResult: null`'dur.
 
 **`progress` ile `today` bilerek FARKLIDIR — hangisi nerede kullanılır:**
 
-| | Kapsam | Sıfırlanma | Kullanıcısı |
-|---|---|---|---|
-| `progress` / `queue` / `postponedIds` / `completedIds` | **TUR** (`roundStartedAt`'ten beri) | her yeni turda | Ders barı ve kuyruğu |
-| `goal` / `today` | **GÜN** (`StudySession`) | hiç (turlar arası birikir) | Anasayfa çemberi, bitiş ekranı |
+| | Kapsam | Kullanıcısı |
+|---|---|---|
+| `progress` / `queue` / `postponedIds` / `completedIds` / `canFinish` / `canOpenNextPool` | **AKTİF HAVUZ** | Ders barı ve kuyruğu |
+| `goal` / `today` | **GÜN** (`StudySession`, havuzlar arası birikir) | Anasayfa çemberi, bitiş ekranı |
 
-Turun ilkinde ikisi birebir aynı sayıyı verir. **İkinci turda ayrışırlar** ve bu doğrudur: 20 kelimelik turu bitirip yeni tur açan kullanıcıda `today.completedWords` 20'de kalır (gün sayacı), `progress.completed` ise 0'dan başlar (taze tur). Ders barı `today.completedWords`'ü okursa taze turun ilk sorusunda **"20/20 · %100 Tamamlandı"** yazar — barın payı `progress.completed`, paydası `progress.total`'dır.
+İlk havuzda ikisi birebir aynı sayıyı verir. **İkinci havuzda ayrışırlar** ve bu doğrudur: 20 kelimelik havuzu bitirip ekstra havuz açan kullanıcıda `today.completedWords` 20'de kalır (gün sayacı), `progress.completed` ise 0'dan başlar (taze havuz). Ders barı `today.completedWords`'ü okursa ekstra havuzun ilk sorusunda **"20/20 · %100 Tamamlandı"** yazar — **barın payı `progress.touched`, paydası `progress.total`'dır** ("Şimdilik Geç" de ilerlemedir; bar dolduğunda ders bitirilebilir).
+
+**Çember asla geri düşmez.** `goal` günün hedefidir ve ekstra havuz açılınca büyümez; hedefin üstündeki iş `today.extra` olarak ayrı döner. Payda büyüseydi 20/20 yapan kullanıcı ekstra havuzu açınca 20/40'a, yani %50'ye düşerdi — ödül olması gereken şey cezaya dönerdi.
 
 Ders ekranı kendi yerel sayacını **tutmamalı**: her `/userwords/answer` yanıtı da aynı `progress` + `goal` + `today` bloklarını döner, bar her cevapta oradan tazelenir; ayrıca `/userwords/today` çekmeye gerek yoktur. `completedWords`'ün tanımı ve neden `totalWords` olmadığı için [Hangi sayı ilerlemedir](#ana-ekran--home) notuna bak.
 Not: tüm `Word` yanıtlarında türetilmiş `isKana` alanı vardır — `true` ise kelime
@@ -849,7 +870,17 @@ noktaya istek atarak sınırsız/rastgele kelime cevaplama girişimini kapatır.
   }
 }
 ```
-Hatalar: `400 "result veya answer gönderilmeli"`, `400 "Invalid result, use: correct, easy, empty, wrong"`, `404 "Word not found"`.
+Hatalar: `400 "result veya answer gönderilmeli"`, `400 "Invalid result, use: correct, easy, empty, wrong"`, `404 "Word not found"`, `400 "Bu kelime bugünün havuzunda değil"`.
+
+**Yalnızca bugünün havuzlarındaki kelime cevaplanabilir (21.09.2026).** Eskiden
+hiçbir kontrol yoktu: hesabının anahtarını bilen biri uygulamayı hiç kullanmadan
+doğrudan bu uca `result: "correct"` göndererek havuz dışındaki yüzlerce kelimeyi
+ilerletebilir, seviye kilitlerini açabilirdi. Günün **tüm** havuzları (1 ve 2)
+kabul edilir; ekstra havuz açıldıktan sonra da ilk havuzun kelimeleri "Tekrar
+Çöz" ile yeniden çalışılabilir (o cevaplar zaten nötrdür).
+
+Yanıt ayrıca `poolNo`, `canFinish`, `canOpenNextPool` ve `today.extra` taşır —
+`GET /userwords/today` ile birebir aynı anlamdadır.
 
 **`counted`, `goal`, `progress` ve `today` sözleşmenin parçasıdır** ve kaldırılmayacaktır. Amaçları istemcinin her cevaptan sonra ayrı bir `/home/summary` ya da `/userwords/today` çağırmasını gereksiz kılmak: ders barı ile anasayfa çemberinin farklı sayı göstermesi böylece yapısal olarak imkânsız olur.
 
@@ -965,6 +996,7 @@ hiç çağırmadığı teyit edilince kaldırıldı. Sayaçların tek yazıcıs�
 `POST /userwords/answer`'dır.
 
 ### PUT /sessions/complete 🔒✉️
+Bitiş ekranını açar. **Havuzu KİLİTLEMEZ, yeni havuz AÇMAZ.**
 ```jsonc
 // 200 — gövde yok; isCompleted=true, duration hesaplanır.
 { "success": true, "data": { /* StudySession */,
@@ -972,31 +1004,65 @@ hiç çağırmadığı teyit edilince kaldırıldı. Sayaçların tek yazıcıs�
   // Payda correctCount+wrongCount'tur, totalWords DEĞİL: "Şimdilik Geç"e
   // basmak doğruluk oranını düşürmemeli.
   "accuracy": 71,
-  // Sonraya bırakılmış kelime sayısı — "3 kelimeyi sonraya bıraktın" satırı
-  // için. Bitirmeyi ENGELLEMEZ (aşağıya bak).
-  "pendingWords": 3
+  // Sonraya bırakılmış kelime sayısı — "3 kelimeyi sonraya bıraktın" satırı için
+  "pendingWords": 3,
+  // "Çalışmaya Devam Et" butonu bunu okur (POST /sessions/next-pool)
+  "canOpenNextPool": false
 } }
 ```
 
-**Ertelenmiş kelime artık dersi bitirmeyi engellemez (07.08.2026, 409 kalktı).**
-Eskiden `empty` durumunda kelime kalmışsa `409` dönüyordu; gerekçe, turun
-kapanmasının (`roundClosedAt`) o kelimeleri günün havuzundan düşürmesiydi.
-Artık **ertelenen kelimeler bir sonraki tura taşınıyor** (bkz.
-`GET /userwords/today` → yeni tur) — kayıp yok, kelime yeni turun **başında**
-geri geliyor. 409'un tek etkisi, "Şimdilik Geç"e basan kullanıcıyı dersten
-çıkamaz hale getirmekti.
+**Tek koşul: en az bir kelimeye dokunulmuş olmalı.** Hiç dokunulmadıysa `400`
+döner — hiç çalışmadan "Tebrikler" ekranı görmek anlamsız.
 
-Akış: kuyruk (`queue`) boşalınca `complete` çağır. Ertelenenler `postponedIds`'tedir ve aynı turda tekrar sorulmaz.
+**Dokunulmamış kelime kalması bitirmeyi ENGELLEMEZ.** Kullanıcı 20 kelimenin
+5'ini yapıp bitirebilir; havuz açık kalır, sonra dönüp kalanlara devam eder
+(`/userwords/today` aynı havuzu döndürmeye devam eder). Dersten **çıkmak** için
+bu ucu çağırmaya gerek yok: çıkış hiçbir istek gerektirmez, durum zaten sunucuda.
 
-Hata: `404 "No active session found"`.
+**Ertelenmiş kelime de engellemez** (409, 07.08.2026'da kalktı) — ama ikinci
+havuzu açmayı engeller: o kapı yalnızca havuz gerçekten bitince açılır.
+
+**ARTIK YENİ TUR AÇMAZ (21.09.2026).** Eskiden bu çağrı havuzu "kapandı"
+damgalıyor, bir sonraki `/userwords/today` taze bir set üretiyordu.
+
+Akış: bar dolunca (`progress.touched === progress.total`) `complete` çağır.
+
+Hatalar: `404 "No active session found"`, `400 "Hiç kelimeye dokunmadan ders bitirilemez"`.
+
+### POST /sessions/next-pool 🔒✉️
+Günün **ikinci (ve son)** havuzunu açar. Bitiş ekranındaki "Çalışmaya Devam Et".
+
+```jsonc
+// 201 — gövde yok; yanıt GET /userwords/today ile AYNI şekildedir
+{ "success": true, "data": { "poolNo": 2, "newWords": [...], "queue": [...],
+  "progress": { "total": 10, ... }, "goal": 20, "today": { "extra": 0, ... } } }
+```
+
+**Kurallar:**
+- Yalnızca **1. havuz gerçekten bitmişse**: ne dokunulmamış ne de ertelenmiş
+  kelime kalacak (`canOpenNextPool: true`). Değilse `400` + `details`
+  (`remaining`, `postponed`). Böylece "Şimdilik Geç" dediklerini bırakıp yeni
+  kelimelere kaçmak mümkün olmuyor.
+- **Günde en fazla 2 havuz.** Üçüncü istek `400`.
+- **Boyutu: günlük hedefin yarısı** (hedef 20 → 10). "Biraz daha çalışayım"
+  diyenin önüne yeni bir 20'lik duvar çıkmasın.
+- **İçeriği önce vadesi gelmiş TEKRARLAR**, yer kalırsa yeni kelimeler. Aynı gün
+  iki kat yeni kelime, ertesi güne iki kat tekrar borcu demektir.
+- `goal` (günün hedefi) **değişmez**; ekstra havuzdaki iş `today.extra`'ya yazılır.
+
+Hatalar: `400 "Bugünün dersi henüz açılmadı: önce GET /userwords/today"`,
+`400 "Bugün en fazla 2 havuz açılabilir"`,
+`400 "Yeni havuz için önce bu havuzu bitir: ..."`,
+`400 "Bugünlük çalışılacak kelime kalmadı"`.
 
 ### GET /sessions/current 🔒✉️
 Dersin **tam durumu, kelime gövdeleri olmadan**. Uygulama silinip kurulsa bile
 istemcinin hiçbir şey hatırlaması gerekmez: kuyruk, sıra ve ilerleme sunucudadır.
 
-**Tamamen okumadır** — havuz açmaz, tur yenilemez, oturum başlatmaz. Bugün için
-havuz yoksa (ya da tur kapalıysa) `data: null` döner; istemci o zaman normal
-akışa girer: `POST /sessions/start` → `GET /userwords/today`.
+**Tamamen okumadır** — havuz açmaz, oturum başlatmaz. Bugün için havuz yoksa
+`data: null` döner; istemci o zaman normal akışa girer:
+`POST /sessions/start` → `GET /userwords/today`. Aktif havuz (1 veya 2)
+`poolNo` ile gelir; `canFinish` ve `canOpenNextPool` de buradadır.
 
 ```jsonc
 // 200
@@ -1004,16 +1070,22 @@ akışa girer: `POST /sessions/start` → `GET /userwords/today`.
   "success": true,
   "data": {
     "sessionId": "665f4d...",   // GÜNÜN oturum kimliği — tur kimliği DEĞİL
-                                // (gün başına tek StudySession var, tur kapanınca
-                                //  aynı kayıt yeniden açılır). Tur değişimi
-                                //  roundStartedAt'ten anlaşılır.
+                                // (gün başına tek StudySession var; ikinci havuz
+                                //  açılınca yeni oturum açılmaz, aynı kayıt
+                                //  yeniden açılır). Havuz değişimi poolNo'dan anlaşılır.
     "jlptLevel": "N5",          // kullanıcının activeLevel'ı
-    "roundStartedAt": "2026-09-05T06:12:00.000Z",
-    "queue": ["665f2b...", "665f2c..."],  // kalan sıra, sunucu belirler
+    "poolNo": 1,                // aktif havuz (1 = günün havuzu, 2 = ekstra)
+    "startedAt": "2026-09-21T06:12:00.000Z",
+    "queue": ["665f2b...", "665f2c..."],  // önce dokunulmamışlar, SONDA ertelenenler
     "currentIndex": 0,          // HER ZAMAN 0: queue "kalan"dır, kaldığın yer queue[0]
     "postponedIds": ["665f2d..."],
     "completedIds": ["665f2e..."],
-    "progress": { "total": 20, "completed": 7, "postponed": 3, "remaining": 10, "touched": 10 }
+    "progress": { "total": 20, "completed": 7, "postponed": 3, "remaining": 10, "touched": 10 },
+    "canFinish": true,
+    "canOpenNextPool": false,
+    "goal": 20,                 // günün hedefi (1. havuz)
+    "today": { "completedWords": 7, "extra": 0, "totalWords": 10, "correctCount": 5,
+               "wrongCount": 2, "emptyCount": 3, "isCompleted": false }
   }
 }
 ```
@@ -1046,7 +1118,11 @@ liste sırası: kilitli üstte, tamamlanan altta).
   "success": true,
   "data": {
     "completionThreshold": 75,   // "Bir sonraki seviyeye geçmek için listeyi %75 oranında tamamlayın" kutusu
-    "activeLevel": "N4",         // günlük dersin çekildiği seviye
+    "activeLevel": "N4",
+    // BUGÜNKÜ DERSİN seviyesi. activeLevel anında değişir ama derse
+    // başlandıysa bugün eski seviyede devam eder (bkz. GET /userwords/today)
+    "lessonLevel": "N5",
+    "levelStartsTomorrow": true,         // günlük dersin çekildiği seviye
     "levels": [
       {
         "jlptLevel": "N3",
@@ -1530,7 +1606,10 @@ Anasayfanın tek istekte tüm verisi. **Hikâye şeridi buna dahil değildir** �
     // completedWords = çemberin PAYI (nihai cevabı verilmiş kelime sayısı).
     // totalWords "kaç kelimeye dokundun"dur ve ertelenenleri de sayar —
     // çemberde KULLANMA (bkz. aşağıdaki "Hangi sayı ilerlemedir" notu).
-    "today": { "completedWords": 8, "totalWords": 11, "correctCount": 6, "wrongCount": 2, "emptyCount": 3, "isCompleted": false },
+    // extra: GÜNÜN HEDEFİNİN ÜSTÜNE yapılan iş (ekstra havuz). Çember hedef
+    // dolunca DOLU KALIR; fazlası "+4 ekstra" diye ayrı gösterilir. Payda
+    // büyütülseydi 20/20 yapıp ekstra havuz açan kullanıcı %50'ye düşerdi.
+    "today": { "completedWords": 8, "extra": 0, "totalWords": 11, "correctCount": 6, "wrongCount": 2, "emptyCount": 3, "isCompleted": false },
 
     // "🔥 12 Gün" + altındaki yedi daire
     "streak": {
@@ -1575,6 +1654,7 @@ Gün etiketleri (`Pzt`, `Salı`…) `date`'ten yerel olarak biçimlendirilir; `w
 | Alan | Anlamı | Nerede kullanılır |
 |---|---|---|
 | `completedWords` | Nihai cevabı (doğru/yanlış) verilmiş kelime sayısı | **Çemberin ve "X/Y Tamamlandı" ifadesinin PAYI** |
+| `extra` | `completedWords`'ün günün hedefini aşan kısmı (ekstra havuz) | Çemberin yanında "+4 ekstra" |
 | `totalWords` | Dokunulan kelime sayısı — "Şimdilik Geç" dahil | Yalnızca bilgi; ilerleme olarak gösterme |
 
 "Şimdilik Geç" (`empty`) **ilerleme değildir**: kelime gün içinde yeniden sorulur, yani ders bitmemiştir. `totalWords` payda olarak kullanılırsa 18 kelime ertelenmişken ekran "20/20 Tamamlandı" der ama ders devam eder; üstelik sayaç oradan sonra donar (ertelenenin gerçek cevabı `emptyCount`'u düşürür, `totalWords`'e dokunmaz). Aynı kural seri sayacında ve `streak.week`'te de geçerlidir.

@@ -7,6 +7,10 @@ const DailyWordPool = require('../../models/DailyWordPool');
 const Notification = require('../../models/Notification');
 const ProgressService = require('../progress/progress.service');
 const QuizService = require('../quiz/quiz.service');
+// Dersin seviyesi activeLevel'dan farklı olabilir (bugün derse başlandıysa yeni
+// seviye yarın başlar). Çemberin paydası DERSİN havuzundan gelmeli, yoksa
+// anasayfa 40, ders ekranı 20 der (21.09.2026 bulgusu H2).
+const UserWordService = require('../userword/userword.service');
 const {
     startOfDayInTz, startOfDateInTz,
     localDateStr, localHourInTz, weekDatesInTz
@@ -71,7 +75,7 @@ const HomeService = {
 
         const [
             todaySession, streak, foundProgress,
-            todayMistakeCount, mistakePreview, todayPools, weekSessions, unreadNotifications
+            todayMistakeCount, mistakePreview, weekSessions, unreadNotifications
         ] = await Promise.all([
             // Bugünün session'ı
             StudySession.findOne({
@@ -95,9 +99,6 @@ const HomeService = {
                 .sort({ wrongCount: -1 })
                 .limit(MISTAKE_PREVIEW_LIMIT),
 
-            // Çemberin paydası için bugünün havuz(lar)ı
-            DailyWordPool.find({ user: userId, date: { $gte: today } }),
-
             // Seri şeridinin yedi günü. Üst sınır YOK: gelecek tarihli oturum
             // oluşmuyor, koymak DST kenarında bir günü kırpma riski getirirdi.
             StudySession.find({ user: userId, date: { $gte: weekStart } })
@@ -111,11 +112,22 @@ const HomeService = {
         // dizisi sessizce kayboluyordu; seviye listesindeki onarımın aynısı
         const progress = await ProgressService.ensureProgress(userId, foundProgress);
 
-        // Çemberin paydası = BUGÜNÜN HAVUZU (günün sözleşmesi). dailyGoal canlı
+        // Dersin seviyesi: bugün derse başlandıysa yeni seviye yarın başlar
+        const ders = await UserWordService.resolveLessonLevel(
+            userId, today, user?.activeLevel || 'N5');
+        const todayPools = await DailyWordPool.find({
+            user: userId, date: { $gte: today }, jlptLevel: ders.jlptLevel, poolNo: 1
+        });
+
+        // Çemberin paydası = GÜNÜN HEDEFİ = 1. havuzun boyutu. dailyGoal canlı
         // tercih değeridir: gün içinde değişince payda anında oynamamalı —
         // havuz genişlerse (hedef artışı) goal zaten onunla birlikte büyür.
-        // Birden fazla tur olduysa (aynı gün içinde oturum tamamlanıp yeniden
-        // açıldıysa) kapanan turların hedefleri de dahil edilir (bkz. poolGoalTotal).
+        //
+        // EKSTRA HAVUZ PAYDAYA EKLENMEZ (21.09.2026): kullanıcı 20/20'yi bitirip
+        // ikinci havuzu açınca payda 40 olsaydı çember %100'den %50'ye düşerdi —
+        // ödül olması gereken şey cezaya dönerdi. Hedefin üstündeki iş
+        // `today.extra` olarak ayrı döner. (Gün içinde seviye değiştiyse aynı
+        // güne birden çok 1. havuz düşebilir; hepsi toplanır.)
         const todayPoolSize = todayPools.reduce((sum, p) => sum + poolGoalTotal(p), 0);
 
         // Oturumlar kendi TAKVİM gününe göre kovalanır: session.date gün
@@ -167,6 +179,11 @@ const HomeService = {
             greeting: greetingFor(localHourInTz(tz, now)), // ismin üstündeki Japonca satır
             activeLevel,
             activeLevelLabel: ProgressService.LEVEL_LABELS[activeLevel], // "N4 • Temel" bandı
+            // BUGÜNKÜ DERSİN seviyesi. activeLevel anında değişir, ama ders
+            // bugün başlamışsa bugün eski seviyede devam eder: istemci
+            // "Bugünkü dersine başladığın için N4 yarın başlayacak" der.
+            lessonLevel: ders.jlptLevel,
+            levelStartsTomorrow: ders.levelStartsTomorrow,
             advanceableLevel: nextUnlocked
                 ? { jlptLevel: nextLevel, label: ProgressService.LEVEL_LABELS[nextLevel] }
                 : null,
@@ -189,6 +206,10 @@ const HomeService = {
                 // totalWords "kaç kelimeye dokundun" sorusunun cevabıdır ve
                 // yalnızca bilgi olarak duruyor — çemberde KULLANMA.
                 completedWords: StudySession.completedTotal(todaySession),
+                // Hedefin ÜSTÜNE yapılan iş (ekstra havuz): çember dolu kalır,
+                // bu sayı "+4 ekstra" diye ayrı gösterilir
+                extra: Math.max(0,
+                    StudySession.completedTotal(todaySession) - (todayPoolSize || user?.dailyGoal || 20)),
                 totalWords: todaySession?.totalWords || 0,
                 correctCount: todaySession?.correctCount || 0,
                 wrongCount: todaySession?.wrongCount || 0,
