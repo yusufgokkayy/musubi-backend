@@ -543,7 +543,7 @@ describe('Auth', () => {
             ['GET', '/sessions/today'], ['GET', '/sessions/history'],
             ['GET', '/progress'],
             ['GET', '/streak'],
-            ['GET', '/home/summary'], ['GET', '/home/calendar'],
+            ['GET', '/home/summary'],
             ['GET', '/notifications'],
             ['GET', '/quiz/status']
         ];
@@ -1827,6 +1827,23 @@ describe('Quiz', () => {
         assert.equal((await api('GET', '/quiz/status', { token: t })).json.data.placementAvailable, true);
     });
 
+    it('yarıda bırakılan sınav modalı kapatmaz: kullanıcı yeniden davet edilir', async () => {
+        // Modalı yalnızca TAMAMLANMIŞ sınav ya da "Daha Sonra" kapatır. Eskiden
+        // herhangi bir deneme kaydı yetiyordu: 10. soruda çıkan kullanıcı ölçüm
+        // almadığı hâlde bir daha hiç davet edilmiyordu.
+        await createVerifiedUser('yarimsinav@test.com');
+        const t = (await login('yarimsinav@test.com')).accessToken;
+
+        const start = await api('POST', '/quiz/start', { token: t, body: { type: 'placement' } });
+        assert.equal(start.status, 200);
+        await api('POST', `/quiz/${start.json.data.quizId}/abandon`, { token: t });
+
+        const home = await api('GET', '/home/summary', { token: t });
+        assert.equal(home.json.data.placementPrompt, true,
+            'sınavı yarıda bırakan kullanıcı ölçüm almadı, modal yeniden çıkmalı');
+        assert.equal(home.json.data.placementAvailable, true, 'terk hak da yakmaz');
+    });
+
     it('sınava girmiş kullanıcıya modal bir daha çıkmaz', async () => {
         const home = await api('GET', '/home/summary', { token });
         assert.equal(home.json.data.placementPrompt, false);
@@ -2010,7 +2027,7 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
 
         // progress TURUN durumudur (today ise GÜNÜN) — ikisi bilerek ayrıdır
         assert.deepEqual(d.progress,
-            { total: 20, completed: 2, postponed: 0, remaining: 18, answered: 2 },
+            { total: 20, completed: 2, postponed: 0, remaining: 18, touched: 2 },
             'havuzdan yalnızca w0 ve w1 cevaplandı');
         assert.equal(d.queue.length, 18, 'kuyruk = bu turda dokunulmamışlar, sunucu sırasıyla');
         assert.deepEqual(d.completedIds.map(String).sort(), [String(w0._id), String(w1._id)].sort());
@@ -2057,7 +2074,7 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
         // migi (右) bugün ertelendi (empty) ve vadesi geçmiş durumda: genişleme
         // kontenjanına yeni kelimeden ÖNCE, tekrar olarak girer — dokunulmuş
         // (empty dahil) sayıldığı için w0/w1 + migi = 3
-        assert.equal(d.progress.answered, 3, 'önceki cevaplar (w0, w1) + dokunulan migi (empty) sayılır');
+        assert.equal(d.progress.touched, 3, 'önceki cevaplar (w0, w1) + dokunulan migi (empty) sayılır');
         assert.ok(d.reviewWords.some(r => r.word.kanji === '右'),
             'vadesi gelmiş kelime top-up kontenjanına önce girer');
 
@@ -2147,9 +2164,8 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
         let today = (await api('GET', '/userwords/today', { token })).json.data;
         let item = today.newWords.find(x => x._id === w._id);
         assert.equal(item.answeredToday, false, 'nihai cevap yok: kelime yeniden sorulmalı');
-        assert.equal(item.touchedToday, true, 'ama dokunuldu: ilerleme sayacında görünmeli');
         assert.equal(item.todayResult, 'empty', 'istemci "ertelendi" bilgisini görebilmeli');
-        assert.equal(today.progress.answered, before.progress.answered + 1,
+        assert.equal(today.progress.touched, before.progress.touched + 1,
             'erteleme de Anasayfa\'daki (StudySession) sayaçla tutarlı şekilde ilerleme sayılır');
 
         // İkinci boş geçiş nötrdür, emptyCount şişmez
@@ -2172,7 +2188,7 @@ describe('Ders akışı (devam + backend puanlama + session)', () => {
         item = today.newWords.find(x => x._id === w._id);
         assert.equal(item.answeredToday, true);
         assert.equal(item.todayResult, 'correct');
-        assert.equal(today.progress.answered, before.progress.answered + 1,
+        assert.equal(today.progress.touched, before.progress.touched + 1,
             'ertelenmişin nihai cevabı ilerlemeyi tekrar artırmaz (kelime zaten sayılmıştı)');
     });
 
@@ -2296,6 +2312,29 @@ describe('Session güvenilirliği (zorunlu session + idempotent bitirme + yeni t
     });
 });
 
+describe('Kaldırılan uçlar (21.09.2026)', () => {
+    let token;
+
+    before(async () => {
+        await createVerifiedUser('kaldirilan@test.com');
+        token = (await login('kaldirilan@test.com')).accessToken;
+    });
+
+    it('takvim, gün detayı ve elle sayaç güncelleme uçları artık YOK', async () => {
+        // Takvim ekranı tasarımda yok; yedi günlük şerit /home/summary içinde
+        // geliyor. /sessions/update ise kelime kontrolü olmadan günün sayacını
+        // artırabiliyordu ve mobil hiç çağırmıyordu.
+        for (const [method, path, body] of [
+            ['GET', '/home/calendar', null],
+            ['GET', '/home/day/2026-09-21', null],
+            ['PUT', '/sessions/update', { result: 'correct' }]
+        ]) {
+            const res = await api(method, path, { token, ...(body && { body }) });
+            assert.equal(res.status, 404, `${method} ${path} kaldırıldı, 404 dönmeli`);
+        }
+    });
+});
+
 describe('Ana ekran (Home)', () => {
     let token, todayStr;
 
@@ -2394,34 +2433,6 @@ describe('Ana ekran (Home)', () => {
         assert.ok(week.filter(g => g.date > todayStr).every(g => g.isFuture && !g.studied),
             'gelecek günler kesikli daire olarak çizilir');
         assert.ok(week.filter(g => g.date < todayStr).every(g => !g.isFuture));
-    });
-
-    it('gün detayı: sayılar + o gün çalışılan kelimeler sonuçlarıyla döner', async () => {
-        const res = await api('GET', `/home/day/${todayStr}`, { token });
-        assert.equal(res.status, 200);
-        const d = res.json.data;
-
-        assert.equal(d.date, todayStr);
-        assert.equal(d.goal, 20, 'o günün havuz büyüklüğü çemberin paydasıdır');
-        assert.equal(d.totalWords, 2);
-        assert.equal(d.correctCount, 1);
-        assert.equal(d.wrongCount, 1);
-        assert.equal(d.words.length, 2);
-        assert.ok(d.words.every(w => w.word.kanji && ['correct', 'wrong', 'empty'].includes(w.result)));
-        assert.equal(d.words.filter(w => w.result === 'wrong').length, 1);
-    });
-
-    it('gün detayı: veri olmayan gün sıfırlarla döner, bozuk tarih 400', async () => {
-        const empty = await api('GET', '/home/day/2020-01-01', { token });
-        assert.equal(empty.status, 200);
-        assert.equal(empty.json.data.totalWords, 0);
-        assert.deepEqual(empty.json.data.words, []);
-
-        const bad = await api('GET', '/home/day/22-nisan', { token });
-        assert.equal(bad.status, 400);
-
-        const badCalendar = await api('GET', '/home/day/2026-13-45', { token });
-        assert.equal(badCalendar.status, 400);
     });
 
     it('hedef değişimi çemberin paydasını ANINDA oynatmaz; payda havuzla birlikte büyür', async () => {
@@ -2685,7 +2696,7 @@ describe('Oturum durumu sunucuda (GET /sessions/current)', () => {
         assert.equal(d.currentIndex, 0, 'queue "kalan"dır, kaldığın yer her zaman queue[0]');
         assert.equal(d.jlptLevel, 'N5');
         assert.ok(d.sessionId, 'GÜNÜN oturum kimliği');
-        assert.deepEqual(d.progress, { total: 5, completed: 0, postponed: 0, remaining: 5, answered: 0 });
+        assert.deepEqual(d.progress, { total: 5, completed: 0, postponed: 0, remaining: 5, touched: 0 });
 
         await api('POST', '/userwords/answer', { token, body: { wordId: words[0]._id, result: 'correct' } });
         await api('POST', '/userwords/answer', { token, body: { wordId: words[1]._id, result: 'empty' } });
@@ -2696,7 +2707,7 @@ describe('Oturum durumu sunucuda (GET /sessions/current)', () => {
         assert.equal(d.queue.length, 3, 'cevaplanan da ertelenen de kuyrukta DEĞİL');
         assert.ok(!d.queue.map(String).includes(String(words[1]._id)),
             '"Şimdilik Geç" aynı turda tekrar sorulmamalı');
-        assert.deepEqual(d.progress, { total: 5, completed: 1, postponed: 1, remaining: 3, answered: 2 });
+        assert.deepEqual(d.progress, { total: 5, completed: 1, postponed: 1, remaining: 3, touched: 2 });
     });
 
     it('kuyruk sırası SABİTTİR: iki çağrı aynı sırayı verir (uygulama silinse de aynı yerden devam)', async () => {

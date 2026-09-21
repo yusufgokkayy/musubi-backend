@@ -4,8 +4,9 @@ const { protect } = require('../../middlewares/auth.middleware');
 
 const router = express.Router();
 
+// Takvim/gün detayı uçları KALDIRILDI (21.09.2026): tasarımda takvim ekranı
+// yok, anasayfadaki yedi günlük şerit zaten /summary içindeki streak.week'ten
+// çiziliyor. Mobil tarafın hiç çağırmadığı da canlı loglarla teyit edildi.
 router.get('/summary',  HomeController.getSummary);
-router.get('/calendar', HomeController.getCalendar);
-router.get('/day/:date', HomeController.getDayDetail);
 
 module.exports = router;

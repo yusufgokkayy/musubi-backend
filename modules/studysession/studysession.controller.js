@@ -11,12 +11,6 @@ const StudySessionController = {
         res.status(200).json({ success: true, data: session });
     }),
 
-    updateSession: catchAsync(async (req, res) => {
-        const { result } = req.body;
-        const session = await StudySessionService.updateSession(req.user.id, result);
-        res.status(200).json({ success: true, data: session });
-    }),
-
     completeSession: catchAsync(async (req, res) => {
         const session = await StudySessionService.completeSession(req.user.id);
         res.status(200).json({ success: true, data: session });

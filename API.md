@@ -724,6 +724,10 @@ kurmaz ve hiçbir şey hatırlamak zorunda değildir — uygulama silinip kuruls
 bile ders aynı yerden devam eder. Aynı bilgi `GET /sessions/current`'tan
 kelime gövdeleri olmadan da alınabilir.
 
+> **21.09.2026:** `touchedToday` alanı kaldırıldı (kimse okumuyordu; tur
+> kapsamlı karşılığı `progress.touched`). `progress.answered` ise
+> **`progress.touched`** oldu — aynı sayı, ne saydığını söyleyen isim.
+
 Her öğe ayrıca `answeredToday` / `todayResult` taşır (bu ikisi **gün**
 kapsamlıdır): `answeredToday` yalnızca günün **nihai cevabı**
 (correct/easy/wrong) verildiyse true olur, `todayResult` ise kelimenin o güne
@@ -763,7 +767,7 @@ taşır; hiç dokunulmamış kelimede `todayResult: null`'dur.
       "completed": 9,    // DERS BARININ PAYI — nihai cevap verilenler
       "postponed": 3,    // şu an ertelenmiş durumda olanlar
       "remaining": 18,   // bu turda hiç dokunulmamışlar (= queue.length)
-      "answered": 12     // DEPRECATED — completed+postponed, ilerleme sanma
+      "touched": 12      // DERS BARININ PAYI — completed + postponed (dokunulan)
     },
 
     // ——— GÜNÜN durumu (anasayfa çemberi bunu okur) ———
@@ -836,7 +840,7 @@ noktaya istek atarak sınırsız/rastgele kelime cevaplama girişimini kapatır.
 
     // Ders barı için TURUN durumu (bkz. /userwords/today'deki tablo)
     "goal": 20,
-    "progress": { "total": 20, "completed": 9, "postponed": 3, "remaining": 8, "answered": 12 },
+    "progress": { "total": 20, "completed": 9, "postponed": 3, "remaining": 8, "touched": 12 },
     // Anasayfa çemberi için GÜNÜN durumu — /home/summary ile aynı kaynak
     "today": {
       "completedWords": 9, "totalWords": 12,
@@ -955,16 +959,10 @@ yanlışları bugüne taşınmaz ve bugün doğruya dönen kelime listeden düş
 { "success": true, "data": { /* StudySession */ } }
 ```
 
-### PUT /sessions/update 🔒✉️
-Normalde çağırmana gerek yok — `/userwords/answer` açık oturumu otomatik günceller. Elle saymak gerekirse:
-```jsonc
-// İstek
-{ "result": "correct" }   // correct | wrong | empty
-
-// 200
-{ "success": true, "data": { /* StudySession */ } }
-```
-Hata: `404 "No active session found"`.
+### ~~PUT /sessions/update~~ — KALDIRILDI (21.09.2026)
+Bu uç kelime kontrolü yapmadan günün sayaçlarını artırabiliyordu; mobil tarafın
+hiç çağırmadığı teyit edilince kaldırıldı. Sayaçların tek yazıcısı
+`POST /userwords/answer`'dır.
 
 ### PUT /sessions/complete 🔒✉️
 ```jsonc
@@ -1015,7 +1013,7 @@ akışa girer: `POST /sessions/start` → `GET /userwords/today`.
     "currentIndex": 0,          // HER ZAMAN 0: queue "kalan"dır, kaldığın yer queue[0]
     "postponedIds": ["665f2d..."],
     "completedIds": ["665f2e..."],
-    "progress": { "total": 20, "completed": 7, "postponed": 3, "remaining": 10, "answered": 10 }
+    "progress": { "total": 20, "completed": 7, "postponed": 3, "remaining": 10, "touched": 10 }
   }
 }
 ```
@@ -1457,6 +1455,12 @@ Anasayfadaki "Seviyeni Öğrenelim Mi?" modalında **"Daha Sonra"**.
 Modal bir daha açılmaz (`GET /home/summary` → `placementPrompt: false`). Sınavı
 iptal etmez: Ayarlar'daki satırdan istediği zaman girebilir.
 
+**Modalı yalnızca iki şey kapatır:** "Daha Sonra" (bu uç) ya da TAMAMLANMIŞ bir
+sınav. Yarıda bırakılan veya süresi dolan deneme modalı kapatmaz (21.09.2026);
+eskiden herhangi bir deneme kaydı yetiyordu ve sınavı 10. soruda bırakan
+kullanıcı bir ölçüm almadığı hâlde bir daha hiç davet edilmiyordu. Terk etmek
+zaten sınav hakkı da yakmaz.
+
 Bu uç olmadan modal her anasayfa açılışında yeniden çıkıyordu — erteleme
 istemcide saklanıyordu ve cihaz değişince/yeniden kurulumda geri geliyordu.
 
@@ -1579,42 +1583,11 @@ Gün etiketleri (`Pzt`, `Salı`…) `date`'ten yerel olarak biçimlendirilir; `w
 
 **Kaldırılan alanlar (07.08.2026).** `progress`, `pendingReviews` ve `tomorrowReviews` yanıttan **silindi**. 04.08.2026 tasarım revizyonunda anasayfadan kalkmışlardı ("Yarın N Kart Bekliyor" bandı ve seviye ilerleme listesi artık çizilmiyor) ve yayındaki uygulamayı kırmamak için duruyorlardı; mobil taraf hiçbirinin okunmadığını yazılı olarak teyit edince arkalarındaki iki `countDocuments` sorgusuyla birlikte kaldırıldılar. Seviye ilerlemesinin yeri `/progress` uçlarıdır.
 
-### GET /home/calendar 🔒✉️
-```jsonc
-// 200 — son 30 günün oturumları (seri takvimi şeridi için; dolu gün = çalışılmış)
-{
-  "success": true,
-  "data": [
-    { "_id": "665f4d...", "date": "2026-07-09T07:00:00.000Z", "totalWords": 20, "isCompleted": true }
-  ]
-}
-```
-
-### GET /home/day/:date 🔒✉️
-Takvimde bir güne dokununca açılan detay ekranı ("22 Nisan Salı"). `:date` `YYYY-MM-DD` biçimindedir ve kullanıcının saat dilimine göre yorumlanır.
-```jsonc
-// 200 — GET /home/day/2026-04-22
-{
-  "success": true,
-  "data": {
-    "date": "2026-04-22",
-    "goal": 20,                // o günün havuz büyüklüğü (tarihsel hedef; havuz kaydı yoksa güncel dailyGoal)
-    "completedWords": 13,      // çember: 13/20 (nihai cevaplı kelimeler)
-    "totalWords": 14,          // o gün DOKUNULAN kelime sayısı (ertelenenler dahil)
-    "correctCount": 10,        // yeşil nokta
-    "wrongCount": 3,           // kırmızı nokta
-    "emptyCount": 1,           // sarı nokta
-    "isCompleted": false,
-    "words": [                 // o gün çalışılan kelimeler, cevap sırasıyla; result = o günkü SON cevap
-      {
-        "word": { "_id": "665f2b...", "kanji": "食べる", "romaji": "taberu", "meaning": "yemek yemek", "type": "fiil", "jlptLevel": "N5" },
-        "result": "correct"    // correct | wrong | empty
-      }
-    ]
-  }
-}
-```
-Veri olmayan gün `200` + sıfır sayaçlar ve boş `words` ile döner. Hata: `400 "Geçersiz tarih, YYYY-MM-DD bekleniyor"`.
+### ~~GET /home/calendar~~ · ~~GET /home/day/:date~~ — KALDIRILDI (21.09.2026)
+Tasarımda takvim ya da geçmiş gün ekranı yok; anasayfadaki yedi günlük şerit
+zaten `/home/summary` yanıtındaki `streak.week` alanından çiziliyor. Mobil
+tarafın bu iki ucu hiç çağırmadığı canlı trafikle de doğrulandı, arkalarındaki
+sorgularla birlikte kaldırıldılar.
 
 ---
 
