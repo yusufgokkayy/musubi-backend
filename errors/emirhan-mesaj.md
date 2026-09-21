@@ -151,3 +151,45 @@ kaldıralım mı?
 (`/home/calendar` ve `/home/day/:tarih` tasarımda karşılığı olmadığı için
 kaldırılacak — anasayfadaki yedi günlük şerit zaten `/home/summary` içinde
 geliyor.)
+
+---
+
+## Sözleşme değişiklikleri (21.09.2026, backend'de kodlandı)
+
+Aşağıdakiler yazıldı ve testleri geçti; henüz yayına alınmadı. API.md güncel.
+
+**Kaldırılan uçlar:** `PUT /sessions/update` · `GET /home/calendar` ·
+`GET /home/day/:date`
+
+**Kaldırılan alanlar:** `touchedToday` · `progress.answered`
+→ **`progress.answered` artık `progress.touched`** (aynı sayı: cevaplanan +
+ertelenen). **Ders barının payı budur.**
+
+**Yeni alanlar** (`/userwords/today`, `/userwords/answer`, `/sessions/current`):
+- `poolNo` — 1 günün havuzu, 2 ekstra havuz
+- `canFinish` — "Dersi Bitir" çağrılabilir mi (en az bir kelimeye dokunuldu mu)
+- `canOpenNextPool` — "Çalışmaya Devam Et" butonu için
+- `today.extra` — günün hedefinin üstüne yapılan iş ("+4 ekstra")
+
+**Davranış değişiklikleri:**
+1. **Ertelenen kelime kuyruktan DÜŞMÜYOR**, kuyruğun **sonuna** gidiyor. Aynı
+   ders içinde geri geliyor. Tekrar "Şimdilik Geç" denirse yine sona gidiyor,
+   sayaçlar oynamıyor.
+2. **`/userwords/today` artık asla yeni havuz açmıyor.** İkinci havuz yalnızca
+   **`POST /sessions/next-pool`** ile açılıyor. Kuralları: birinci havuz
+   gerçekten bitmiş olacak (ne dokunulmamış ne ertelenmiş kelime kalacak),
+   günde en fazla 2 havuz, boyutu günlük hedefin yarısı.
+3. **`PUT /sessions/complete` havuzu kilitlemiyor.** Dokunulmamış kelime kalsa
+   da bitirilebiliyor, kullanıcı sonra dönüp devam edebiliyor. Hiç kelimeye
+   dokunulmadıysa `400`.
+4. **`goal` artık GÜNÜN HEDEFİ** (1. havuzun boyutu) ve ekstra havuz açılınca
+   **büyümüyor**. Çember hedef dolunca dolu kalıyor, fazlası `today.extra`.
+5. **Havuz dışı kelimeye cevap `400`.** Günün tüm havuzları kabul ediliyor,
+   yani "Tekrar Çöz" çalışmaya devam ediyor.
+
+**Ders ekranı için özet:**
+- Bar: pay `progress.touched`, payda `progress.total`
+- Çember: pay `today.completedWords`, payda `goal`, yanında `today.extra`
+- Kuyruk: `queue` (sunucu sırası — ertelenenler sonda)
+- "Dersi Bitir" görünürlüğü: `canFinish`
+- "Çalışmaya Devam Et" görünürlüğü: `canOpenNextPool`

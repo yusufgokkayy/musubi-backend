@@ -1,6 +1,8 @@
 # Plan — Ders Akışı v1 Yeniden Düzenlemesi
 
-**Tarih:** 21.09.2026 · **Durum:** ONAY BEKLİYOR, kod yazılmadı
+**Tarih:** 21.09.2026 · **Durum:** AŞAMA 1 ve 2 KODLANDI (testler 205 geçiyor)
+· Aşama 1 main'e birleştirildi (`8a74237`), Aşama 2 `feat/havuz-modeli` dalında
+(`a0659e9`) · **Henüz yayına gönderilmedi**
 **Dayanak:** `errors/bulgular-kelime-akisi.md` (tespitler) ve 14–21.09 kararları
 
 ---
