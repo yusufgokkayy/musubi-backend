@@ -1,8 +1,9 @@
 # Plan — Ders Akışı v1 Yeniden Düzenlemesi
 
-**Tarih:** 21.09.2026 · **Durum:** AŞAMA 1 ve 2 KODLANDI (testler 205 geçiyor)
-· Aşama 1 main'e birleştirildi (`8a74237`), Aşama 2 `feat/havuz-modeli` dalında
-(`a0659e9`) · **Henüz yayına gönderilmedi**
+**Tarih:** 21.09.2026 · **Durum:** ✅ TAMAMLANDI VE YAYINA ALINDI
+Aşama 1 + Aşama 2 + H2 main'de (`5123f8e`), testler 206 geçiyor, push edildi,
+Railway yayını yapıldı, veritabanı sıfırlanıp kelimeler yeniden yüklendi.
+Geriye yalnızca Emirhan'ın cevabına bağlı temizlik kaldı (kullanılmayan uçlar).
 **Dayanak:** `errors/bulgular-kelime-akisi.md` (tespitler) ve 14–21.09 kararları
 
 ---
