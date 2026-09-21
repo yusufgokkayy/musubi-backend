@@ -3,15 +3,12 @@ const Streak = require('../../models/Streak');
 const Progress = require('../../models/Progress');
 const UserWord = require('../../models/UserWord');
 const User = require('../../models/User');
-const Word = require('../../models/Word');
-const Event = require('../../models/Event');
 const DailyWordPool = require('../../models/DailyWordPool');
 const Notification = require('../../models/Notification');
-const AppError = require('../../utils/AppError');
 const ProgressService = require('../progress/progress.service');
 const QuizService = require('../quiz/quiz.service');
 const {
-    startOfDayInTz, startOfDateInTz, addDays,
+    startOfDayInTz, startOfDateInTz,
     localDateStr, localHourInTz, weekDatesInTz
 } = require('../../utils/date.util');
 
@@ -226,72 +223,6 @@ const HomeService = {
             // countDocuments sorgusuyla birlikte silindiler. Seviye
             // ilerlemesinin asıl yeri /progress uçlarıdır.
         };
-    },
-
-    // Takvimden bir güne dokununca açılan detay: o günün sayıları + çalışılan
-    // kelimeler (her kelimenin o günkü SON cevabıyla). Kelime listesi
-    // answer_submitted event'lerinden geri kurulur.
-    async getDayDetail(userId, dateStr) {
-        const user = await User.findById(userId).select('timezone dailyGoal');
-        const dayStart = startOfDateInTz(user?.timezone, dateStr);
-        if (!dayStart) throw new AppError('Geçersiz tarih, YYYY-MM-DD bekleniyor', 400);
-        const dayEnd = addDays(dayStart, 1);
-
-        const [session, events, pools] = await Promise.all([
-            StudySession.findOne({ user: userId, date: { $gte: dayStart, $lt: dayEnd } }),
-            Event.find({
-                user: userId,
-                type: 'answer_submitted',
-                createdAt: { $gte: dayStart, $lt: dayEnd }
-            }).sort({ createdAt: 1 }).select('data'),
-            DailyWordPool.find({ user: userId, date: { $gte: dayStart, $lt: dayEnd } })
-        ]);
-
-        // Kelime başına o günkü son SAYILAN cevap geçerlidir (kronolojik sıra
-        // korunur); tekrar çalışma turlarının nötr cevapları (practice) günün
-        // sonucunu ezmez
-        const resultByWord = new Map();
-        for (const e of events) {
-            if (e.data?.wordId && !e.data.practice) {
-                resultByWord.set(String(e.data.wordId), e.data.result);
-            }
-        }
-
-        const wordDocs = await Word.find({ _id: { $in: [...resultByWord.keys()] } })
-            .select('kanji romaji meaning type jlptLevel');
-        const wordById = new Map(wordDocs.map(w => [String(w._id), w]));
-
-        const words = [...resultByWord.entries()]
-            .filter(([id]) => wordById.has(id))
-            .map(([id, result]) => ({ word: wordById.get(id), result }));
-
-        // Çemberin paydası: o günün havuz büyüklüğü (tarihsel hedef, turlar
-        // dahil — bkz. poolGoalTotal); havuz kaydı yoksa güncel dailyGoal'a düşülür
-        const poolSize = pools.reduce((sum, p) => sum + poolGoalTotal(p), 0);
-
-        return {
-            date: dateStr,
-            goal: poolSize || user?.dailyGoal || 20,
-            completedWords: StudySession.completedTotal(session), // çemberin PAYI
-            totalWords: session?.totalWords || 0,
-            correctCount: session?.correctCount || 0,
-            wrongCount: session?.wrongCount || 0,
-            emptyCount: session?.emptyCount || 0,
-            isCompleted: session?.isCompleted || false,
-            words
-        };
-    },
-
-    async getCalendar(userId) {
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-        const sessions = await StudySession.find({
-            user: userId,
-            date: { $gte: thirtyDaysAgo }
-        }).select('date totalWords isCompleted');
-
-        return sessions;
     }
 };
 

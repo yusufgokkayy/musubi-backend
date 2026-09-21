@@ -426,13 +426,17 @@ const QuizService = {
         return { deferred: true };
     },
 
-    // Anasayfada modal çıkacak mı? Yalnızca hiç sınava girmemiş VE ertelememiş
-    // kullanıcıya. Bir kez "Daha Sonra" diyen bir daha görmez — sınava girmek
-    // isterse Ayarlar'daki satır her zaman orada.
+    // Anasayfada modal çıkacak mı? Modalı yalnızca iki şey kalıcı olarak
+    // kapatır: TAMAMLANMIŞ bir sınav ya da kullanıcının "Daha Sonra" demesi.
+    //
+    // Eskiden HERHANGİ bir deneme kaydı (terk edilmiş/süresi dolmuş dahil)
+    // modalı sonsuza kadar kapatıyordu: sınava girip 10. soruda çıkan kullanıcı
+    // bir ölçüm almadığı hâlde bir daha hiç davet edilmiyordu. Oysa terk etmek
+    // zaten hak yakmıyor (bkz. placementAvailability) — iki kural ayrışmıştı.
     async shouldPromptPlacement(userId, userDoc = null) {
         const user = userDoc || await User.findById(userId).select('placementDeferredAt');
         if (user?.placementDeferredAt) return false;
-        return !(await QuizAttempt.exists({ user: userId, type: 'placement' }));
+        return !(await QuizAttempt.exists({ user: userId, type: 'placement', status: 'completed' }));
     },
 
     // Sınav önü ekranı (Ayarlar > "Seviye Tespit Sınavına Gir") ve anasayfa

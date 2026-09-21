@@ -93,10 +93,12 @@ const buildRoundState = (rawItems, roundStart) => {
             completed: completedIds.length,
             postponed: postponedIds.length,
             remaining: queue.length,
-            // DEPRECATED — eski {total, answered, remaining} sözleşmesinin kalıntısı.
-            // Turun ilk tekrarında completed+postponed ile aynı sayıdır; ders
-            // barında KULLANILMAMALI (ertelenenleri ilerleme sayar).
-            answered: completedIds.length + postponedIds.length
+            // DERS BARININ PAYI: dokunulan kelime sayısı (cevaplanan + ertelenen).
+            // Mobil barı bununla çiziyor ve bu DOĞRU: "Şimdilik Geç" de bir
+            // ilerlemedir, kelime o turda ele alınmıştır. Bar dolduğunda
+            // (touched === total) bitiş ekranı açılabilir.
+            // Eski adı `answered`'dı; ismi ne saydığını söylemediği için değişti.
+            touched: completedIds.length + postponedIds.length
         }
     };
 };
@@ -165,13 +167,13 @@ const decorateTodayWords = async (userId, today, reviewWordsRaw, newWordsRaw, ro
     // bekliyor. todayResult de gün kapsamlıdır: "bugün bu kelimeyi boş
     // geçmiştin" rozeti tur değişince kaybolmamalı.
     //
-    // touchedToday ise DEPRECATED: tur kapsamlı karşılığı buildRoundState'te.
+    // (touchedToday alanı 21.09.2026'da kaldırıldı: kimse okumuyordu, tur
+    // kapsamlı karşılığı zaten progress.touched.)
     const reviewWords = reviewWordsRaw.map(uw => {
         const touched = !!uw.lastReviewDate && uw.lastReviewDate >= today;
         return {
             ...uw.toObject(),
             answeredToday: touched && FINAL_RESULTS.includes(uw.lastResult),
-            touchedToday: touched,
             todayResult: touched ? uw.lastResult ?? null : null
         };
     });
@@ -197,7 +199,6 @@ const decorateTodayWords = async (userId, today, reviewWordsRaw, newWordsRaw, ro
         return {
             ...obj,
             answeredToday: FINAL_RESULTS.includes(todayResult),
-            touchedToday: !!state,
             todayResult
         };
     });
@@ -636,7 +637,7 @@ const UserWordService = {
             ]);
             return {
                 goal: round ? round.progress.total : 0,
-                progress: round ? round.progress : { total: 0, completed: 0, postponed: 0, remaining: 0, answered: 0 },
+                progress: round ? round.progress : { total: 0, completed: 0, postponed: 0, remaining: 0, touched: 0 },
                 today: {
                     completedWords: StudySession.completedTotal(s), // anasayfa çemberinin PAYI
                     totalWords: s?.totalWords || 0,
