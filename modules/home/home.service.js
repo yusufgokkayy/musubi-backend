@@ -95,8 +95,8 @@ const HomeService = {
                 .sort({ wrongCount: -1 })
                 .limit(MISTAKE_PREVIEW_LIMIT),
 
-            // Çemberin paydası için bugünün havuz(lar)ı
-            DailyWordPool.find({ user: userId, date: { $gte: today } }),
+            // Çemberin paydası için GÜNÜN havuzu (poolNo 1)
+            DailyWordPool.find({ user: userId, date: { $gte: today }, poolNo: 1 }),
 
             // Seri şeridinin yedi günü. Üst sınır YOK: gelecek tarihli oturum
             // oluşmuyor, koymak DST kenarında bir günü kırpma riski getirirdi.
@@ -111,11 +111,15 @@ const HomeService = {
         // dizisi sessizce kayboluyordu; seviye listesindeki onarımın aynısı
         const progress = await ProgressService.ensureProgress(userId, foundProgress);
 
-        // Çemberin paydası = BUGÜNÜN HAVUZU (günün sözleşmesi). dailyGoal canlı
+        // Çemberin paydası = GÜNÜN HEDEFİ = 1. havuzun boyutu. dailyGoal canlı
         // tercih değeridir: gün içinde değişince payda anında oynamamalı —
         // havuz genişlerse (hedef artışı) goal zaten onunla birlikte büyür.
-        // Birden fazla tur olduysa (aynı gün içinde oturum tamamlanıp yeniden
-        // açıldıysa) kapanan turların hedefleri de dahil edilir (bkz. poolGoalTotal).
+        //
+        // EKSTRA HAVUZ PAYDAYA EKLENMEZ (21.09.2026): kullanıcı 20/20'yi bitirip
+        // ikinci havuzu açınca payda 40 olsaydı çember %100'den %50'ye düşerdi —
+        // ödül olması gereken şey cezaya dönerdi. Hedefin üstündeki iş
+        // `today.extra` olarak ayrı döner. (Gün içinde seviye değiştiyse aynı
+        // güne birden çok 1. havuz düşebilir; hepsi toplanır.)
         const todayPoolSize = todayPools.reduce((sum, p) => sum + poolGoalTotal(p), 0);
 
         // Oturumlar kendi TAKVİM gününe göre kovalanır: session.date gün
@@ -189,6 +193,10 @@ const HomeService = {
                 // totalWords "kaç kelimeye dokundun" sorusunun cevabıdır ve
                 // yalnızca bilgi olarak duruyor — çemberde KULLANMA.
                 completedWords: StudySession.completedTotal(todaySession),
+                // Hedefin ÜSTÜNE yapılan iş (ekstra havuz): çember dolu kalır,
+                // bu sayı "+4 ekstra" diye ayrı gösterilir
+                extra: Math.max(0,
+                    StudySession.completedTotal(todaySession) - (todayPoolSize || user?.dailyGoal || 20)),
                 totalWords: todaySession?.totalWords || 0,
                 correctCount: todaySession?.correctCount || 0,
                 wrongCount: todaySession?.wrongCount || 0,

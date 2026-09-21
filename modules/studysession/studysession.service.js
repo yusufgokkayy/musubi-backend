@@ -1,5 +1,4 @@
 const StudySession = require('../../models/StudySession');
-const DailyWordPool = require('../../models/DailyWordPool');
 const UserWord = require('../../models/UserWord');
 const AppError = require('../../utils/AppError');
 const StreakService = require('../streak/streak.service');
@@ -85,20 +84,29 @@ const StudySessionService = {
 
         if (!session) throw new AppError('No active session found', 404);
 
-        // ERTELENMİŞ KELİME ARTIK TURU KAPATMAYI ENGELLEMEZ (07.08.2026 ürün
-        // kararı). Eskiden 409 dönüyordu ve gerekçesi şuydu: turu kapatmak
-        // (roundClosedAt) ertelenen kelimeleri günün havuzundan düşürüyor,
-        // kullanıcı cevaplamadığı hâlde "Tebrikler" ekranını görüyordu.
+        // BİTİRME = "bitiş ekranını gördüm" (21.09.2026). Havuzu KİLİTLEMEZ.
         //
-        // O gerekçe artık geçersiz: yeni tur açılırken ertelenenler havuza
-        // TAŞINIYOR (bkz. userword.service.js carry-over notu), yani kelime
-        // kaybolmuyor, turun başına geçiyor. 409'un tek yaptığı, "Şimdilik
-        // Geç"e basan kullanıcıyı dersten çıkamaz hale getirmekti — oysa
-        // "Şimdilik Geç" tam olarak "şimdi cevaplamak istemiyorum" demek.
+        // Tek koşul: en az bir kelimeye dokunulmuş olmalı. Hiç dokunmadan
+        // "Tebrikler" ekranı görmek anlamsız. Dokunulmamış kelime KALMASI ise
+        // bitirmeyi engellemez — kullanıcı sonra dönüp devam edebilir, /today
+        // aynı havuzu döndürmeye devam eder. Dersten ÇIKMAK için bu uç zaten
+        // çağrılmaz; çıkış hiçbir istek gerektirmez.
+        //
+        // Ertelenmiş kelime de engellemez (409 kalkalı çok oldu) ama ikinci
+        // havuzu açmayı engeller: o kapı yalnızca havuz gerçekten bitince
+        // açılır (bkz. userword.service.js openNextPool).
+        //
+        // ARTIK YENİ TUR AÇMAZ: eskiden buradaki roundClosedAt damgası bir
+        // sonraki /userwords/today çağrısında kendiliğinden taze bir havuz
+        // ürettiriyordu — kullanıcı yalnızca ekrana dönerek üstüne yeni bir
+        // 20'lik set alıyordu. İkinci havuz artık açık bir istekle açılıyor.
         //
         // Sayı yine de yanıtta döner (pendingWords): bitiş ekranı "3 kelimeyi
         // sonraya bıraktın" diyebilsin. Sayaç yerine UserWord sayılır —
         // emptyCount türetilmiş bir sayaçtır, gerçeği kaydın kendisi söyler.
+        if ((session.totalWords || 0) === 0) {
+            throw new AppError('Hiç kelimeye dokunmadan ders bitirilemez', 400);
+        }
         const pendingWords = await UserWord.countDocuments({
             user: userId,
             lastReviewDate: { $gte: today },
@@ -124,15 +132,6 @@ const StudySessionService = {
                 wrongCount: session.wrongCount,
                 duration: session.duration
             });
-
-            // Günün havuz(lar)ını "tur bitti" olarak işaretle — bir sonraki
-            // /userwords/today çağrısı taze bir set üretir (bkz. DailyWordPool.
-            // roundClosedAt yorumu: StudySession.isCompleted KULLANILMAZ, çünkü
-            // /sessions/start onu hemen sıfırlıyor).
-            await DailyWordPool.updateMany(
-                { user: userId, date: { $gte: today } },
-                { $set: { roundClosedAt: new Date() } }
-            );
         }
 
         // Bitiş ekranındaki "Accuracy %" hazır gelsin — istemci hesaplamasın.
