@@ -6,7 +6,7 @@ Mobil entegrasyon için tam sözleşme. Tüm yollar `/api` önekiyle başlar, t�
 
 **Kimlik doğrulama:** 🔒 işaretli endpoint'ler `Authorization: Bearer <accessToken>` başlığı ister. ✉️ işaretli olanlar ayrıca doğrulanmış e-posta gerektirir (aksi halde `403 "Please verify your email first"`). Access token ~15 dk geçerlidir; `401 "Token expired"` alınca `/auth/refresh` çağrılır, o da 401 dönerse login ekranına dönülür.
 
-**Ortak hata kodları:** `400` geçersiz istek, `401` kimlik hatası, `403` yetki/doğrulama/cooldown, `404` bulunamadı, `429` rate limit (`message` alanı Türkçe açıklama içerir).
+**Ortak hata kodları:** `400` geçersiz istek, `401` kimlik hatası, `403` yetki/doğrulama/cooldown, `404` bulunamadı, `409` çakışma (ör. alınmış kullanıcı adı), `429` rate limit (`message` alanı Türkçe açıklama içerir).
 
 ---
 
@@ -49,6 +49,33 @@ Onboarding'in "E-posta ile Devam Et" adımı: ad-soyad/şifre ekranlarına geçm
 ```
 Hata: `400 "Geçerli bir e-posta adresi girin"` (boş veya bozuk biçim).
 
+### POST /auth/check-username (v2)
+"Kişisel Bilgiler" ekranında kullanıcı adı alanı yazılırken sorulur (istemci
+debounce etmeli). **Oturumsuz** çağrılabilir — ekran kayıttan önce gelir. Token
+gönderilirse (profil düzenleme) kullanıcının **kendi** mevcut adı müsait sayılır.
+```jsonc
+// İstek — başındaki "@" ve büyük harfler normalize edilir
+{ "username": "@Emomu" }
+
+// 200 — uygun olmayan ad HATA DEĞİL, available:false döner
+{
+  "success": true,
+  "data": {
+    "username": "emomu",       // saklanacak biçim (küçük harf, @'siz)
+    "available": false,
+    "reason": "taken",         // null | invalid | reserved | inappropriate | taken
+    "message": "Bu kullanıcı adı alınmış"   // alanın altına yazılabilir; istemci reason'a göre kendi dilinde de gösterebilir
+  }
+}
+```
+**Kurallar** (kayıt, sosyal kayıt ve update-info'da da aynısı uygulanır):
+3–20 karakter; yalnızca `a-z 0-9 _ .`; nokta başta/sonda veya art arda olamaz;
+en az bir harf içermeli. `admin`, `musubi`, `destek` gibi ayrılmış adlar
+(`reserved`) ve bariz küfürler (`inappropriate`) reddedilir. Büyük/küçük harf
+ayrımı **yoktur**: `Emomu` ile `emomu` aynı addır.
+
+Sınır: 60 istek / 15 dk (IP başına, login bütçesinden ayrı).
+
 ### POST /auth/social
 Google/Apple ile giriş. Client, sağlayıcı SDK'sından aldığı `idToken`'ı gönderir; backend imzayı sağlayıcının anahtarlarıyla doğrular. Hesap yoksa oluşturulur, aynı e-postayla local hesap varsa sosyal hesaba bağlanır (şifresi korunur). Sosyal hesapların e-postası doğrulanmış sayılır — doğrulama maili akışı çalışmaz.
 ```jsonc
@@ -58,6 +85,7 @@ Google/Apple ile giriş. Client, sağlayıcı SDK'sından aldığı `idToken`'ı
   "idToken": "eyJhbGciOiJSUzI1...",
   "name": "Yusuf",               // opsiyonel
   "surname": "Gökkaya",          // opsiyonel
+  "username": "yusuf",           // opsiyonel (v2) — YALNIZCA hesap açılışında uygulanır, bkz. check-username
   "deviceName": "Pixel 8",       // opsiyonel; yoksa User-Agent kullanılır
   "consents": { "terms": "1.0", "privacy": "1.0", "kvkk": "1.0" },  // opsiyonel, bkz. GET /auth/consents
 
@@ -77,9 +105,13 @@ Google/Apple ile giriş. Client, sağlayıcı SDK'sından aldığı `idToken`'ı
   "refreshToken": "eyJ...",
   "isNewUser": true,             // true ise client onboarding/seviye testi teklifine yönlendirebilir
   "isEmailVerified": true,
-  "data": { "id": "665f1a...", "name": "Yusuf" }
+  "data": { "id": "665f1a...", "name": "Yusuf", "username": null, "needsUsername": true }
 }
 ```
+`needsUsername: true` ise ana ekrana geçmeden "Kişisel Bilgiler" ekranı
+(fotoğraf + kullanıcı adı) gösterilir; ad `PUT /auth/update-info` › `username`
+ile, fotoğraf `PUT /users/me/avatar` ile kaydedilir. Aynı bayrak `register`,
+`login` yanıtlarında ve `GET /auth/me`'de de vardır.
 Hatalar: `400 "Desteklenmeyen sağlayıcı"`, `400 "idToken gerekli"`, `400 "Sosyal hesabınızın e-postası doğrulanmamış"`, `401 "Geçersiz sosyal giriş tokenı"`.
 
 Sosyal kayıt da onboarding tercihlerini tek istekte alır — mobil taraf, Google SDK'dan gelen e-postayı önce `check-email`'e sorup yeni kullanıcı ise onboarding ekranlarını gösterir, sonra bu uca hepsini birden gönderir.
@@ -94,6 +126,8 @@ Bildirimi" ve "Günlük Kelime Hedefi" ekranlarının seçimleri de buraya gelir
 {
   "name": "Yusuf",
   "surname": "Gökkaya",
+  "username": "yusuf",           // v2 — "Kişisel Bilgiler" ekranı. Opsiyonel: gönderilmezse
+                                 // hesap needsUsername:true ile açılır (eski istemci bozulmaz)
   "email": "yusuf@ornek.com",
   "password": "Enaz8Karakter!",
   "deviceName": "Pixel 8",       // opsiyonel; yoksa User-Agent kullanılır
@@ -115,12 +149,16 @@ Bildirimi" ve "Günlük Kelime Hedefi" ekranlarının seçimleri de buraya gelir
   "success": true,
   "accessToken": "eyJhbGciOi...",
   "refreshToken": "eyJhbGciOi...",
-  "data": { "id": "665f1a...", "name": "Yusuf" }
+  "data": { "id": "665f1a...", "name": "Yusuf", "username": "yusuf", "needsUsername": false }
 }
 ```
-Hatalar: `400 "email already in use"`, `400` validasyon (şifre kuralları, geçersiz e-posta, geçersiz `reminderTime`, 50 karakteri aşan ad/soyad), `500 "Email gönderilemedi, tekrar deneyin"` (kayıt geri alınır).
+Hatalar: `409 "Bu kullanıcı adı alınmış"` (`details.reason: "taken"`), `400` geçersiz/ayrılmış/uygunsuz kullanıcı adı (`details.reason`: `invalid`/`reserved`/`inappropriate`) — ikisinde de hesap açılmaz ve mail gitmez, `400 "email already in use"`, `400` validasyon (şifre kuralları, geçersiz e-posta, geçersiz `reminderTime`, 50 karakteri aşan ad/soyad), `500 "Email gönderilemedi, tekrar deneyin"` (kayıt geri alınır).
 
 **Doğrulama token'ı yanıtta DÖNMEZ** — hiçbir ortamda. Eskiden `NODE_ENV !== 'production'` koşuluyla dönüyordu; bu fail-open bir kontroldü (değişken boş kalırsa token açığa çıkardı). Token yalnızca e-postadaki linkte bulunur. Aynısı `forgot-password`'ün `resetToken`'ı için de geçerlidir.
+
+**Profil fotoğrafı kayıtta gönderilmez.** Doğrulanmamış hesap dosya yükleyemez
+(bu hesaplar 7 gün sonra silinir); "Kişisel Bilgiler"de seçilen fotoğrafı
+istemci saklar ve e-posta doğrulanınca `PUT /users/me/avatar` ile yükler.
 
 E-posta `lowercase` + `trim` edilerek saklanır: `Emir@Gmail.com` ile `emir@gmail.com` **aynı hesaptır**. Ad ve soyad `trim` edilir, en fazla 50 karakterdir.
 
@@ -260,15 +298,18 @@ Push token'ını siler. Kullanıcı bildirim iznini işletim sisteminden kapatt�
 
 ### GET /auth/me 🔒✉️
 ```jsonc
-// 200 — User dokümanı (password/fcmToken asla dönmez)
+// 200 — User dokümanı. password/fcmToken, token hash'leri ve giriş/mail
+// sayaçları (loginThrottle, mailThrottle) asla dönmez.
 {
   "success": true,
   "data": {
     "_id": "665f1a...",
     "name": "Yusuf",
     "surname": "Gökkaya",
+    "username": "yusuf",       // v2 — yoksa alan gelmez ve needsUsername true olur
+    "needsUsername": false,
+    "avatarUrl": "https://musubi.alpsoysoft.com/uploads/avatars/9f86d0...webp",  // yoksa null → baş harf çiz
     "email": "yusuf@ornek.com",
-    "profile_image": "default.jpg",
     "role": "user",
     "isEmailVerified": true,
     "dailyGoal": 20,
@@ -290,6 +331,7 @@ Push token'ını siler. Kullanıcı bildirim iznini işletim sisteminden kapatt�
 {
   "name": "Yusuf",
   "surname": "Gökkaya",
+  "username": "yeni.ad",              // v2 — check-username kuralları; kendi mevcut adı çakışma sayılmaz
   "email": "yeni@ornek.com",          // değişirse doğrulama sıfırlanır, yeni adrese mail gider
   "dailyGoal": 30,                    // 5-50 arası
   "fcmToken": "fcm-cihaz-tokeni",     // push için Firebase SDK'dan alınan token
@@ -305,7 +347,7 @@ Push token'ını siler. Kullanıcı bildirim iznini işletim sisteminden kapatt�
 // 200 — güncellenmiş kullanıcı (GET /auth/me ile aynı biçim)
 { "success": true, "data": { /* ... */ } }
 ```
-Hatalar: `400 "Bu e-posta adresi zaten kullanımda"`, `400` enum validasyonu (geçersiz theme/fontSize), `500 "Doğrulama maili gönderilemedi, e-posta değiştirilmedi"`. `isPremium` bu endpoint'ten **değiştirilemez** (gönderilirse yok sayılır). `password` da **değiştirilemez** — gönderilirse `400 "Şifre bu uçtan değiştirilemez..."`: şifre değişiminin tek kapısı `change-password` (eski şifre doğrulamalı) ve `reset-password` (mail token'lı); ikisi de oturum rotasyonu yapar. `activeLevel` de **değiştirilemez** (yok sayılır): seçilen seviyenin açık olması gerekir, o kontrol `PUT /progress/active-level`'dadır.
+Hatalar: `409 "Bu kullanıcı adı alınmış"`, `400` geçersiz/ayrılmış/uygunsuz kullanıcı adı (boş değer de — ad silinemez; `details.reason` check-username'deki kodlar), `400 "Bu e-posta adresi zaten kullanımda"`, `400` enum validasyonu (geçersiz theme/fontSize), `500 "Doğrulama maili gönderilemedi, e-posta değiştirilmedi"`. `isPremium` bu endpoint'ten **değiştirilemez** (gönderilirse yok sayılır). `password` da **değiştirilemez** — gönderilirse `400 "Şifre bu uçtan değiştirilemez..."`: şifre değişiminin tek kapısı `change-password` (eski şifre doğrulamalı) ve `reset-password` (mail token'lı); ikisi de oturum rotasyonu yapar. `activeLevel` de **değiştirilemez** (yok sayılır): seçilen seviyenin açık olması gerekir, o kontrol `PUT /progress/active-level`'dadır.
 
 ### POST /auth/verify-password 🔒✉️
 Ayarlardaki adım adım şifre değiştirme akışının ilk ekranı ("Şifre Girin" alt sayfası): mevcut şifre doğrulanmadan yeni şifre ekranına geçilmez.
@@ -1576,8 +1618,8 @@ Anasayfanın tek istekte tüm verisi. **Hikâye şeridi buna dahil değildir** �
     "greeting": "こんにちは",         // ismin üstündeki Japonca satır; kullanıcının
                                     // saat dilimine göre おはようございます (<11) /
                                     // こんにちは (<18) / こんばんは
-    "avatarUrl": null,              // başlıktaki avatar — ŞU AN HER HESAPTA null
-                                    // (avatar yükleme henüz yok). Boşsa baş harf çiz.
+    "avatarUrl": "https://.../uploads/avatars/9f86...webp",  // başlıktaki avatar
+                                    // (PUT /users/me/avatar). Yüklenmemişse null → baş harf çiz.
     "unreadNotifications": 3,       // zil ikonunun rozeti (0 ise rozet yok)
 
     // Başlığın altındaki seviye bandı: "N4 • Temel Seviyesi"
@@ -1754,6 +1796,32 @@ Elle push testi — giriş yapmış kullanıcının kayıtlı `fcmToken`'ına an
 
 // 200
 { "success": true, "data": { /* Notification, type: "test" */ } }
+```
+
+---
+
+## Kullanıcılar — `/users` (v2)
+
+### PUT /users/me/avatar 🔒✉️
+Profil fotoğrafını yükler veya değiştirir ("Profil Fotoğrafı Ayarla").
+`multipart/form-data`, dosya alanının adı **`image`**.
+```jsonc
+// 200
+{ "success": true, "data": { "avatarUrl": "https://.../uploads/avatars/9f86d0...webp" } }
+```
+- JPEG, PNG, WebP veya GIF kabul edilir; sunucu **ortadan kare kırpar**
+  (512×512), WebP'e çevirir ve konum/EXIF verisini siler. Tasarımdaki
+  "PNG veya JPG • Maks. 4 MB" istemci tarafı yönlendirmesidir; sunucu 20 MB'a
+  kadar kabul eder (telefon fotoğrafı istemcide küçültülmeden de gelebilir).
+- Eski fotoğraf dosyası, başka hesap aynı görseli kullanmıyorsa silinir.
+- Doğrulanmamış hesap yükleyemez (`403`). Sınır: 10 istek / 15 dk.
+
+Hatalar: `400 "Görsel dosyası gerekli ..."`, `400 "Desteklenmeyen dosya biçimi ..."` (SVG dahil), `400 "Görsel çözümlenemedi ..."`, `400 "Görsel çok büyük ..."`.
+
+### DELETE /users/me/avatar 🔒✉️
+Fotoğrafı kaldırır; yoksa da `200` döner (idempotent).
+```jsonc
+{ "success": true, "data": { "avatarUrl": null } }
 ```
 
 ---

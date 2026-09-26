@@ -1,5 +1,16 @@
 const catchAsync = require('../../utils/catchAsync');
 const AuthService = require('./auth.service');
+const UserService = require('../user/user.service');
+
+// Giriş/kayıt yanıtlarının `data` bloğu. needsUsername true ise istemci ana
+// ekrana geçmeden "Kişisel Bilgiler" ekranını göstermeli (v2 öncesi hesaplar
+// ve kullanıcı adı göndermeden kaydolan eski istemciler).
+const authData = (user) => ({
+    id: user._id,
+    name: user.name,
+    username: user.username || null,
+    needsUsername: !user.username
+});
 
 const AuthController = {
     checkEmail: catchAsync(async (req, res) => {
@@ -7,13 +18,19 @@ const AuthController = {
         res.status(200).json({ success: true, available });
     }),
 
+    // Uygunsuz/alınmış ad bir HATA değil, beklenen cevaptır: 200 + available:false
+    checkUsername: catchAsync(async (req, res) => {
+        const data = await UserService.checkUsername(req.body?.username, req.user?._id);
+        res.status(200).json({ success: true, data });
+    }),
+
     socialLogin: catchAsync(async (req, res) => {
-        const { provider, idToken, name, surname, consents,
+        const { provider, idToken, name, surname, username, consents,
                 dailyGoal, timezone, reminderTime, dailyReminder, language } = req.body;
         const deviceName = req.body.deviceName || req.headers['user-agent'];
         const { user, accessToken, refreshToken, isNewUser } =
             await AuthService.socialLogin({
-                provider, idToken, name, surname, deviceName,
+                provider, idToken, name, surname, username, deviceName,
                 consents, ip: req.ip, userAgent: req.headers['user-agent'],
                 // register ile aynı onboarding alanları; yalnızca yeni hesapta uygulanır
                 dailyGoal, timezone, reminderTime, dailyReminder, language
@@ -24,16 +41,16 @@ const AuthController = {
             refreshToken,
             isNewUser,
             isEmailVerified: true,
-            data: { id: user._id, name: user.name }
+            data: authData(user)
         });
     }),
 
     register: catchAsync(async (req, res) => {
         // Onboarding'in son adımına kadar toplanan her şey tek istekte gelir
-        const { name, surname, email, password, dailyGoal, timezone, reminderTime, dailyReminder, language, consents } = req.body;
+        const { name, surname, username, email, password, dailyGoal, timezone, reminderTime, dailyReminder, language, consents } = req.body;
         const deviceName = req.body.deviceName || req.headers['user-agent'];
         const { user, accessToken, refreshToken } = await AuthService.register({
-            name, surname, email, password, deviceName, dailyGoal, timezone, reminderTime, dailyReminder, language,
+            name, surname, username, email, password, deviceName, dailyGoal, timezone, reminderTime, dailyReminder, language,
             // KVKK rıza kanıtı: kaydın hangi bağlamda yapıldığı
             consents, ip: req.ip, userAgent: req.headers['user-agent']
         });
@@ -46,7 +63,7 @@ const AuthController = {
             success: true,
             accessToken,
             refreshToken,
-            data: { id: user._id, name: user.name }
+            data: authData(user)
         });
     }),
 
@@ -59,7 +76,7 @@ const AuthController = {
             accessToken,
             refreshToken,
             isEmailVerified,
-            data: { id: user._id, name: user.name }
+            data: authData(user)
         });
     }),
 
@@ -121,7 +138,7 @@ const AuthController = {
     getMe: catchAsync(async (req, res) => {
         res.status(200).json({
             success: true,
-            data: req.user
+            data: UserService.toMe(req.user)
         });
     }),
 
@@ -145,7 +162,7 @@ const AuthController = {
 
     updateInfo: catchAsync(async (req, res) => {
         const user = await AuthService.updateInfo(req.user.id, req.body);
-        res.status(200).json({ success: true, data: user });
+        res.status(200).json({ success: true, data: UserService.toMe(user) });
     }),
 
     verifyEmail: catchAsync(async (req, res) => {

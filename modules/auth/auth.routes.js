@@ -2,11 +2,15 @@ const express = require('express');
 const AuthController = require('./auth.controller');
 const { protect, optionalAuth } = require('../../middlewares/auth.middleware');
 const { isEmailVerified } = require('../../middlewares/auth.middleware');
-const { authLimiter } = require('../../middlewares/rateLimiter');
+const { authLimiter, usernameCheckLimiter } = require('../../middlewares/rateLimiter');
 
 const router = express.Router();
 
 router.post('/check-email',     authLimiter, AuthController.checkEmail);
+// "Kişisel Bilgiler" ekranı yazarken sorar — kayıttan önce, yani oturumsuz.
+// optionalAuth: girişli kullanıcı (profil düzenleme) kendi mevcut adını
+// "alınmış" görmesin
+router.post('/check-username',  usernameCheckLimiter, optionalAuth, AuthController.checkUsername);
 router.post('/register',        authLimiter, AuthController.register);
 router.post('/login',           authLimiter, AuthController.login);
 router.post('/social',          authLimiter, AuthController.socialLogin);

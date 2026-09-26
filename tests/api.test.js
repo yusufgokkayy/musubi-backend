@@ -2598,8 +2598,8 @@ describe('Ana ekran (Home)', () => {
             ['おはようございます', 'こんにちは', 'こんばんは'].includes(d.greeting),
             'ismin üstündeki satır kullanıcının saat dilimine göre seçilir'
         );
-        assert.ok('avatarUrl' in d, 'yükleme gelene kadar da sözleşmede durmalı');
-        assert.equal(d.avatarUrl, null, 'avatar yükleme yolu henüz yok');
+        assert.ok('avatarUrl' in d, 'fotoğrafı olmayan hesapta da sözleşmede durmalı');
+        assert.equal(d.avatarUrl, null, 'fotoğraf yüklenmemişse null — istemci baş harf çizer');
 
         assert.equal(d.unreadNotifications, 0);
         await api('POST', '/notifications/test', { token, body: {} });
@@ -4480,5 +4480,240 @@ describe('Hikâyeler', () => {
         assert.equal(await seenDurumu(), true, 'değişmeyen görseller yeniden gönderilince halka yanmamalı');
 
         await Story.deleteMany({});
+    });
+});
+
+describe('v2 — Kullanıcı adı ve profil fotoğrafı', () => {
+    const sharp = require('sharp');
+    const { normalizeUsername, usernameViolation } = require('../utils/username.util');
+
+    const makePng = (width, height, r = 40) =>
+        sharp({ create: { width, height, channels: 3, background: { r, g: 120, b: 200 } } })
+            .png().toBuffer();
+
+    const putAvatar = async (bytes, token) => {
+        const form = new FormData();
+        form.append('image', new Blob([bytes]), 'avatar.png');
+        const res = await fetch(BASE + '/users/me/avatar', {
+            method: 'PUT',
+            headers: { Authorization: 'Bearer ' + token },
+            body: form
+        });
+        return { status: res.status, json: await res.json().catch(() => ({})) };
+    };
+
+    const keyOf = (url) => /\/uploads\/(avatars\/[a-f0-9]{32}\.webp)$/.exec(url)?.[1];
+    const fileExists = (key) =>
+        fs.access(path.join(uploadDir, key)).then(() => true, () => false);
+
+    it('kural: biçim, ayrılmış adlar ve küfür filtresi (yanlış pozitif vermeden)', () => {
+        assert.equal(normalizeUsername('  @Emo.Mu '), 'emo.mu');
+        assert.equal(normalizeUsername(42), '', 'string olmayan girdi 500 değil geçersiz ad olmalı');
+
+        for (const ok of ['emomu', 'yusuf_51', 'emo.mu', 'abc', 'a'.repeat(20), 'klasik', 'sikke', 'gotham']) {
+            assert.equal(usernameViolation(ok), null, `${ok} geçerli olmalı`);
+        }
+        for (const bad of ['ab', 'a'.repeat(21), 'emo mu', 'şeker', '.emo', 'emo.', 'emo..mu', '12345', '___']) {
+            assert.equal(usernameViolation(bad), 'invalid', `${bad} geçersiz olmalı`);
+        }
+        assert.equal(usernameViolation('admin'), 'reserved');
+        assert.equal(usernameViolation('musubi'), 'reserved');
+        for (const kufur of ['xorospux', '0r0spu', 'sik_123', 'amk', 'the.fuck.er']) {
+            assert.equal(usernameViolation(kufur), 'inappropriate', `${kufur} reddedilmeli`);
+        }
+    });
+
+    it('check-username: oturumsuz çalışır, alınmış ad available:false döner (hata değil)', async () => {
+        await createVerifiedUser('kadi-sahip@test.com', { username: 'alinmis' });
+
+        const bos = await api('POST', '/auth/check-username', { body: { username: '@Yepyeni' } });
+        assert.equal(bos.status, 200);
+        assert.deepEqual(
+            { username: bos.json.data.username, available: bos.json.data.available, reason: bos.json.data.reason },
+            { username: 'yepyeni', available: true, reason: null }
+        );
+
+        const dolu = await api('POST', '/auth/check-username', { body: { username: 'ALINMIS' } });
+        assert.equal(dolu.status, 200);
+        assert.equal(dolu.json.data.available, false, 'büyük/küçük harf farkı aynı ad sayılır');
+        assert.equal(dolu.json.data.reason, 'taken');
+        assert.ok(dolu.json.data.message);
+
+        const kotu = await api('POST', '/auth/check-username', { body: { username: 'a b' } });
+        assert.equal(kotu.json.data.reason, 'invalid');
+
+        // Profil düzenlemede kullanıcı kendi mevcut adını "alınmış" görmemeli
+        const { accessToken } = await login('kadi-sahip@test.com');
+        const kendi = await api('POST', '/auth/check-username', { token: accessToken, body: { username: 'alinmis' } });
+        assert.equal(kendi.json.data.available, true);
+    });
+
+    it('kayıtta kullanıcı adı: küçük harfle saklanır, alınmışsa 409 ve hesap/mail oluşmaz', async () => {
+        const body = (email, username) => ({
+            name: 'Ad', surname: 'Soyad', email, password: 'Testsifre123!', username
+        });
+
+        const ok = await api('POST', '/auth/register', { body: body('kadi-kayit@test.com', '@Kayitli.Ad') });
+        assert.equal(ok.status, 201, JSON.stringify(ok.json));
+        assert.equal(ok.json.data.username, 'kayitli.ad');
+        assert.equal(ok.json.data.needsUsername, false);
+
+        const mailSayisi = sendEmail.outbox.length;
+        const cakisan = await api('POST', '/auth/register', { body: body('kadi-kayit2@test.com', 'KAYITLI.AD') });
+        assert.equal(cakisan.status, 409);
+        assert.equal(cakisan.json.details?.reason, 'taken');
+        assert.equal(await User.countDocuments({ email: 'kadi-kayit2@test.com' }), 0, 'hesap oluşmamalı');
+        assert.equal(sendEmail.outbox.length, mailSayisi, 'doğrulama maili gitmemeli');
+
+        const uygunsuz = await api('POST', '/auth/register', { body: body('kadi-kayit3@test.com', 'orospu') });
+        assert.equal(uygunsuz.status, 400);
+        assert.equal(uygunsuz.json.details?.reason, 'inappropriate');
+    });
+
+    it('kullanıcı adı olmayan hesap: needsUsername true, update-info ile tamamlanır', async () => {
+        const kayit = await api('POST', '/auth/register', {
+            body: { name: 'Eski', surname: 'Istemci', email: 'kadi-yok@test.com', password: 'Testsifre123!' }
+        });
+        assert.equal(kayit.status, 201, 'kullanıcı adı göndermeyen eski istemcinin kaydı bozulmamalı');
+        assert.equal(kayit.json.data.needsUsername, true);
+
+        await createVerifiedUser('kadi-tamamla@test.com');
+        await createVerifiedUser('kadi-dolu@test.com', { username: 'dolu' });
+        const { accessToken: token, data } = await login('kadi-tamamla@test.com');
+        assert.equal(data.needsUsername, true, 'login yanıtı da bayrağı taşımalı');
+
+        let me = await api('GET', '/auth/me', { token });
+        assert.equal(me.json.data.needsUsername, true);
+
+        const cakisan = await api('PUT', '/auth/update-info', { token, body: { username: 'Dolu' } });
+        assert.equal(cakisan.status, 409);
+        const bos = await api('PUT', '/auth/update-info', { token, body: { username: '' } });
+        assert.equal(bos.status, 400, 'kullanıcı adı boşaltılamaz');
+
+        const ok = await api('PUT', '/auth/update-info', { token, body: { username: 'Tamamlandi' } });
+        assert.equal(ok.status, 200, JSON.stringify(ok.json));
+        assert.equal(ok.json.data.username, 'tamamlandi');
+        assert.equal(ok.json.data.needsUsername, false);
+
+        me = await api('GET', '/auth/me', { token });
+        assert.equal(me.json.data.needsUsername, false);
+
+        // Aynı adı yeniden göndermek (form "Güncelle") kendi adıyla çakışmamalı
+        const ayni = await api('PUT', '/auth/update-info', { token, body: { username: 'tamamlandi' } });
+        assert.equal(ayni.status, 200);
+    });
+
+    it('veri katmanı: kullanıcı adı benzersiz, adı olmayan hesaplar birbiriyle çakışmaz', async () => {
+        await User.init();
+        await createVerifiedUser('kadi-idx1@test.com', { username: 'tekil' });
+        await assert.rejects(createVerifiedUser('kadi-idx2@test.com', { username: 'tekil' }), { code: 11000 });
+        // İki "adsız" hesap aynı anda var olabilmeli (partial index)
+        await createVerifiedUser('kadi-idx3@test.com');
+        await createVerifiedUser('kadi-idx4@test.com');
+    });
+
+    it('/auth/me iç muhasebe alanlarını sızdırmaz', async () => {
+        await createVerifiedUser('kadi-me@test.com', { username: 'mecik' });
+        const { accessToken } = await login('kadi-me@test.com');
+        const d = (await api('GET', '/auth/me', { token: accessToken })).json.data;
+        for (const alan of ['password', 'fcmToken', 'emailVerificationToken', 'resetPasswordToken',
+            'loginThrottle', 'mailThrottle', 'avatarKey', 'profile_image']) {
+            assert.ok(!(alan in d), `${alan} dönmemeli`);
+        }
+        assert.equal(d.username, 'mecik');
+        assert.equal(d.avatarUrl, null);
+    });
+
+    it('profil fotoğrafı: kare kırpılır, /auth/me ve anasayfada görünür, değişince eskisi silinir', async () => {
+        await createVerifiedUser('avatar@test.com', { username: 'avatarci' });
+        const { accessToken: token } = await login('avatar@test.com');
+
+        const ilk = await putAvatar(await makePng(1400, 800, 10), token);
+        assert.equal(ilk.status, 200, JSON.stringify(ilk.json));
+        const ilkKey = keyOf(ilk.json.data.avatarUrl);
+        assert.ok(ilkKey, 'avatarUrl /uploads/avatars/<hash>.webp olmalı');
+
+        const meta = await sharp(await fs.readFile(path.join(uploadDir, ilkKey))).metadata();
+        assert.deepEqual([meta.width, meta.height, meta.format], [512, 512, 'webp'], 'yatay fotoğraf kareye kırpılmalı');
+
+        assert.equal((await api('GET', '/auth/me', { token })).json.data.avatarUrl, ilk.json.data.avatarUrl);
+        assert.equal((await api('GET', '/home/summary', { token })).json.data.avatarUrl, ilk.json.data.avatarUrl);
+
+        const ikinci = await putAvatar(await makePng(600, 600, 99), token);
+        const ikinciKey = keyOf(ikinci.json.data.avatarUrl);
+        assert.notEqual(ikinciKey, ilkKey);
+        assert.equal(await fileExists(ilkKey), false, 'kullanılmayan eski dosya silinmeli');
+        assert.equal(await fileExists(ikinciKey), true);
+
+        const sil = await api('DELETE', '/users/me/avatar', { token });
+        assert.equal(sil.status, 200);
+        assert.equal(sil.json.data.avatarUrl, null);
+        assert.equal(await fileExists(ikinciKey), false);
+        assert.equal((await api('GET', '/auth/me', { token })).json.data.avatarUrl, null);
+    });
+
+    it('aynı görseli kullanan iki hesap: biri silince diğerinin fotoğrafı kırılmaz', async () => {
+        await createVerifiedUser('avatar-a@test.com');
+        await createVerifiedUser('avatar-b@test.com');
+        const a = (await login('avatar-a@test.com')).accessToken;
+        const b = (await login('avatar-b@test.com')).accessToken;
+
+        const gorsel = await makePng(300, 300, 222);
+        const keyA = keyOf((await putAvatar(gorsel, a)).json.data.avatarUrl);
+        const keyB = keyOf((await putAvatar(gorsel, b)).json.data.avatarUrl);
+        assert.equal(keyA, keyB, 'içerik hash\'i aynı dosyayı üretir');
+
+        await api('DELETE', '/users/me/avatar', { token: a });
+        assert.equal(await fileExists(keyB), true, 'B hâlâ kullanıyor');
+
+        // Hesap silme de aynı kurala uyar; son kullanan gidince dosya da gider
+        const del = await api('DELETE', '/auth/delete-account', { token: b, body: { password: 'Testsifre123!' } });
+        assert.equal(del.status, 200);
+        assert.equal(await fileExists(keyB), false);
+    });
+
+    it('doğrulanmamış hesap fotoğraf yükleyemez; oturumsuz 401', async () => {
+        await User.create({
+            name: 'Dogrulanmamis', surname: 'X', email: 'avatar-nv@test.com',
+            password: 'Testsifre123!', isEmailVerified: false
+        });
+        const { accessToken } = await login('avatar-nv@test.com');
+        assert.equal((await putAvatar(await makePng(100, 100), accessToken)).status, 403);
+
+        const res = await fetch(BASE + '/users/me/avatar', { method: 'PUT' });
+        assert.equal(res.status, 401);
+    });
+
+    it('sosyal kayıt: kullanıcı adı yalnızca hesap açılışında uygulanır', async () => {
+        const jwt = require('jsonwebtoken');
+        const body = (username) => ({
+            body: {
+                provider: 'google', deviceName: 'test-suite', username,
+                idToken: jwt.sign({
+                    sub: 'google-sub-kadi', email: 'sosyal-kadi@test.com', email_verified: true,
+                    given_name: 'Sosyal', family_name: 'Kadi'
+                }, 'sahte-imza')
+            }
+        });
+
+        const ilk = await api('POST', '/auth/social', body('Sosyal.Kadi'));
+        assert.equal(ilk.status, 201, JSON.stringify(ilk.json));
+        assert.equal(ilk.json.data.username, 'sosyal.kadi');
+
+        // Mevcut hesaba girişte gönderilen ad (geçersiz olsa bile) yok sayılır
+        const tekrar = await api('POST', '/auth/social', body('baska ad'));
+        assert.equal(tekrar.status, 200);
+        assert.equal(tekrar.json.data.username, 'sosyal.kadi');
+    });
+
+    it('bozuk/SVG dosya ve eksik alan reddedilir', async () => {
+        await createVerifiedUser('avatar-bozuk@test.com');
+        const { accessToken: token } = await login('avatar-bozuk@test.com');
+        assert.equal((await putAvatar(Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'), token)).status, 400);
+
+        const res = await fetch(BASE + '/users/me/avatar', {
+            method: 'PUT', headers: { Authorization: 'Bearer ' + token }, body: new FormData()
+        });
+        assert.equal(res.status, 400);
     });
 });

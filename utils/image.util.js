@@ -39,10 +39,13 @@ const sniffFormat = (buf) => {
 // tek taraflı kazanç — kaliteden hiçbir şey verilmiyor.
 const WEBP_EFFORT = 6;
 
-const reencodeToWebp = async (buffer, { maxWidth, maxHeight, quality = 82 }) => {
+// fit: 'inside' en-boy oranını korur (hikâye kartı dikey kalır); 'cover'
+// kareyi ortadan kırpar — profil fotoğrafı her yerde daire içinde gösterildiği
+// için yatay bir fotoğraf 512x512'lik kareye oturtulur, kenarları boşa gitmez.
+const reencodeToWebp = async (buffer, { maxWidth, maxHeight, fit = 'inside', quality = 82 }) => {
     const pipeline = sharp(buffer, { limitInputPixels: MAX_INPUT_PIXELS })
         .rotate()
-        .resize({ width: maxWidth, height: maxHeight, fit: 'inside', withoutEnlargement: true })
+        .resize({ width: maxWidth, height: maxHeight, fit, withoutEnlargement: true })
         .webp({ quality, effort: WEBP_EFFORT });
 
     const { data, info } = await pipeline.toBuffer({ resolveWithObject: true });

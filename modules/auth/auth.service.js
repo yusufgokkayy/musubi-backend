@@ -27,6 +27,7 @@ const { DOC_KEYS, docSummary } = require('../../config/legal/texts');
 const { safeTimezone } = require('../../utils/date.util');
 const Event = require('../../models/Event');
 const logEvent = require('../../utils/event.util');
+const UserService = require('../user/user.service');
 
 const MAX_SESSIONS_PER_USER = 5;
 
@@ -117,6 +118,9 @@ const UNVERIFIED_ACCOUNT_TTL_DAYS = 7;
 // hesap temizliği aynı listeyi kullanır — ikisi ayrışırsa biri yetim
 // doküman bırakır, o yüzden tek yerde durur.
 const purgeUserData = async (userId) => {
+    // Profil fotoğrafı dosyası kullanıcı silindikten SONRA bırakılır: dosyayı
+    // başka hesap kullanıyor mu kontrolü, silinen hesabı hâlâ görmesin
+    const owner = await User.findById(userId).select('avatarKey');
     await Promise.all([
         UserWord.deleteMany({ user: userId }),
         Progress.deleteMany({ user: userId }),
@@ -130,6 +134,7 @@ const purgeUserData = async (userId) => {
         Event.deleteMany({ user: userId })
     ]);
     await User.findByIdAndDelete(userId);
+    if (owner?.avatarKey) await UserService.releaseAvatarFile(owner.avatarKey);
 };
 
 const hashToken = (token) =>
@@ -184,11 +189,20 @@ const AuthService = {
     // hatırlatma saati ve günlük hedef ekranlarının seçimleri de buraya gelir.
     // Hepsi opsiyoneldir — "Şimdilik Geç" diyen kullanıcı bunları göndermez ve
     // şema varsayılanlarıyla (10:00 / 20 kelime) devam eder.
-    async register({ name, surname, email, password, deviceName, dailyGoal, timezone, reminderTime, dailyReminder, language, consents, ip, userAgent }) {
+    // username: v2 istemcisi "Kişisel Bilgiler" ekranında alır ve burada
+    // gönderir. Opsiyoneldir — göndermeyen (eski) istemcinin kaydı bozulmaz,
+    // hesap needsUsername: true ile açılır ve ad sonra update-info ile verilir.
+    async register({ name, surname, username, email, password, deviceName, dailyGoal, timezone, reminderTime, dailyReminder, language, consents, ip, userAgent }) {
         validatePassword(password);
+
+        // Hesap oluşmadan ÖNCE: alınmış/uygunsuz ad kayıt mailini göndertmesin
+        const cleanUsername = username !== undefined
+            ? await UserService.assertUsernameUsable(username)
+            : undefined;
 
         const user = new User({
             name, surname, email, password,
+            ...(cleanUsername && { username: cleanUsername }),
             ...onboardingFields({ dailyGoal, timezone, reminderTime, dailyReminder, language })
         });
 
@@ -211,7 +225,8 @@ const AuthService = {
         // register(1) + 5 resend = 6 mail alabilirdi. Burada assert YOK —
         // hesap yeni, geçmiş sayaç zaten olamaz.
         markMailSent(user, 'verification');
-        await user.save();
+        // Kontrol ile yazma arasında aynı adı başkası alırsa E11000 → 409
+        await UserService.saveWithUsername(user);
 
         // E-posta gönderimi, yan kayıtlar (Progress/Streak/oturum) oluşmadan ÖNCE
         // denenir: başarısızlıkta yalnızca User silinir, yetim doküman kalmaz.
@@ -305,7 +320,7 @@ const AuthService = {
     // Google/Apple ile giriş: hesap yoksa oluşturur (isNewUser: true), varsa
     // giriş yapar. Aynı e-postayla local hesap varsa sosyal hesaba bağlanır —
     // sağlayıcı e-posta sahipliğini zaten doğruladığı için bu güvenlidir.
-    async socialLogin({ provider, idToken, name, surname, deviceName, consents, ip, userAgent, dailyGoal, timezone, reminderTime, dailyReminder, language }) {
+    async socialLogin({ provider, idToken, name, surname, username, deviceName, consents, ip, userAgent, dailyGoal, timezone, reminderTime, dailyReminder, language }) {
         const profile = await verifySocialToken(provider, idToken);
 
         // Doğrulanmamış e-postayla hesap bağlama/oluşturma, hesap ele
@@ -328,7 +343,13 @@ const AuthService = {
         }
 
         if (!user) {
+            // Kullanıcı adı, onboarding alanları gibi yalnızca hesap AÇILIŞINDA
+            // uygulanır; mevcut hesaba girişte yok sayılır (değiştirmek için update-info)
+            const cleanUsername = username !== undefined
+                ? await UserService.assertUsernameUsable(username)
+                : undefined;
             user = new User({
+                ...(cleanUsername && { username: cleanUsername }),
                 // Apple ad bilgisini token'da değil ilk girişte ayrıca gönderir;
                 // client iletirse body'den, yoksa token'dan, o da yoksa e-postadan
                 name: name || profile.name || profile.email.split('@')[0],
@@ -344,7 +365,7 @@ const AuthService = {
             // Sosyal kayıt da bir hesap açılışıdır; rıza kaydı e-postayla
             // kayıttakiyle aynı şekilde tutulur
             recordConsents(user, { consents, ip, userAgent });
-            await user.save();
+            await UserService.saveWithUsername(user);
             isNewUser = true;
         }
 
@@ -561,6 +582,12 @@ const AuthService = {
 
         if (updates.name) user.name = updates.name;
         if (updates.surname) user.surname = updates.surname;
+        // Hem v2 öncesi hesabın ilk adı ("Kişisel Bilgiler" / needsUsername)
+        // hem profil düzenlemedeki değişiklik buradan geçer. Silinemez: boş
+        // değer geçersiz ad olarak 400 döner.
+        if (updates.username !== undefined) {
+            user.username = await UserService.assertUsernameUsable(updates.username, { excludeUserId: user._id });
+        }
 
         // E-posta değişiyorsa doğrulama sıfırlanır ve yeni adrese doğrulama maili gider
         if (updates.email && updates.email !== user.email) {
@@ -618,7 +645,7 @@ const AuthService = {
             };
         }
 
-        await user.save();
+        await UserService.saveWithUsername(user);
         return user;
     },
 

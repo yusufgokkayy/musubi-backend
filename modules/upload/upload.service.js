@@ -13,7 +13,12 @@ const { sniffFormat, reencodeToWebp } = require('../../utils/image.util');
 const PRESETS = {
     story:      { folder: 'stories',      maxWidth: 1080, maxHeight: 1920 },
     storyCover: { folder: 'story-covers', maxWidth: 512,  maxHeight: 512 },
-    word:       { folder: 'words',        maxWidth: 800,  maxHeight: 800 }
+    word:       { folder: 'words',        maxWidth: 800,  maxHeight: 800 },
+    // Profil fotoğrafı: tasarımdaki en büyük daire (sıra atlama ekranı) ~300pt,
+    // 3x ekranda ~900px'e denk gelse de 512 yeterince net ve dosya ~30-50 KB.
+    // Bu preset admin'in /uploads ucundan DEĞİL, kullanıcının kendi
+    // PUT /users/me/avatar ucundan kullanılır (bkz. user.service.js).
+    avatar:     { folder: 'avatars',      maxWidth: 512,  maxHeight: 512, fit: 'cover' }
 };
 
 // Silme ucu key'i dışarıdan alır; dizin dışına çıkan ("../") veya hiç bu

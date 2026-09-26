@@ -66,9 +66,23 @@ const UserSchema = new mongoose.Schema({
         default: 'local'
     },
     providerId: String,
-    profile_image: {
+    // Profilde, sıralamada ve davet linkinde (/u/<username>) görünen ad.
+    // Küçük harfle ve "@" olmadan saklanır; kuralları utils/username.util.js.
+    //
+    // Şemada required DEĞİL: v2'den önce açılan hesapların kullanıcı adı yok.
+    // Eksik olduğu /auth/me'deki needsUsername bayrağıyla istemciye söylenir
+    // ve istemci "Kişisel Bilgiler" ekranını gösterir.
+    username: {
         type: String,
-        default: 'default.jpg'
+        trim: true,
+        lowercase: true
+    },
+    // Profil fotoğrafının depolama anahtarı (ör. "avatars/<hash>.webp").
+    // URL DEĞİL key saklanır — bkz. config/storage/index.js. İstemciye
+    // UploadService.urlFor ile avatarUrl olarak çıkar; yoksa null ve istemci
+    // baş harf çizer. (Eski `profile_image: 'default.jpg'` placeholder'ının yerini aldı.)
+    avatarKey: {
+        type: String
     },
     role: {
         type: String,
@@ -214,6 +228,18 @@ UserSchema.index(
     { provider: 1, providerId: 1 },
     { unique: true, partialFilterExpression: { providerId: { $exists: true } } }
 );
+
+// Kullanıcı adı benzersizdir. Partial filter: kullanıcı adı henüz olmayan
+// (v2 öncesi) hesaplar index'e girmez — aksi halde "username yok" değeri
+// iki hesapta birden bulunamazdı.
+UserSchema.index(
+    { username: 1 },
+    { unique: true, partialFilterExpression: { username: { $type: 'string' } } }
+);
+
+// Profil fotoğrafını silerken dosyayı başka hesabın kullanıp kullanmadığına
+// bakılır (dosya adları içerik hash'i, aynı görsel aynı key'i üretir)
+UserSchema.index({ avatarKey: 1 }, { sparse: true });
 
 UserSchema.pre('save', async function () {
     if (!this.isModified('password')) return;

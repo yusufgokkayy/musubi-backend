@@ -11,6 +11,7 @@ const QuizService = require('../quiz/quiz.service');
 // seviye yarın başlar). Çemberin paydası DERSİN havuzundan gelmeli, yoksa
 // anasayfa 40, ders ekranı 20 der (21.09.2026 bulgusu H2).
 const UserWordService = require('../userword/userword.service');
+const UserService = require('../user/user.service');
 const {
     startOfDayInTz, startOfDateInTz,
     localDateStr, localHourInTz, weekDatesInTz
@@ -49,7 +50,7 @@ const dayStudied = (session) =>
 const HomeService = {
     async getSummary(userId) {
         const user = await User.findById(userId)
-            .select('timezone name dailyGoal activeLevel placementDeferredAt');
+            .select('timezone name dailyGoal activeLevel placementDeferredAt avatarKey');
         const tz = user?.timezone;
 
         // Tek bir "şimdi" sabitlenir: her yardımcı kendi new Date()'ini okusaydı
@@ -193,11 +194,9 @@ const HomeService = {
             placementAvailable: placement.available,
             // available:false ise geri sayımın bitiş anı; true ise null
             nextAttemptAllowedAt: placement.available ? null : placement.nextAllowedAt,
-            // Kullanıcı avatarı henüz YÜKLENEMİYOR (upload uçları admin'e
-            // kapalı, sosyal girişte de fotoğraf saklanmıyor) — alan sözleşmede
-            // duruyor ki yükleme geldiğinde istemci başlığı yeniden kurmasın.
-            // Bugün her hesapta null; istemci baş harf/placeholder çizmelidir.
-            avatarUrl: null,
+            // Profil fotoğrafı (PUT /users/me/avatar). Yüklenmemişse null;
+            // istemci baş harf/placeholder çizer.
+            avatarUrl: UserService.avatarUrl(user),
             unreadNotifications,           // zil ikonunun rozeti
             goal: todayPoolSize || user?.dailyGoal || 20, // ilerleme çemberinin PAYDASI
             dailyGoal: user?.dailyGoal || 20, // ayarlardaki tercih (çember için KULLANMA)

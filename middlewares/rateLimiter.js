@@ -39,6 +39,31 @@ const uploadLimiter = rateLimit({
     message: { success: false, message: 'Çok fazla yükleme denemesi, lütfen daha sonra tekrar deneyin' }
 });
 
+// Profil fotoğrafı: uploadLimiter'dan AYRI ve daha sıkı, çünkü bu uç her
+// doğrulanmış kullanıcıya açık (uploadLimiter admin'e özel uçları korur).
+// Gerçek kullanıcı fotoğrafını 15 dakikada birkaç kez değiştirir, fazlası döngüdür.
+const avatarLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 10,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: skipInTest,
+    message: { success: false, message: 'Çok fazla yükleme denemesi, lütfen daha sonra tekrar deneyin' }
+});
+
+// Kullanıcı adı müsaitliği: istemci yazarken sorar (debounce'lu). authLimiter
+// kullanılsaydı bu kontroller login bütçesini (20/15dk) tüketirdi. Kullanıcı
+// adları zaten herkese açık olduğu için sayım saldırısı burada bir sızıntı
+// değil; sınır yalnızca döngüye/kazımaya karşı.
+const usernameCheckLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 60,
+    standardHeaders: true,
+    legacyHeaders: false,
+    skip: skipInTest,
+    message: { success: false, message: 'Çok fazla istek, lütfen daha sonra tekrar deneyin' }
+});
+
 // Simülatörden (public/) gelen istekler AYRI kovada sayılır — bkz. app.js.
 // Amaç kısıtlamak değil, YALITMAK: test eden biri ile gerçek kullanıcı aynı
 // çıkış IP'sinin (ofis, üniversite, mobil NAT) arkasındaysa, testin harcadığı
@@ -57,4 +82,4 @@ const simulatorApiLimiter = rateLimit({
     message: { success: false, message: 'Çok fazla istek, lütfen daha sonra tekrar deneyin' }
 });
 
-module.exports = { generalLimiter, authLimiter, uploadLimiter, simulatorApiLimiter };
+module.exports = { generalLimiter, authLimiter, uploadLimiter, avatarLimiter, usernameCheckLimiter, simulatorApiLimiter };

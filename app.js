@@ -184,6 +184,9 @@ app.use('/api/quiz', requireVerifiedUser, require('./modules/quiz/quiz.routes'))
 app.use('/api/uploads', requireVerifiedUser, require('./modules/upload/upload.routes'));
 // Hikâyeler: okuma uçları her kullanıcıya açık, yönetim uçları router'da isAdmin'li
 app.use('/api/stories', requireVerifiedUser, require('./modules/story/story.routes'));
+// Profil fotoğrafı (v2). Kullanıcı adı müsaitliği kayıttan ÖNCE sorulduğu için
+// burada değil /api/auth/check-username'de, oturumsuz
+app.use('/api/users', requireVerifiedUser, require('./modules/user/user.routes'));
 
 app.use(errorHandler);
 

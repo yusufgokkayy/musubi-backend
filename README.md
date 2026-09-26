@@ -470,7 +470,7 @@ Test ortamında `sendEmail` gerçek gönderim yapmaz; mailler bellek içi bir ou
 ## Yol Haritası
 
 - [ ] XP/puan sistemi (event log üzerine kurulacak)
-- [ ] Profil fotoğrafı yükleme (`/uploads` altyapısı hazır; `User.profile_image` hâlâ placeholder)
+- [x] Profil fotoğrafı ve kullanıcı adı (v2 Aşama 1)
 - [ ] Refresh token rotation + reuse detection (bkz. mağaza öncesi notları)
 - [ ] Görseller için CDN'li depolama sürücüsü (`STORAGE_DRIVER` adaptörü hazır; şu an `local` + Railway Volume)
 - [ ] Reklam kaldırma / abonelik (IAP makbuz doğrulama)
