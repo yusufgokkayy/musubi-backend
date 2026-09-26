@@ -661,7 +661,10 @@ const UserWordService = {
             throw new AppError('result veya answer gönderilmeli', 400);
         }
         if (result == null) {
-            const variants = wordAnswerVariants(wordExists);
+            // "Doğru cevap" satırı kullanıcının dilinde gösterilir; kabul
+            // listesi iki dili de içerir (bkz. answer.util.js)
+            const lang = (await User.findById(userId).select('preferences.language'))?.preferences?.language;
+            const variants = wordAnswerVariants(wordExists, lang);
             correctAnswer = variants[0];
             result = !normalizeAnswer(answer) ? 'empty'
                 : gradeTyping(answer, variants) ? 'correct'

@@ -11,16 +11,24 @@ dotenv.config({ path: './.env' }); // kök dizindeki .env (örnek için .env.exa
 
 const app = express();
 
+// Ortam bayrağı: gevşek davranışlar (kökten dev konsolu, proxy'ye güvenmeme)
+// YALNIZCA açıkça "development" denince açılır. Eskiden koşul
+// `!== 'production'`dı; NODE_ENV'i boş kalmış bir deploy dev moduna düşüyor,
+// proxy ayarı kapanıyor ve tüm kullanıcılar TEK bir rate limit kovasını
+// paylaşıyordu (bir kişi herkesi 429'a düşürebilirdi). Bilinmeyen değerlerde
+// artık güvenli taraf seçilir. Geçersiz değerle sunucu hiç açılmaz (server.js).
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 // Railway/Render gibi platformlarda uygulama reverse proxy arkasında çalışır;
 // bu ayar olmadan rate limiter tüm istekleri proxy'nin IP'sinden sanır ve
 // 300/15dk limiti TÜM kullanıcıların toplamına uygulanır.
-if (process.env.NODE_ENV === 'production') {
+if (!isDevelopment) {
     app.set('trust proxy', 1);
 }
 
 // Dev konsolu (public/) yalnızca production DIŞINDA servis edilir; CSP'de ses ve
 // görsellere https izni verilir ki konsoldan kelime sesi/görseli test edilebilsin
-if (process.env.NODE_ENV !== 'production') {
+if (isDevelopment) {
     app.use(helmet({
         contentSecurityPolicy: {
             useDefaults: true,
@@ -131,6 +139,8 @@ app.use(cors(
 ));
 
 app.use(express.json({ limit: '100kb' }));
+// Gövdede "$" ile başlayan anahtar = sorgu operatörü enjeksiyonu denemesi
+app.use(require('./middlewares/sanitize').rejectOperatorKeys);
 
 // Simülatör her isteğine `X-Musubi-Client: simulator` koyar (public/app.js).
 // Bu başlık kimlik DEĞİL etikettir — taklit edilebilir, hiçbir yetki vermez;

@@ -2,6 +2,8 @@
 
 Mobil entegrasyon için tam sözleşme. Tüm yollar `/api` önekiyle başlar, tüm gövdeler JSON'dur (`Content-Type: application/json`).
 
+**Genel kurallar:** İstek gövdesinde `$` ile başlayan hiçbir anahtar kabul edilmez (`400 "Geçersiz istek gövdesi"`) — sorgu operatörü enjeksiyonuna karşı. Açık auth uçları (`check-email`, `register`, `login`, `social`, `forgot-password`, `resend-verification-email`) sunucuda `APP_CHECK_ENFORCE=true` iken `X-Firebase-AppCheck` başlığı ister (Firebase App Check token'ı); başlık yoksa/geçersizse `401`. Varsayılan kapalıdır.
+
 **Zarf:** Her başarılı yanıt `{ "success": true, ... }`, her hata `{ "success": false, "message": "..." }` biçimindedir. Bazı hatalar ayrıca `details` nesnesi taşır — istemcinin üzerine iş yapabileceği makine-okur veri (örn. `POST /quiz/start` cooldown'ında `nextAttemptAllowedAt`). `details` isteğe bağlıdır, yokluğunda hata biçimi değişmez.
 
 **Kimlik doğrulama:** 🔒 işaretli endpoint'ler `Authorization: Bearer <accessToken>` başlığı ister. ✉️ işaretli olanlar ayrıca doğrulanmış e-posta gerektirir (aksi halde `403 "Please verify your email first"`). Access token ~15 dk geçerlidir; `401 "Token expired"` alınca `/auth/refresh` çağrılır, o da 401 dönerse login ekranına dönülür.
@@ -77,7 +79,7 @@ ayrımı **yoktur**: `Emomu` ile `emomu` aynı addır.
 Sınır: 60 istek / 15 dk (IP başına, login bütçesinden ayrı).
 
 ### POST /auth/social
-Google/Apple ile giriş. Client, sağlayıcı SDK'sından aldığı `idToken`'ı gönderir; backend imzayı sağlayıcının anahtarlarıyla doğrular. Hesap yoksa oluşturulur, aynı e-postayla local hesap varsa sosyal hesaba bağlanır (şifresi korunur). Sosyal hesapların e-postası doğrulanmış sayılır — doğrulama maili akışı çalışmaz.
+Google/Apple ile giriş. Client, sağlayıcı SDK'sından aldığı `idToken`'ı gönderir; backend imzayı sağlayıcının anahtarlarıyla doğrular. Hesap yoksa oluşturulur, aynı e-postayla local hesap varsa sosyal hesaba bağlanır. Bağlanan local hesap **doğrulanmışsa** şifresi korunur (hibrit hesap); **doğrulanmamışsa** şifresi silinir, tüm oturumları kapatılır ve ad sağlayıcıdan alınır — o hesabı adresin sahibi değil, adresi ele geçirmek isteyen biri açmış olabilir (ön-kayıt koruması). Sosyal hesapların e-postası doğrulanmış sayılır — doğrulama maili akışı çalışmaz.
 ```jsonc
 // İstek — name/surname opsiyonel (Apple ad bilgisini yalnızca İLK girişte client'a verir, o zaman iletin)
 {
@@ -310,6 +312,7 @@ Push token'ını siler. Kullanıcı bildirim iznini işletim sisteminden kapatt�
     "needsUsername": false,
     "avatarUrl": "https://musubi.alpsoysoft.com/uploads/avatars/9f86d0...webp",  // yoksa null → baş harf çiz
     "email": "yusuf@ornek.com",
+    "pendingEmail": "yeni@ornek.com",  // yalnızca e-posta değişimi doğrulama beklerken
     "role": "user",
     "isEmailVerified": true,
     "dailyGoal": 20,
@@ -332,7 +335,8 @@ Push token'ını siler. Kullanıcı bildirim iznini işletim sisteminden kapatt�
   "name": "Yusuf",
   "surname": "Gökkaya",
   "username": "yeni.ad",              // v2 — check-username kuralları; kendi mevcut adı çakışma sayılmaz
-  "email": "yeni@ornek.com",          // değişirse doğrulama sıfırlanır, yeni adrese mail gider
+  "email": "yeni@ornek.com",          // bkz. aşağıdaki "E-posta değişimi"
+  "currentPassword": "Mevcut123!",    // e-posta değişiminde ZORUNLU (şifresiz sosyal hesapta yerine "idToken")
   "dailyGoal": 30,                    // 5-50 arası
   "fcmToken": "fcm-cihaz-tokeni",     // push için Firebase SDK'dan alınan token
   "timezone": "Europe/Berlin",        // geçersiz değer varsayılana (Europe/Istanbul) düşer
@@ -347,7 +351,14 @@ Push token'ını siler. Kullanıcı bildirim iznini işletim sisteminden kapatt�
 // 200 — güncellenmiş kullanıcı (GET /auth/me ile aynı biçim)
 { "success": true, "data": { /* ... */ } }
 ```
-Hatalar: `409 "Bu kullanıcı adı alınmış"`, `400` geçersiz/ayrılmış/uygunsuz kullanıcı adı (boş değer de — ad silinemez; `details.reason` check-username'deki kodlar), `400 "Bu e-posta adresi zaten kullanımda"`, `400` enum validasyonu (geçersiz theme/fontSize), `500 "Doğrulama maili gönderilemedi, e-posta değiştirilmedi"`. `isPremium` bu endpoint'ten **değiştirilemez** (gönderilirse yok sayılır). `password` da **değiştirilemez** — gönderilirse `400 "Şifre bu uçtan değiştirilemez..."`: şifre değişiminin tek kapısı `change-password` (eski şifre doğrulamalı) ve `reset-password` (mail token'lı); ikisi de oturum rotasyonu yapar. `activeLevel` de **değiştirilemez** (yok sayılır): seçilen seviyenin açık olması gerekir, o kontrol `PUT /progress/active-level`'dadır.
+**E-posta değişimi:** yeni adres hemen geçerli OLMAZ. `pendingEmail` alanında
+bekler, yeni adrese doğrulama maili gider; link tıklanınca `email` olur. Bu sürede
+hesap doğrulanmış kalır ve giriş eski adresle sürer (yanıtta `email` eski,
+`pendingEmail` yeni adres). Hassas işlem olduğu için mevcut şifre
+(`currentPassword`) istenir; şifresiz sosyal hesap sağlayıcıdan aldığı taze
+`idToken`'ı gönderir. Değişim maili adres bazlı mail kısıtına tabidir.
+
+Hatalar: `409 "Bu kullanıcı adı alınmış"`, `400` geçersiz/ayrılmış/uygunsuz kullanıcı adı (boş değer de — ad silinemez; `details.reason` check-username'deki kodlar), `401 "Şifreniz yanlış..."` / `401 "Kimlik doğrulanamadı"` (e-posta değişiminde yeniden doğrulama), `400 "Geçerli bir e-posta adresi girin"`, `429` mail kısıtı, `400 "Bu e-posta adresi zaten kullanımda"`, `400` enum validasyonu (geçersiz theme/fontSize), `500 "Doğrulama maili gönderilemedi, e-posta değiştirilmedi"`. `isPremium` bu endpoint'ten **değiştirilemez** (gönderilirse yok sayılır). `password` da **değiştirilemez** — gönderilirse `400 "Şifre bu uçtan değiştirilemez..."`: şifre değişiminin tek kapısı `change-password` (eski şifre doğrulamalı) ve `reset-password` (mail token'lı); ikisi de oturum rotasyonu yapar. `activeLevel` de **değiştirilemez** (yok sayılır): seçilen seviyenin açık olması gerekir, o kontrol `PUT /progress/active-level`'dadır.
 
 ### POST /auth/verify-password 🔒✉️
 Ayarlardaki adım adım şifre değiştirme akışının ilk ekranı ("Şifre Girin" alt sayfası): mevcut şifre doğrulanmadan yeni şifre ekranına geçilmez.
@@ -544,7 +555,7 @@ linkle farklı şifre deneyebilir).
 // deviceName gönderilmediyse (web landing sayfası) yalnızca doğrulama yapılır
 { "success": true, "data": {} }
 ```
-Hata: `400 "Invalid or expired token"` (link 24 saat geçerli).
+Hata: `400 "Invalid or expired token"` (link 24 saat geçerli), `409 "Bu e-posta adresi artık başka bir hesapta kullanılıyor"` (e-posta değişimi onayı: talep ile onay arasında adresi başka hesap aldıysa — bekleyen değişim iptal edilir, eski adres geçerli kalır).
 
 ### GET /auth/verify-email/:token
 POST varyantının eski GET biçimi (geriye uyumluluk). `User-Agent` cihaz adı sayılır,
@@ -620,10 +631,15 @@ Hatalar: `404 "Bu e-postayla kayıtlı bir hesap yok"`, `400 "E-posta zaten doğ
 // Şifresiz sosyal hesap: şifre yerine sağlayıcıdan alınan TAZE idToken gönderilir
 { "idToken": "eyJhbGciOiJSUzI1..." }
 
+// Apple ile girişli hesap: ek olarak Sign in with Apple'dan TAZE alınan
+// authorizationCode gönderilir — sunucu Apple'daki yetkiyi iptal eder
+// (App Store kuralı 5.1.1(v)). İptal başarısız olsa da silme tamamlanır.
+{ "idToken": "eyJ...", "authorizationCode": "c1a2b3..." }
+
 // 200 — kullanıcı + TÜM ilişkili veri kalıcı silinir (KVKK)
 { "success": true, "message": "Account deleted" }
 ```
-Hata: `401 "Password is incorrect"` / `401 "Kimlik doğrulanamadı"`.
+Hata: `401 "Şifreniz yanlış. Lütfen tekrar deneyin."` / `401 "Kimlik doğrulanamadı"`.
 
 ---
 
@@ -1464,7 +1480,7 @@ Soru formatları ve `prompt` biçimleri:
 |---|---|---|---|
 | `meaning` | kelime → anlam seç | `{ kanji, romaji, audioUrl? }` | 4 anlam |
 | `reverse` | anlam → kelime seç | `{ meaning }` (ses YOK — cevabı söylerdi) | 4 kelime |
-| `reading` | kanji → okunuş seç | `{ kanji, audioUrl? }` | 4 okunuş |
+| `reading` | kanji → okunuş seç | `{ kanji }` (ses YOK — okunuşu, yani cevabı söylerdi) | 4 okunuş |
 | `typing` | "Bu kelimenin Türkçesini yazınız" | `{ kanji, romaji, audioUrl? }` | YOK (serbest metin) |
 | `fillblank` | "Boşluğa uygun kelimeyi yerleştir" | `{ sentence: "東京____で会いましょう。" }` (ses yok) | 4 kelime |
 | `image` | "Doğru şıkkı işaretleyiniz" (görsel) | `{ imageUrl }` (ses yok) | 4 kelime |
@@ -1788,7 +1804,8 @@ Hata: `404 "Notification not found"`.
 { "success": true, "data": { "modifiedCount": 5 } }
 ```
 
-### POST /notifications/test 🔒✉️
+### POST /notifications/test 🔒✉️ (yalnızca admin)
+Normal kullanıcıya `403`. Başlık 100, gövde 500 karakterle kırpılır. Geliştirici hesabını `npm run make-admin -- <e-posta>` ile yetkilendirin.
 Elle push testi — giriş yapmış kullanıcının kayıtlı `fcmToken`'ına anında gönderir, `notificationSettings` tercihlerinden bağımsız (mobil uygulama/geliştirme ortamı doğrulaması içindir).
 ```jsonc
 // İstek — ikisi de opsiyonel

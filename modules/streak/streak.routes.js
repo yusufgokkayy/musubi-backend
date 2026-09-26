@@ -5,6 +5,8 @@ const { protect } = require('../../middlewares/auth.middleware');
 const router = express.Router();
 
 router.get('/',     StreakController.getStreak);
-router.put('/update', StreakController.updateStreak);
+// PUT /update KALDIRILDI (26.09.2026): belgelenmemişti, hiçbir istemci
+// çağırmıyordu ve çalışmadan seriyi sürdürmeye izin veriyordu. Seri yalnızca
+// günün ilk gerçek cevabında (POST /userwords/answer) ilerler.
 
 module.exports = router;

@@ -25,15 +25,29 @@ const gradeTyping = (answer, correctAnswers) => {
     return correctAnswers.some(c => normalizeAnswer(c) === typed);
 };
 
-// Kelimenin quiz/yazma sorusunda kabul edilecek doğru cevap varyantları.
-// Uygulama tr-only (preferences.language enum'ı yalnızca 'tr'): kullanıcı
-// Türkçe anlamı yazar, bu yüzden temel karşılaştırma meaningTr'dir; boşsa
-// (henüz çevrilmemiş kelime) İngilizce meaning'e düşülür. meaningTrAccepted/
-// meaningEnAccepted, hangi alan baz alındıysa onun eş anlamlı ek varyantlarıdır.
-const wordAnswerVariants = (word) => {
-    const base = word.meaningTr || word.meaning;
-    const accepted = word.meaningTr ? word.meaningTrAccepted : word.meaningEnAccepted;
-    return [...new Set([...meaningVariants(base), ...(accepted || [])])];
+// Kullanıcının dilindeki anlam: İngilizce arayüzde `meaning`, Türkçede
+// `meaningTr` (yoksa İngilizceye düşer). Şık metni, geri bildirim kartı ve
+// "doğru cevap" satırı bununla üretilir.
+const meaningIn = (word, lang = 'tr') =>
+    (lang === 'en' ? word.meaning : (word.meaningTr || word.meaning));
+
+// Yazma sorusunda kabul edilen cevaplar. İKİ DİL DE kabul edilir, kullanıcının
+// dili önce gelir (ilk eleman "doğru cevap" olarak gösterilir).
+//
+// Eskiden meaningTr varsa YALNIZCA Türkçe kabul ediliyordu. Veri setindeki her
+// kelimede meaningTr olduğu için İngilizce arayüzdeki kullanıcı "su"ya "water"
+// yazıp yanlış alıyordu — yazma sorusunu hiç doğru yapamıyordu (26.09.2026,
+// doğrulandı). Türk kullanıcının "water" yazması da anlamı bildiğini gösterir;
+// iki dili birden kabul etmek bir dilin cevabını diğerinde yanlış saymaktan
+// doğrudur.
+const wordAnswerVariants = (word, lang = 'tr') => {
+    const tr = word.meaningTr
+        ? [...meaningVariants(word.meaningTr), ...(word.meaningTrAccepted || [])]
+        : [];
+    const en = word.meaning
+        ? [...meaningVariants(word.meaning), ...(word.meaningEnAccepted || [])]
+        : [];
+    return [...new Set(lang === 'en' ? [...en, ...tr] : [...tr, ...en])];
 };
 
-module.exports = { normalizeAnswer, meaningVariants, gradeTyping, wordAnswerVariants };
+module.exports = { normalizeAnswer, meaningVariants, gradeTyping, wordAnswerVariants, meaningIn };

@@ -1,5 +1,6 @@
 const { initializeApp, cert } = require('firebase-admin/app');
 const { getMessaging } = require('firebase-admin/messaging');
+const { getAppCheck } = require('firebase-admin/app-check');
 
 // Kimlik iki kaynaktan gelebilir (öncelik sırasıyla):
 //   1. FIREBASE_SERVICE_ACCOUNT_B64 ortam değişkeni — servis hesabı JSON'unun
@@ -8,6 +9,7 @@ const { getMessaging } = require('firebase-admin/messaging');
 //   2. config/firebase-service-account.json dosyası — lokal geliştirme
 // İkisi de yoksa uygulama çökmesin; push sessizce devre dışı kalır.
 let messaging = null;
+let appCheck = null;
 
 try {
     let serviceAccount;
@@ -20,11 +22,13 @@ try {
     }
     initializeApp({ credential: cert(serviceAccount) });
     messaging = getMessaging();
+    appCheck = getAppCheck();
     console.log(`Firebase hazır (proje: ${serviceAccount.project_id}) — push bildirimleri aktif`);
 } catch (err) {
     console.warn('Firebase başlatılamadı (FIREBASE_SERVICE_ACCOUNT_B64 veya config/firebase-service-account.json gerekli) — push bildirimleri devre dışı');
 }
 
 module.exports = {
-    getMessaging: () => messaging
+    getMessaging: () => messaging,
+    getAppCheck: () => appCheck
 };

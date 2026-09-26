@@ -5,7 +5,11 @@ const User = require('../../models/User');
 const AppError = require('../../utils/AppError');
 const ProgressService = require('../progress/progress.service');
 const logEvent = require('../../utils/event.util');
-const { gradeTyping, wordAnswerVariants } = require('../../utils/answer.util');
+const { gradeTyping, wordAnswerVariants, meaningIn } = require('../../utils/answer.util');
+
+// Soruların dili kullanıcının arayüz dilidir (User.preferences.language)
+const userLang = async (userId) =>
+    (await User.findById(userId).select('preferences.language'))?.preferences?.language || 'tr';
 
 const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
 
@@ -84,7 +88,11 @@ const QuizService = {
     // Hedefler count'un iki katı çekilir: çeldirici bulunamayan kelimeler
     // eleniyor (aşağıda `continue`), tam count kadar çekseydik sınav eksik
     // soruyla çıkardı.
-    async generateQuestions(jlptLevel, count) {
+    // lang: anlam şıkları, "anlam → kelime" sorusunun metni ve yazma sorusunun
+    // "doğru cevap" satırı bu dilde üretilir. Eskiden şıklar `meaning`
+    // (İngilizce) alanından geliyordu — Türk kullanıcı da İngilizce şık
+    // görüyordu (26.09.2026 incelemesi).
+    async generateQuestions(jlptLevel, count, lang = 'tr') {
         const targets = await Word.aggregate([
             { $match: { jlptLevel, isCore: true } },
             { $sample: { size: count * 2 } }
@@ -122,17 +130,17 @@ const QuizService = {
                     format,
                     // Kelime gösterilir, anlamı yazılır; ses de kelimeyi söyler (cevabı sızdırmaz)
                     prompt: { kanji: word.kanji, romaji: word.romaji, audioUrl: word.audioUrl },
-                    correctAnswers: wordAnswerVariants(word)
+                    correctAnswers: wordAnswerVariants(word, lang)
                 });
                 continue;
             }
 
             // fillblank/image cevabı kelimenin kendisidir (kanji şıkları);
             // ses bu ikisinde YOK — kelimeyi seslendirmek cevabı söylemek olur
-            const field = (format === 'meaning') ? 'meaning'
-                : (format === 'reading') ? 'romaji'
-                : 'kanji'; // reverse | fillblank | image
-            const correct = word[field];
+            const valueOf = (w) => (format === 'meaning') ? meaningIn(w, lang)
+                : (format === 'reading') ? w.romaji
+                : w.kanji; // reverse | fillblank | image
+            const correct = valueOf(word);
 
             // Aynı tür öncelikli, benzersiz metinli 3 çeldirici
             const sameType = pool.filter(p => p.type === word.type);
@@ -140,7 +148,7 @@ const QuizService = {
             const seen = new Set([correct]);
             const distractors = [];
             for (const cand of [...shuffle(sameType), ...shuffle(otherType)]) {
-                const val = cand[field];
+                const val = valueOf(cand);
                 if (!val || seen.has(val)) continue;
                 seen.add(val);
                 distractors.push(val);
@@ -152,10 +160,12 @@ const QuizService = {
             // reverse/fillblank/image'da ses YOK: kelimeyi seslendirmek doğru şıkkı söylemek olur
             const prompt =
                 format === 'meaning' ? { kanji: word.kanji, romaji: word.romaji, audioUrl: word.audioUrl } :
-                format === 'reverse' ? { meaning: word.meaning } :
+                format === 'reverse' ? { meaning: meaningIn(word, lang) } :
                 format === 'fillblank' ? { sentence: word.example.replaceAll(word.kanji, '____') } :
                 format === 'image' ? { imageUrl: word.imageUrl } :
-                { kanji: word.kanji, audioUrl: word.audioUrl }; // reading
+                // reading: ses YOK — kelimeyi seslendirmek okunuşu, yani doğru
+                // şıkkı söylemek olur
+                { kanji: word.kanji }; // reading
 
             questions.push({
                 word: word._id,
@@ -177,10 +187,10 @@ const QuizService = {
     // zora (N5 → N1). Sıra bilerek karıştırılmıyor — tasarımda her soruda seviye
     // rozeti var ve zorluğun kademeli artması kullanıcıyı ilk soruda duvara
     // çarptırmıyor.
-    async generatePlacementQuestions() {
+    async generatePlacementQuestions(lang = 'tr') {
         const questions = [];
         for (const level of LEVELS) {
-            questions.push(...await QuizService.generateQuestions(level, PLACEMENT_DISTRIBUTION[level]));
+            questions.push(...await QuizService.generateQuestions(level, PLACEMENT_DISTRIBUTION[level], lang));
         }
         return questions;
     },
@@ -275,7 +285,7 @@ const QuizService = {
         const existing = await QuizService.resolveInProgress(userId);
         if (existing) return attemptResponse(existing);
 
-        const questions = await QuizService.generatePlacementQuestions();
+        const questions = await QuizService.generatePlacementQuestions(await userLang(userId));
         const attempt = await QuizAttempt.create({ user: userId, type: 'placement', questions });
         logEvent(userId, 'quiz_started', { type: 'placement', totalQuestions: questions.length });
         return attemptResponse(attempt);
@@ -318,14 +328,17 @@ const QuizService = {
         q.answeredAt = new Date();
 
         // Geri bildirim kartındaki "駅 — istasyon" satırı
-        const word = await Word.findById(q.word).select('kanji meaning meaningTr');
+        const [word, lang] = await Promise.all([
+            Word.findById(q.word).select('kanji meaning meaningTr'),
+            userLang(userId)
+        ]);
 
         const answeredCount = attempt.questions.filter(x => x.answeredAt).length;
         const finished = answeredCount === attempt.questions.length;
 
         const response = {
             correct: isCorrect,
-            word: word ? { kanji: word.kanji, meaning: word.meaningTr || word.meaning } : null,
+            word: word ? { kanji: word.kanji, meaning: meaningIn(word, lang) } : null,
             // Yanlışta "Cevap: ..." satırı için anahtar (soru artık cevaplandı, sızıntı değil)
             ...(q.format === 'typing'
                 ? { correctAnswer: q.correctAnswers[0] }

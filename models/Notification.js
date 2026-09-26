@@ -35,4 +35,11 @@ const NotificationSchema = new mongoose.Schema({
 
 NotificationSchema.index({ user: 1, read: 1, createdAt: -1 });
 
+// Bildirimler 90 gün sonra kendiliğinden silinir (MongoDB TTL). Her kullanıcıya
+// günde birkaç kayıt düşüyor ve eskiden hiç silinmiyordu; 90 günden eski bir
+// "Bugünün Görevi" kaydının kimseye faydası yok ama depoyu dolduruyor.
+// Not: bildirim tekrar kısıtları (gün içi dedupe, decay özetinin "son
+// çalışmadan beri en fazla 3" kuralı) en fazla birkaç günlük geçmişe bakar.
+NotificationSchema.index({ createdAt: 1 }, { expireAfterSeconds: 90 * 24 * 60 * 60 });
+
 module.exports = mongoose.model('Notification', NotificationSchema);
