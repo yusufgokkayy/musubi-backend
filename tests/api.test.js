@@ -3806,8 +3806,13 @@ describe('Mobil simülatör (canlıda /sim)', () => {
         // Etiket gitmezse istekler genel kovada sayılır ve simülatör trafiği
         // gerçek kullanıcıların bütçesini yemeye başlar (sessiz bozulma)
         assert.match(client, /'X-Musubi-Client': 'simulator'/);
-        // Token yenileme api() sarmalayıcısını ATLIYOR; etiketi ayrıca taşımalı
-        assert.equal((client.match(/'X-Musubi-Client': 'simulator'/g) || []).length, 2);
+        // api() sarmalayıcısını ATLAYAN doğrudan çağrılar (token yenileme,
+        // çok parçalı fotoğraf yükleme) etiketi ayrıca taşımalı: her doğrudan
+        // /api fetch'ine bir etiket düşmeli
+        const tags = (client.match(/'X-Musubi-Client': 'simulator'/g) || []).length;
+        const fetches = (client.match(/fetch\('\/api/g) || []).length;
+        assert.ok(fetches >= 3, 'api(), refresh ve avatar yüklemesi');
+        assert.equal(tags, fetches, 'etiketsiz bir /api fetch çağrısı var');
     });
 
     it('istemci etiketi hiçbir kapı açmaz — yetki değil, etikettir', async () => {
