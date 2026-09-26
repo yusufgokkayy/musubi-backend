@@ -4646,6 +4646,43 @@ describe('Güvenlik regresyonları (26.09.2026 incelemesi)', () => {
         assert.equal(res.status, 200);
     });
 
+    it('dil: yazma sorusu iki dili de kabul eder, doğru cevap kullanıcının dilinde', () => {
+        const { wordAnswerVariants, gradeTyping } = require('../utils/answer.util');
+        const w = { meaning: 'water', meaningTr: 'su', meaningTrAccepted: ['su'], meaningEnAccepted: ['water'] };
+        assert.equal(gradeTyping('water', wordAnswerVariants(w, 'tr')), true, 'İngilizce arayüz regresyonu');
+        assert.equal(gradeTyping('su', wordAnswerVariants(w, 'en')), true);
+        assert.equal(wordAnswerVariants(w, 'en')[0], 'water');
+        assert.equal(wordAnswerVariants(w, 'tr')[0], 'su');
+        assert.equal(wordAnswerVariants({ meaning: 'water' }, 'tr')[0], 'water', 'Türkçesi olmayan kelime İngilizceye düşer');
+    });
+
+    it('dil: sınav şıkları ve anlam metni kullanıcının dilinde; okunuş sorusunda ses yok', async () => {
+        const QuizService = require('../modules/quiz/quiz.service');
+        await Word.updateMany({ jlptLevel: 'N3' },
+            [{ $set: { meaningTr: { $concat: ['tr ', '$meaning'] }, audioUrl: 'https://ses.test/a.mp3' } }],
+            { updatePipeline: true });
+        try {
+            const byFormat = async (lang) => {
+                const qs = [];
+                for (let i = 0; i < 6; i++) qs.push(...await QuizService.generateQuestions('N3', 8, lang));
+                return qs;
+            };
+            const tr = await byFormat('tr');
+            const en = await byFormat('en');
+            const choicesOf = (qs, f) => qs.filter(q => q.format === f).flatMap(q => q.choices);
+            assert.ok(choicesOf(tr, 'meaning').length && choicesOf(tr, 'meaning').every(c => c.startsWith('tr ')),
+                'Türk kullanıcı Türkçe anlam şıkları görmeli');
+            assert.ok(choicesOf(en, 'meaning').every(c => !c.startsWith('tr ')), 'İngilizce kullanıcı İngilizce görmeli');
+            for (const q of tr.filter(q => q.format === 'reverse')) assert.ok(q.prompt.meaning.startsWith('tr '));
+            for (const q of tr.filter(q => q.format === 'typing')) assert.ok(q.correctAnswers[0].startsWith('tr '));
+            for (const q of [...tr, ...en].filter(q => q.format === 'reading')) {
+                assert.equal(q.prompt.audioUrl, undefined, 'ses okunuşu, yani cevabı söylerdi');
+            }
+        } finally {
+            await Word.updateMany({ jlptLevel: 'N3' }, { $unset: { meaningTr: 1, audioUrl: 1 } });
+        }
+    });
+
     it('Apple token iptali: yapılandırma yoksa silme yine tamamlanır', async () => {
         const { revokeAppleTokens } = require('../utils/appleRevoke');
         const r = await revokeAppleTokens('kod');
