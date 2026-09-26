@@ -27,6 +27,7 @@ const { DOC_KEYS, docSummary } = require('../../config/legal/texts');
 const { safeTimezone } = require('../../utils/date.util');
 const Event = require('../../models/Event');
 const logEvent = require('../../utils/event.util');
+const { revokeAppleTokens } = require('../../utils/appleRevoke');
 
 const MAX_SESSIONS_PER_USER = 5;
 
@@ -167,6 +168,26 @@ const rotateAllSessions = async (userId, deviceName) => {
     return { accessToken, refreshToken };
 };
 
+
+// Hassas işlemlerden (hesap silme, e-posta değişimi) önce kimliği yeniden
+// kanıtlatır: şifreli hesap şifresiyle, şifresiz sosyal hesap taze idToken ile.
+// Access token tek başına yetmez — kilidi açık bırakılmış bir telefonu eline
+// geçiren kişi, şifreyi bilmeden hesabı devralamamalı.
+// `user` şifre alanıyla (+password) yüklenmiş olmalı.
+const assertReauth = async (user, { password, idToken } = {}) => {
+    if (user.password) {
+        if (typeof password !== 'string' || !(await user.comparePassword(password))) {
+            throw new AppError('Şifreniz yanlış. Lütfen tekrar deneyin.', 401);
+        }
+        return;
+    }
+    const profile = await verifySocialToken(user.provider, idToken);
+    if (profile.providerId !== user.providerId) {
+        throw new AppError('Kimlik doğrulanamadı', 401);
+    }
+};
+
+const EMAIL_RE = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$/;
 
 const AuthService = {
     // Onboarding e-posta adımı: ad-soyad/şifre ekranlarına geçmeden önce
@@ -320,6 +341,29 @@ const AuthService = {
         if (!user) {
             user = await User.findOne({ email: profile.email });
             if (user) {
+                // ÖN-KAYIT KORUMASI. Doğrulanmamış bir local hesap, e-postanın
+                // sahibi tarafından açılmış olmak zorunda değil: saldırgan
+                // kurbanın adresiyle kayıt olup şifreyi kendisi belirleyebilir
+                // ve kayıtta bir oturum alır. Kurban sonra Google/Apple ile
+                // girince hesap bağlanıp "doğrulanmış" olurdu — saldırgan da
+                // kendi şifresi ve oturumuyla içeride kalırdı (26.09.2026,
+                // testle doğrulandı). Sağlayıcı adresin GERÇEK sahibini
+                // kanıtladığı için doğrulanmamış hesaptaki her şey sahipsiz
+                // sayılır: şifre silinir, tüm oturumlar kapanır, ad sağlayıcıdan
+                // alınır. Doğrulanmış local hesap (adresin sahibi zaten o)
+                // şifresiyle birlikte korunur ve hibrit hesaba dönüşür.
+                if (!user.isEmailVerified) {
+                    await DeviceSession.deleteMany({ user: user._id });
+                    user.password = undefined;
+                    user.name = name || profile.name || user.name;
+                    user.surname = surname || profile.surname || '';
+                    user.emailVerificationToken = undefined;
+                    user.emailVerificationExpire = undefined;
+                    user.resetPasswordToken = undefined;
+                    user.resetPasswordExpire = undefined;
+                    user.pendingEmail = undefined;
+                    logEvent(user._id, 'unverified_account_claimed', { provider });
+                }
                 user.provider = provider;
                 user.providerId = profile.providerId;
                 user.isEmailVerified = true;
@@ -538,6 +582,9 @@ const AuthService = {
         user.password = newPassword;
         user.resetPasswordToken = undefined;
         user.resetPasswordExpire = undefined;
+        // Maildeki linke tıklamak adres sahipliğinin kanıtıdır: doğrulama
+        // bekleyen hesap ayrıca bir doğrulama maili beklemek zorunda kalmasın
+        user.isEmailVerified = true;
         // Kilitli kullanıcı şifresini sıfırladıktan sonra da giremezse çıkmaza
         // girerdi; maildeki linke tıklamak zaten hesap sahipliğini kanıtlıyor
         clearLoginFailures(user);
@@ -562,29 +609,44 @@ const AuthService = {
         if (updates.name) user.name = updates.name;
         if (updates.surname) user.surname = updates.surname;
 
-        // E-posta değişiyorsa doğrulama sıfırlanır ve yeni adrese doğrulama maili gider
-        if (updates.email && updates.email !== user.email) {
-            const emailTaken = await User.findOne({ email: updates.email });
-            if (emailTaken) throw new AppError('Bu e-posta adresi zaten kullanımda', 400);
+        // E-posta DEĞİŞİMİ: yeni adres pendingEmail'de bekler, doğrulama
+        // linkine tıklanınca geçerli olur (bkz. verifyEmail). Hesap bu sürede
+        // doğrulanmış kalır ve eski adresle giriş sürer — yeni adreste yazım
+        // hatası yapan kullanıcı kilitlenmez, gece temizliğine de takılmaz.
+        //
+        // Hassas işlem: mevcut şifre (şifresiz sosyal hesapta taze idToken)
+        // istenir. Aksi halde telefonu eline geçiren kişi adresi kendine çevirip
+        // "şifremi unuttum" ile hesabı tamamen devralabilirdi.
+        if (updates.email !== undefined && updates.email !== null && updates.email !== '') {
+            const newEmail = String(updates.email).trim().toLowerCase();
+            if (newEmail !== user.email) {
+                if (!EMAIL_RE.test(newEmail)) throw new AppError('Geçerli bir e-posta adresi girin', 400);
 
-            const verificationToken = crypto.randomBytes(20).toString('hex');
+                const withSecret = await User.findById(userId).select('+password');
+                await assertReauth(withSecret, { password: updates.currentPassword, idToken: updates.idToken });
 
-            try {
-                await sendEmail({
-                    to: updates.email,
-                    ...buildMail(userLang(user), 'change', `/verify-email/${verificationToken}`)
-                });
-            } catch (err) {
-                throw new AppError('Doğrulama maili gönderilemedi, e-posta değiştirilmedi', 500);
+                const emailTaken = await User.exists({ email: newEmail });
+                if (emailTaken) throw new AppError('Bu e-posta adresi zaten kullanımda', 400);
+
+                // Değişim maili de adres bazlı kısıta tabi: aksi halde her
+                // update-info çağrısı keyfi bir adrese mail göndertebilirdi
+                assertMailAllowed(user, 'verification');
+
+                const verificationToken = crypto.randomBytes(20).toString('hex');
+                try {
+                    await sendEmail({
+                        to: newEmail,
+                        ...buildMail(userLang(user), 'change', `/verify-email/${verificationToken}`)
+                    });
+                } catch (err) {
+                    throw new AppError('Doğrulama maili gönderilemedi, e-posta değiştirilmedi', 500);
+                }
+
+                user.pendingEmail = newEmail;
+                user.emailVerificationToken = hashToken(verificationToken);
+                user.emailVerificationExpire = Date.now() + 24 * 60 * 60 * 1000;
+                markMailSent(user, 'verification');
             }
-
-            user.email = updates.email;
-            user.isEmailVerified = false;
-            user.emailVerificationToken = crypto
-                .createHash('sha256')
-                .update(verificationToken)
-                .digest('hex');
-            user.emailVerificationExpire = Date.now() + 24 * 60 * 60 * 1000;
         }
 
         // Şifre bu uçtan DEĞİŞTİRİLEMEZ: eski şifre doğrulaması ve oturum
@@ -599,7 +661,18 @@ const AuthService = {
         // ve o kontrol ProgressService.setActiveLevel'da. Buradan yazılabilseydi
         // kullanıcı kilitli N1'i kendine atayıp müfredatı atlardı.
         // Tek kapı: PUT /api/progress/active-level
-        if (updates.fcmToken) user.fcmToken = updates.fcmToken;
+        if (updates.fcmToken) {
+            user.fcmToken = String(updates.fcmToken);
+            // Push token CİHAZA aittir, hesaba değil. Aynı telefonda önce A sonra
+            // B giriş yaptıysa (A çıkış yapmadan, ör. oturumu süresi dolduğu
+            // için) token iki hesapta birden kalıyor ve A'nın bildirimleri
+            // B'nin telefonuna gitmeye devam ediyordu. Token'ı en son kaydeden
+            // hesap sahiplenir.
+            await User.updateMany(
+                { fcmToken: user.fcmToken, _id: { $ne: user._id } },
+                { $unset: { fcmToken: 1 } }
+            );
+        }
         if (updates.timezone) user.timezone = safeTimezone(updates.timezone);
         // Kısmi güncellenir (ör. yalnız reminderTime gelir); geçersiz HH:mm'i
         // şema validasyonu 400'e çevirir
@@ -637,6 +710,21 @@ const AuthService = {
 
         if (!user) throw new AppError('Invalid or expired token', 400);
 
+        // E-posta değişiminin onayı: bekleyen adres ancak şimdi geçerli olur.
+        // Talep ile onay arasında adresi başka bir hesap almış olabilir.
+        if (user.pendingEmail) {
+            const taken = await User.exists({ email: user.pendingEmail, _id: { $ne: user._id } });
+            if (taken) {
+                user.pendingEmail = undefined;
+                user.emailVerificationToken = undefined;
+                user.emailVerificationExpire = undefined;
+                await user.save();
+                throw new AppError('Bu e-posta adresi artık başka bir hesapta kullanılıyor', 409);
+            }
+            user.email = user.pendingEmail;
+            user.pendingEmail = undefined;
+        }
+
         user.isEmailVerified = true;
         user.emailVerificationToken = undefined;
         user.emailVerificationExpire = undefined;
@@ -663,8 +751,9 @@ const AuthService = {
         const user = await User.findOne({
             emailVerificationToken: hashToken(verificationToken),
             emailVerificationExpire: { $gt: Date.now() }
-        }).select('email');
-        return user?.email || null;
+        }).select('email pendingEmail');
+        // Değişim linkinde sayfa doğrulanacak YENİ adresi göstermeli
+        return user ? (user.pendingEmail || user.email) : null;
     },
 
     async findResetTokenOwner(resetToken) {
@@ -753,19 +842,19 @@ const AuthService = {
         return rotateAllSessions(userId, deviceName);
     },
 
-    async deleteAccount(userId, { password, idToken } = {}) {
+    async deleteAccount(userId, { password, idToken, authorizationCode } = {}) {
         const user = await User.findById(userId).select('+password');
         if (!user) throw new AppError('User not found', 404);
 
         // Silme onayı: şifreli hesap şifresiyle, şifresiz sosyal hesap taze idToken ile
-        if (user.password) {
-            const isMatch = await user.comparePassword(password);
-            if (!isMatch) throw new AppError('Password is incorrect', 401);
-        } else {
-            const profile = await verifySocialToken(user.provider, idToken);
-            if (profile.providerId !== user.providerId) {
-                throw new AppError('Kimlik doğrulanamadı', 401);
-            }
+        await assertReauth(user, { password, idToken });
+
+        // Apple ile girişli hesapta Apple'ın verdiği yetki de geri alınmalı
+        // (App Store İnceleme Kuralları 5.1.1(v)). En iyi çaba: iptal başarısız
+        // olsa da silme SÜRER — kullanıcının silme hakkı Apple'ın API'sine
+        // bağlı kalamaz. Sonuç loglanır.
+        if (user.provider === 'apple') {
+            await revokeAppleTokens(authorizationCode);
         }
 
         // KVKK: kullanıcıya ait tüm veriler silinir
@@ -788,10 +877,23 @@ const AuthService = {
             createdAt: { $lt: cutoff }
         }).select('_id');
 
+        // İkinci emniyet: doğrulanmamış hesap hiçbir öğrenme ucuna erişemez
+        // (isEmailVerified mount seviyesinde), yani öğrenme verisi olan hesap
+        // bir zamanlar doğrulanmıştır ve SİLİNMEZ. Eski e-posta değişimi akışı
+        // doğrulanmış hesapları da isEmailVerified: false'a çeviriyordu; o
+        // dönemden kalan hesaplar bu kontrolle korunur.
+        let purged = 0;
         for (const { _id } of stale) {
+            const hasHistory = await UserWord.exists({ user: _id }) ||
+                await StudySession.exists({ user: _id });
+            if (hasHistory) {
+                console.warn(`[purge] öğrenme verisi olan doğrulanmamış hesap atlandı: ${_id}`);
+                continue;
+            }
             await purgeUserData(_id);
+            purged++;
         }
-        return { purged: stale.length };
+        return { purged };
     }
 };
 

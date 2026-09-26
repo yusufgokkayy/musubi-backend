@@ -198,6 +198,20 @@ const UserSchema = new mongoose.Schema({
             dayStart: Date
         }
     },
+    // E-posta DEĞİŞİMİNDE yeni adres burada bekler; doğrulama linkine
+    // tıklanınca `email`'e taşınır. Değişim sırasında hesap doğrulanmış kalır,
+    // giriş eski adresle sürer.
+    //
+    // Eskiden yeni adres doğrudan `email`'e yazılıp isEmailVerified false
+    // yapılıyordu. İki sonucu vardı: (1) yeni adreste yazım hatası yapan
+    // kullanıcı hesabından kilitleniyordu, (2) gece çalışan doğrulanmamış hesap
+    // temizliği hesabı açılış tarihine baktığı için AYLARCA eski bir hesabı
+    // tüm öğrenme verisiyle siliyordu (26.09.2026 incelemesi, doğrulandı).
+    pendingEmail: {
+        type: String,
+        lowercase: true,
+        trim: true
+    },
     emailVerificationToken: String,
     emailVerificationExpire: Date,
     resetPasswordToken: String,
@@ -216,7 +230,10 @@ UserSchema.index(
 );
 
 UserSchema.pre('save', async function () {
-    if (!this.isModified('password')) return;
+    // Şifrenin KALDIRILMASI da bir değişikliktir (ön-kayıt koruması: sosyal
+    // girişle bağlanan doğrulanmamış hesabın şifresi silinir) — boş değeri
+    // hash'lemeye çalışmak bcrypt'i patlatırdı
+    if (!this.isModified('password') || !this.password) return;
     this.password = await bcrypt.hash(this.password, 10);
 });
 

@@ -1236,30 +1236,40 @@ describe('E-posta akışları', () => {
         }
     });
 
-    it('e-posta değişikliği doğrulamayı sıfırlar, yeni adrese mail gider', async () => {
+    it('e-posta değişikliği: yeni adres doğrulanınca geçerli olur, hesap bu arada doğrulanmış kalır', async () => {
         await createVerifiedUser('eskiadres@test.com');
         const token = (await login('eskiadres@test.com')).accessToken;
 
-        const res = await api('PUT', '/auth/update-info', {
-            token, body: { email: 'yeniadres@test.com' }
+        // Hassas işlem: mevcut şifre olmadan veya yanlışken reddedilir
+        const sifresiz = await api('PUT', '/auth/update-info', { token, body: { email: 'yeniadres@test.com' } });
+        assert.equal(sifresiz.status, 401);
+        const yanlis = await api('PUT', '/auth/update-info', {
+            token, body: { email: 'yeniadres@test.com', currentPassword: 'Yanlis123!' }
         });
-        assert.equal(res.status, 200);
-        assert.equal(res.json.data.isEmailVerified, false);
-        assert.equal(res.json.data.email, 'yeniadres@test.com');
+        assert.equal(yanlis.status, 401);
+
+        const res = await api('PUT', '/auth/update-info', {
+            token, body: { email: 'YeniAdres@test.com', currentPassword: 'Testsifre123!' }
+        });
+        assert.equal(res.status, 200, JSON.stringify(res.json));
+        assert.equal(res.json.data.email, 'eskiadres@test.com', 'adres doğrulanana kadar DEĞİŞMEZ');
+        assert.equal(res.json.data.pendingEmail, 'yeniadres@test.com');
+        assert.equal(res.json.data.isEmailVerified, true, 'hesap kilitlenmemeli');
 
         const mail = sendEmail.outbox.at(-1);
         assert.equal(mail.to, 'yeniadres@test.com', 'doğrulama YENİ adrese gitmeli');
 
-        // Artık ✉️ endpoint'ler 403; maildeki token doğrulamayı geri açar
-        const me = await api('GET', '/auth/me', { token });
-        assert.equal(me.status, 403);
+        // Doğrulanmadan önce her şey eskisi gibi çalışır
+        assert.equal((await api('GET', '/auth/me', { token })).status, 200);
 
         const vToken = mail.html.match(/verify-email\/([0-9a-f]+)/)[1];
         const verify = await api('GET', `/auth/verify-email/${vToken}`);
         assert.equal(verify.status, 200);
 
-        const meAfter = await api('GET', '/auth/me', { token });
-        assert.equal(meAfter.status, 200);
+        const me = (await api('GET', '/auth/me', { token })).json.data;
+        assert.equal(me.email, 'yeniadres@test.com');
+        assert.ok(!me.pendingEmail);
+        await login('yeniadres@test.com'); // yeni adresle giriş (login 200 bekler)
     });
 
     it('mail gönderilemezse e-posta değişikliği uygulanmaz', async () => {
@@ -1268,13 +1278,86 @@ describe('E-posta akışları', () => {
 
         sendEmail.failNextSend();
         const res = await api('PUT', '/auth/update-info', {
-            token, body: { email: 'ulasilmaz@test.com' }
+            token, body: { email: 'ulasilmaz@test.com', currentPassword: 'Testsifre123!' }
         });
         assert.equal(res.status, 500);
 
         const me = await api('GET', '/auth/me', { token });
         assert.equal(me.json.data.email, 'sabitadres@test.com', 'adres değişmemiş olmalı');
+        assert.ok(!me.json.data.pendingEmail);
         assert.equal(me.json.data.isEmailVerified, true, 'doğrulama bozulmamış olmalı');
+    });
+
+    it('bekleyen adresi arada başka hesap alırsa onay 409 döner, eski adres korunur', async () => {
+        await createVerifiedUser('yaris-a@test.com');
+        const token = (await login('yaris-a@test.com')).accessToken;
+        await api('PUT', '/auth/update-info', {
+            token, body: { email: 'yaris-hedef@test.com', currentPassword: 'Testsifre123!' }
+        });
+        const vToken = sendEmail.outbox.at(-1).html.match(/verify-email\/([0-9a-f]+)/)[1];
+
+        await createVerifiedUser('yaris-hedef@test.com');
+        const verify = await api('GET', `/auth/verify-email/${vToken}`);
+        assert.equal(verify.status, 409);
+        const me = (await api('GET', '/auth/me', { token })).json.data;
+        assert.equal(me.email, 'yaris-a@test.com');
+        assert.ok(!me.pendingEmail);
+    });
+
+    it('temizlik görevi e-posta değiştiren ESKİ hesabı silmez (veri kaybı regresyonu)', async () => {
+        const eski = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
+        const user = await createVerifiedUser('eski-hesap@test.com', { createdAt: eski });
+        const token = (await login('eski-hesap@test.com')).accessToken;
+        await api('GET', '/userwords/today', { token });
+        await UserWord.create({ user: user._id, word: new mongoose.Types.ObjectId() });
+
+        // Yeni akış: değişim hesabı doğrulanmamışa çevirmez
+        await api('PUT', '/auth/update-info', {
+            token, body: { email: 'eski-hesap-yeni@test.com', currentPassword: 'Testsifre123!' }
+        });
+        // Eski akıştan kalmış bir kayıt da korunur: öğrenme verisi olan hesap
+        // bir zamanlar doğrulanmıştır
+        const legacy = await createVerifiedUser('legacy-degisim@test.com', { createdAt: eski, isEmailVerified: false });
+        await UserWord.create({ user: legacy._id, word: new mongoose.Types.ObjectId() });
+        // Hiç doğrulanmamış, verisiz eski kayıt ise silinmeye devam eder
+        const cop = await User.create({
+            name: 'Cop', surname: 'X', email: 'cop-kayit@test.com', password: 'Testsifre123!',
+            isEmailVerified: false, createdAt: eski
+        });
+
+        await AuthService.purgeUnverifiedAccounts();
+        assert.equal(await User.countDocuments({ _id: user._id }), 1);
+        assert.equal(await UserWord.countDocuments({ user: user._id }), 1);
+        assert.equal(await User.countDocuments({ _id: legacy._id }), 1);
+        assert.equal(await User.countDocuments({ _id: cop._id }), 0);
+    });
+
+    it('şifre sıfırlama e-postayı da doğrulanmış sayar (link sahipliği kanıtlar)', async () => {
+        await User.create({
+            name: 'Sifirla', surname: 'X', email: 'sifirla-dogrula@test.com',
+            password: 'Testsifre123!', isEmailVerified: false
+        });
+        await api('POST', '/auth/forgot-password', { body: { email: 'sifirla-dogrula@test.com' } });
+        const res = await api('POST', '/auth/reset-password', {
+            body: { token: lastResetToken(), password: 'YeniSifre456!' }
+        });
+        assert.equal(res.status, 200);
+        const u = await User.findOne({ email: 'sifirla-dogrula@test.com' });
+        assert.equal(u.isEmailVerified, true);
+    });
+
+    it('push token cihaza aittir: aynı token başka hesaptan kaydedilince eski hesaptan düşer', async () => {
+        await createVerifiedUser('fcm-a@test.com');
+        await createVerifiedUser('fcm-b@test.com');
+        const a = (await login('fcm-a@test.com')).accessToken;
+        const b = (await login('fcm-b@test.com')).accessToken;
+        await api('PUT', '/auth/update-info', { token: a, body: { fcmToken: 'ortak-cihaz' } });
+        await api('PUT', '/auth/update-info', { token: b, body: { fcmToken: 'ortak-cihaz' } });
+
+        const ua = await User.findOne({ email: 'fcm-a@test.com' }).select('+fcmToken');
+        const ub = await User.findOne({ email: 'fcm-b@test.com' }).select('+fcmToken');
+        assert.equal(ua.fcmToken, undefined, 'A\'nın bildirimleri B\'nin telefonuna gitmemeli');
+        assert.equal(ub.fcmToken, 'ortak-cihaz');
     });
 });
 
@@ -4480,5 +4563,74 @@ describe('Hikâyeler', () => {
         assert.equal(await seenDurumu(), true, 'değişmeyen görseller yeniden gönderilince halka yanmamalı');
 
         await Story.deleteMany({});
+    });
+});
+
+describe('Güvenlik regresyonları (26.09.2026 incelemesi)', () => {
+    const jwt = require('jsonwebtoken');
+
+    it('ön-kayıt: doğrulanmamış hesap sosyal girişle sahiplenilince saldırganın şifresi ve oturumu düşer', async () => {
+        const reg = await api('POST', '/auth/register', {
+            body: { name: 'Saldirgan', surname: 'X', email: 'onkayit-kurban@test.com', password: 'Saldirgan123!' }
+        });
+        assert.equal(reg.status, 201);
+
+        const idToken = jwt.sign({
+            sub: 'google-onkayit', email: 'onkayit-kurban@test.com', email_verified: true,
+            given_name: 'Kurban', family_name: 'Gercek'
+        }, 'sahte-imza');
+        const soc = await api('POST', '/auth/social', { body: { provider: 'google', idToken, deviceName: 'test-suite' } });
+        assert.equal(soc.status, 200);
+
+        const girisDenemesi = await api('POST', '/auth/login', {
+            body: { email: 'onkayit-kurban@test.com', password: 'Saldirgan123!' }
+        });
+        assert.notEqual(girisDenemesi.status, 200, 'saldırganın şifresi artık çalışmamalı');
+        const eskiOturum = await api('POST', '/auth/refresh', { body: { refreshToken: reg.json.refreshToken } });
+        assert.equal(eskiOturum.status, 401, 'kayıtta alınan oturum kapanmalı');
+
+        const me = (await api('GET', '/auth/me', { token: soc.json.accessToken })).json.data;
+        assert.equal(me.name, 'Kurban', 'ad sağlayıcıdan alınmalı');
+        assert.equal(me.isEmailVerified, true);
+    });
+
+    it('Apple token iptali: yapılandırma yoksa silme yine tamamlanır', async () => {
+        const { revokeAppleTokens } = require('../utils/appleRevoke');
+        const r = await revokeAppleTokens('kod');
+        assert.deepEqual(r, { revoked: false, reason: 'not_configured' });
+    });
+
+    it('Apple token iptali: kod token\'a çevrilip /auth/revoke çağrılır', async () => {
+        const { generateKeyPairSync } = require('node:crypto');
+        const { privateKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+        const env = {
+            APPLE_TEAM_ID: 'TEAM123456', APPLE_KEY_ID: 'KEY1234567', APPLE_REVOKE_CLIENT_ID: 'com.musubi.app',
+            APPLE_PRIVATE_KEY_B64: Buffer.from(privateKey.export({ type: 'pkcs8', format: 'pem' })).toString('base64')
+        };
+        const eski = { ...process.env };
+        Object.assign(process.env, env);
+        const realFetch = global.fetch;
+        const calls = [];
+        global.fetch = async (url, opts) => {
+            calls.push({ url, body: new URLSearchParams(opts.body) });
+            const json = url.endsWith('/auth/token') ? { refresh_token: 'apple-refresh' } : {};
+            return { ok: true, status: 200, json: async () => json };
+        };
+        try {
+            const { revokeAppleTokens } = require('../utils/appleRevoke');
+            const r = await revokeAppleTokens('taze-kod');
+            assert.deepEqual(r, { revoked: true });
+            assert.equal(calls[0].url, 'https://appleid.apple.com/auth/token');
+            assert.equal(calls[0].body.get('code'), 'taze-kod');
+            assert.equal(calls[1].url, 'https://appleid.apple.com/auth/revoke');
+            assert.equal(calls[1].body.get('token'), 'apple-refresh');
+            const secret = jwt.decode(calls[1].body.get('client_secret'), { complete: true });
+            assert.equal(secret.header.alg, 'ES256');
+            assert.equal(secret.payload.iss, 'TEAM123456');
+            assert.equal(secret.payload.sub, 'com.musubi.app');
+        } finally {
+            global.fetch = realFetch;
+            for (const k of Object.keys(env)) { if (eski[k] === undefined) delete process.env[k]; else process.env[k] = eski[k]; }
+        }
     });
 });
