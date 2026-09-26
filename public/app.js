@@ -186,9 +186,11 @@ function pagehead(jp, title, opts = {}) {
   </div>`;
 }
 function avatarHtml() {
-  const url = state.home?.avatarUrl;
+  const url = state.me?.avatarUrl ?? state.home?.avatarUrl;
   const initial = (state.me?.name || 'M').trim().charAt(0).toLocaleUpperCase('tr');
-  return url ? `<img class="avatar" src="${esc(url)}" alt="">` : `<div class="avatar" data-tab="settings">${esc(initial)}</div>`;
+  return url
+    ? `<img class="avatar" src="${esc(url)}" alt="" data-nav="profile-edit">`
+    : `<div class="avatar" data-nav="profile-edit">${esc(initial)}</div>`;
 }
 
 function sheet(html) { $('#sheet-slot').innerHTML = `<div class="overlay" data-overlay><div class="sheet">${html}</div></div>`; }
@@ -386,21 +388,231 @@ function showRegEmail() {
   });
 }
 
+// ─── Kişisel Bilgiler (v2) ───────────────────────────────────────
+// Tasarımdaki tek ekranın üç hâli (Figma Roadmap/v2.x.x):
+//   register — kayıt sihirbazı: fotoğraf + ad + soyad + kullanıcı adı
+//   setup    — kullanıcı adı olmayan hesap (needsUsername): fotoğraf + kullanıcı adı
+//   edit     — profil düzenleme: fotoğraf + kullanıcı adı, buton "Güncelle"
+//
+// Fotoğraf kayıtta GÖNDERİLEMEZ: doğrulanmamış hesap dosya yükleyemiyor.
+// Sihirbazda seçilen dosya state.wizard.avatarFile'da bekler ve e-posta
+// doğrulanıp uygulamaya girilince yüklenir (bkz. enterApp).
+const MAX_AVATAR_MB = 4;
+
+function avatarPicker(url) {
+  return `<div class="field"><label>Profil Fotoğrafı</label>
+    <div class="avatar-picker">
+      <div class="avatar-lg" id="av-preview">${url ? `<img src="${esc(url)}" alt="">` : I.user}</div>
+      <button class="btn btn-outline btn-sm" id="av-pick" type="button">Profil Fotoğrafı Ayarla</button>
+      <div class="tiny">PNG veya JPG • Maks. ${MAX_AVATAR_MB} MB</div>
+      <input type="file" id="av-file" accept="image/png,image/jpeg" hidden>
+    </div></div>`;
+}
+
+// Önizleme data: URL'iyle yapılır — CSP img-src blob:'a izin vermiyor
+// (object URL ile önizleme sessizce kırık görsel gösterirdi).
+const readDataUrl = (file) => new Promise((resolve) => {
+  const r = new FileReader();
+  r.onload = () => resolve(r.result);
+  r.readAsDataURL(file);
+});
+
+// Seçilen dosyayı önizler ve onChange(file, dataUrl) ile bildirir. 4 MB sınırı tasarımın
+// istemci kuralıdır; sunucu daha büyüğünü de kabul eder.
+function wireAvatarPicker(onChange) {
+  const input = $('#av-file');
+  $('#av-pick').addEventListener('click', () => input.click());
+  input.addEventListener('change', () => {
+    const file = input.files[0];
+    if (!file) return;
+    if (!/^image\/(png|jpeg)$/.test(file.type)) return toast('Yalnızca PNG veya JPG seçebilirsin', 'err');
+    if (file.size > MAX_AVATAR_MB * 1024 * 1024) return toast(`Fotoğraf en fazla ${MAX_AVATAR_MB} MB olabilir`, 'err');
+    readDataUrl(file).then((url) => {
+      $('#av-preview').innerHTML = `<img src="${esc(url)}" alt="">`;
+      onChange(file, url);
+    });
+  });
+}
+
+function usernameField(value) {
+  return `<div class="field"><label>Kullanıcı Adı</label>
+    <div class="input" id="w-username"><span class="at">@</span><input id="in-username" placeholder="username" autocomplete="off" autocapitalize="none" value="${esc(value || '')}"></div>
+    <div class="errline" id="un-status"></div></div>`;
+}
+
+// Yazarken POST /auth/check-username'e sorar. Sunucu adı normalize ettiği için
+// ("@Emo" → "emo") dönen biçim saklanır. check() son sonucu döndürür; buton
+// henüz cevap gelmemişken basılırsa beklenir.
+function wireUsernameCheck(initial) {
+  const input = $('#in-username'), status = $('#un-status'), wrap = $('#w-username');
+  let last = null, pending = null;
+  const run = async () => {
+    const raw = input.value;
+    if (!raw.trim()) { last = null; status.textContent = ''; status.className = 'errline'; wrap.classList.remove('bad'); return null; }
+    const res = await api('POST', '/auth/check-username', { username: raw }, { auth: Boolean(state.access) });
+    if (input.value !== raw) return last;          // yazmaya devam edilmiş, eski cevap
+    if (!res.ok) { status.textContent = res.json.message || 'Kontrol edilemedi'; return null; }
+    last = res.json.data;
+    const same = initial && last.username === initial;
+    status.className = 'errline' + (last.available ? ' okline' : '');
+    status.textContent = last.available ? (same ? '' : '✓ Kullanılabilir') : last.message;
+    wrap.classList.toggle('bad', !last.available);
+    return last;
+  };
+  const debounced = debounce(() => { pending = run(); }, 350);
+  input.addEventListener('input', () => { wrap.classList.remove('bad'); debounced(); });
+  if (input.value.trim()) pending = run();
+  return {
+    async check() { pending = run(); return pending; },
+    value: () => input.value.trim()
+  };
+}
+
+// Çok parçalı yükleme — api() JSON gönderiyor. Süresi dolmuş token'da önce
+// api() üzerinden yenileme tetiklenir, sonra bir kez daha denenir.
+async function uploadAvatar(file, retried = false) {
+  const form = new FormData();
+  form.append('image', file);
+  let res, json;
+  try {
+    res = await fetch('/api/users/me/avatar', {
+      method: 'PUT',
+      headers: { 'X-Musubi-Client': 'simulator', Authorization: 'Bearer ' + state.access },
+      body: form
+    });
+    json = await res.json().catch(() => ({}));
+  } catch {
+    return { ok: false, status: 0, json: { message: 'network error' } };
+  }
+  if (res.status === 401 && !retried) {
+    await api('GET', '/auth/me');
+    return uploadAvatar(file, true);
+  }
+  return { ok: res.ok, status: res.status, json };
+}
+
+async function refreshMe() {
+  const res = await api('GET', '/auth/me');
+  if (res.ok) state.me = res.json.data;
+  return res.ok;
+}
+
 function showRegName() {
+  const w = state.wizard;
   formScreen({
-    title: 'Adın Soyadın',
-    lead: 'Sana nasıl seslenelim?',
+    title: 'Kişisel Bilgiler',
+    lead: 'Lütfen tüm kişisel bilgilerinizi eksiksiz girin.',
     action: 'Devam Et',
-    body: `<div class="field"><label>Ad</label><div class="input">${I.user}<input id="in-name" placeholder="Adın" value="${esc(state.wizard.name || '')}"></div></div>
-           <div class="field"><label>Soyad</label><div class="input">${I.user}<input id="in-surname" placeholder="Soyadın" value="${esc(state.wizard.surname || '')}"></div></div>
+    body: `${avatarPicker(w.avatarPreview)}
+           <div class="grid2">
+             <div class="field"><label>Ad</label><div class="input"><input id="in-name" placeholder="Adın" value="${esc(w.name || '')}"></div></div>
+             <div class="field"><label>Soyad</label><div class="input"><input id="in-surname" placeholder="Soyadın" value="${esc(w.surname || '')}"></div></div>
+           </div>
+           ${usernameField(w.username)}
            <div class="errline" id="err"></div>`
   });
-  $('#f-action').addEventListener('click', () => {
-    const name = $('#in-name').value.trim();
-    if (!name) { $('#err').textContent = 'Adını girmen gerekiyor'; return; }
-    state.wizard.name = name;
-    state.wizard.surname = $('#in-surname').value.trim();
+  wireAvatarPicker((file, url) => { w.avatarFile = file; w.avatarPreview = url; });
+  const un = wireUsernameCheck();
+  $('#f-action').addEventListener('click', async () => {
+    const name = $('#in-name').value.trim(), err = $('#err');
+    if (!name) { err.textContent = 'Adını girmen gerekiyor'; return; }
+    const result = await un.check();
+    if (!result) { err.textContent = 'Bir kullanıcı adı seçmen gerekiyor'; return; }
+    if (!result.available) { err.textContent = ''; return; }
+    err.textContent = '';
+    w.name = name;
+    w.surname = $('#in-surname').value.trim();
+    w.username = result.username;
     go('reg-password');
+  });
+}
+
+// needsUsername: v2 öncesi açılmış hesap veya kullanıcı adı göndermeden kayıt.
+// Ana ekrana geçmeden önce bu ekran gösterilir (bkz. enterApp).
+function showProfileSetup() {
+  const pendingFile = state.wizard.avatarFile || null;
+  let file = pendingFile;
+  formScreen({
+    title: 'Kişisel Bilgiler',
+    lead: 'Devam etmeden önce bir kullanıcı adı seç.',
+    action: 'Devam Et',
+    backLabel: 'Çıkış Yap',
+    body: `${avatarPicker(file ? state.wizard.avatarPreview : state.me?.avatarUrl)}
+           ${usernameField('')}
+           <div class="errline" id="err"></div>`
+  });
+  // "Geri" burada çıkış demek: kullanıcı adı olmadan uygulamaya girilmez
+  $('[data-back]').addEventListener('click', (e) => { e.stopPropagation(); doLogout(); }, { capture: true });
+  wireAvatarPicker((f) => { file = f; });
+  const un = wireUsernameCheck();
+  $('#f-action').addEventListener('click', async () => {
+    const btn = $('#f-action'), err = $('#err');
+    const result = await un.check();
+    if (!result) { err.textContent = 'Bir kullanıcı adı seçmen gerekiyor'; return; }
+    if (!result.available) return;
+    btn.disabled = true;
+    const res = await api('PUT', '/auth/update-info', { username: result.username });
+    if (!res.ok) { btn.disabled = false; err.textContent = res.json.message || 'Kaydedilemedi'; return; }
+    state.me = res.json.data;
+    if (file) {
+      const up = await uploadAvatar(file);
+      if (!up.ok) toast(up.json.message || 'Fotoğraf yüklenemedi', 'err');
+    }
+    state.wizard.avatarFile = state.wizard.avatarPreview = null;
+    await refreshMe();
+    reset('home');
+  });
+}
+
+// Profil düzenleme — anasayfadaki avatar veya Ayarlar > Profili Düzenle
+function showProfileEdit() {
+  const me = state.me || {};
+  let file = null;
+  formScreen({
+    title: 'Kişisel Bilgiler',
+    lead: 'Lütfen tüm kişisel bilgilerinizi eksiksiz girin.',
+    action: 'Güncelle',
+    body: `${avatarPicker(me.avatarUrl)}
+           ${me.avatarUrl ? '<div class="row center" style="margin:-4px 0 12px"><button class="link" id="av-remove">Fotoğrafı Kaldır</button></div>' : ''}
+           ${usernameField(me.username)}
+           <div class="errline" id="err"></div>`
+  });
+  const btn = $('#f-action');
+  const un = wireUsernameCheck(me.username);
+  const dirty = () => Boolean(file) || un.value().replace(/^@/, '').toLowerCase() !== (me.username || '');
+  const sync = () => { btn.disabled = !dirty(); };
+  sync();
+  $('#in-username').addEventListener('input', sync);
+  wireAvatarPicker((f) => { file = f; sync(); });
+
+  $('#av-remove')?.addEventListener('click', async () => {
+    if (!guard(await api('DELETE', '/users/me/avatar'), 'Fotoğraf kaldırıldı')) return;
+    await refreshMe();
+    if (state.home) state.home.avatarUrl = null;
+    renderCurrent();
+  });
+
+  btn.addEventListener('click', async () => {
+    const err = $('#err');
+    err.textContent = '';
+    const nameChanged = un.value().replace(/^@/, '').toLowerCase() !== (me.username || '');
+    if (nameChanged) {
+      const result = await un.check();
+      if (!result?.available) { if (!result) err.textContent = 'Kullanıcı adı boş olamaz'; return; }
+    }
+    btn.disabled = true;
+    if (nameChanged) {
+      const res = await api('PUT', '/auth/update-info', { username: un.value() });
+      if (!res.ok) { btn.disabled = false; err.textContent = res.json.message || 'Kaydedilemedi'; return; }
+    }
+    if (file) {
+      const up = await uploadAvatar(file);
+      if (!up.ok) { btn.disabled = false; err.textContent = up.json.message || 'Fotoğraf yüklenemedi'; return; }
+      if (state.home) state.home.avatarUrl = up.json.data.avatarUrl;
+    }
+    await refreshMe();
+    toast('Profil güncellendi', 'ok');
+    back();
   });
 }
 
@@ -502,7 +714,7 @@ function showRegGoal() {
     const w = state.wizard, err = $('#err'), btn = $('#f-action');
     btn.disabled = true;
     const res = await api('POST', '/auth/register', {
-      name: w.name, surname: w.surname, email: w.email, password: w.password,
+      name: w.name, surname: w.surname, username: w.username, email: w.email, password: w.password,
       deviceName: 'web-simülatör',
       dailyGoal: picked,
       dailyReminder: w.dailyReminder !== false,
@@ -708,6 +920,14 @@ async function enterApp() {
   state.me = res.json.data;
   applyPrefs();
   renderDevBar();
+  // Kullanıcı adı olmadan uygulamaya girilmez (v2 öncesi hesaplar)
+  if (state.me.needsUsername) return reset('profile-setup');
+  // Kayıt sihirbazında seçilen fotoğraf doğrulamayı bekliyordu — şimdi yüklenir
+  if (state.wizard.avatarFile) {
+    const up = await uploadAvatar(state.wizard.avatarFile);
+    if (up.ok) { state.wizard.avatarFile = state.wizard.avatarPreview = null; await refreshMe(); }
+    else toast(up.json.message || 'Profil fotoğrafı yüklenemedi, Ayarlar\'dan tekrar dene', 'err');
+  }
   reset('home');
 }
 
@@ -1554,6 +1774,7 @@ function showSettings() {
 
       <div class="grouplabel" style="margin-top:6px">Hesap</div>
       <div class="group">
+        <button class="row-item" data-nav="profile-edit"><span class="ic">${I.user}</span><span class="lbl">Profili Düzenle</span><span class="val">${me.username ? '@' + esc(me.username) : ''}</span><span class="chev">${I.chevR}</span></button>
         <button class="row-item" data-nav="settings-password"><span class="ic">${I.key}</span><span class="lbl">Şifreyi Değiştir</span><span class="chev">${I.chevR}</span></button>
         <button class="row-item" data-nav="settings-notifications"><span class="ic">${I.bellRing}</span><span class="lbl">Bildirim Ayarları</span><span class="chev">${I.chevR}</span></button>
       </div>
@@ -1841,6 +2062,7 @@ const SHOW = {
   welcome: showWelcome,
   'reg-email': showRegEmail, 'reg-name': showRegName, 'reg-password': showRegPassword,
   'reg-reminder': showRegReminder, 'reg-goal': showRegGoal, 'reg-success': showRegSuccess,
+  'profile-setup': showProfileSetup, 'profile-edit': showProfileEdit,
   'verify-ok': showVerifyOk, 'verify-fail': showVerifyFail, 'verify-nudge': showVerifyNudge,
   login: showLogin, 'forgot-email': showForgotEmail, 'forgot-newpass': showForgotNewPass, 'reset-success': showResetSuccess,
 
@@ -1872,7 +2094,8 @@ $('#dev-bar').addEventListener('click', async (e) => {
   if (btn.dataset.dev === 'reset') return doLogout();
   if (btn.dataset.dev === 'fresh') {
     setTokens(null, null);
-    state.me = null; state.home = null; state.promptedPlacement = false; state.wizard = {};
+    state.me = null; state.home = null; state.promptedPlacement = false;
+    state.wizard = { username: 'test' + Date.now().toString(36).slice(-6) };
     reset('welcome'); go('reg-email');
     setTimeout(() => { const i = $('#in-email'); if (i) i.value = `test${Date.now().toString(36)}@musubi.dev`; }, 0);
   }
