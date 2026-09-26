@@ -4683,6 +4683,40 @@ describe('Güvenlik regresyonları (26.09.2026 incelemesi)', () => {
         }
     });
 
+    it('aynı anda gelen oturum başlatma istekleri günün TEK oturumunu açar', async () => {
+        const u = await createVerifiedUser('cift-oturum@test.com');
+        const { accessToken } = await login('cift-oturum@test.com');
+        const StudySession = require('../models/StudySession');
+        await StudySession.init();
+        // Servis doğrudan paralel çağrılır: HTTP üzerinden istekler yarış
+        // penceresine nadiren denk geliyor, servis seviyesinde güvenilir üretilir
+        const oturumlar = await Promise.all(Array.from({ length: 20 }, () =>
+            StudySessionService.startSession(u._id, 'N5')));
+        assert.equal(await StudySession.countDocuments({ user: u._id }), 1);
+        assert.equal(new Set(oturumlar.map(o => String(o._id))).size, 1);
+        const http = await api('POST', '/sessions/start', { token: accessToken, body: {} });
+        assert.equal(http.json.data._id, String(oturumlar[0]._id));
+    });
+
+    it('seri sıfırlama ön filtresi: dün çalışan korunur, iki gün önce çalışan sıfırlanır', async () => {
+        const a = await createVerifiedUser('seri-dun@test.com');
+        const b = await createVerifiedUser('seri-eski@test.com');
+        const { startOfDayInTz, addDays } = require('../utils/date.util');
+        const dun = addDays(startOfDayInTz('Europe/Istanbul'), -1);
+        await Streak.updateOne({ user: a._id }, { currentStreak: 5, lastStudyDate: new Date(dun.getTime() + 60 * 1000) });
+        await Streak.updateOne({ user: b._id }, { currentStreak: 5, lastStudyDate: addDays(dun, -1) });
+        await StreakService.resetExpiredStreaks();
+        assert.equal((await Streak.findOne({ user: a._id })).currentStreak, 5);
+        assert.equal((await Streak.findOne({ user: b._id })).currentStreak, 0);
+    });
+
+    it('bildirimler 90 günlük TTL ile silinir', async () => {
+        await Notification.init();
+        const idx = await Notification.collection.indexes();
+        const ttl = idx.find(i => i.expireAfterSeconds !== undefined);
+        assert.equal(ttl?.expireAfterSeconds, 90 * 24 * 60 * 60);
+    });
+
     it('Apple token iptali: yapılandırma yoksa silme yine tamamlanır', async () => {
         const { revokeAppleTokens } = require('../utils/appleRevoke');
         const r = await revokeAppleTokens('kod');

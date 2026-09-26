@@ -10,6 +10,16 @@ const StudySessionSchema = new mongoose.Schema({
         type: Date,
         default: Date.now
     },
+    // Oturumun ait olduğu günün BAŞLANGICI (kullanıcının saat diliminde gece
+    // yarısı, UTC olarak). Tek işi aşağıdaki tekillik index'i: "günde tek
+    // oturum" kuralı eskiden yalnızca bul-yoksa-oluştur ile korunuyordu ve
+    // aynı anda gelen iki /sessions/start (çift dokunma) günün İKİ oturumunu
+    // açabiliyordu — sayaçlar ikiye bölünüyordu. `date` alanı oluşturma anı
+    // olduğu için index'e uygun değil; bu alan günü temsil eder.
+    // Eski kayıtlarda yok (partial index onları dışarıda bırakır).
+    dayStart: {
+        type: Date
+    },
     totalWords: {
         type: Number,
         default: 0
@@ -44,6 +54,10 @@ const StudySessionSchema = new mongoose.Schema({
 });
 
 StudySessionSchema.index({ user: 1, date: 1 });
+StudySessionSchema.index(
+    { user: 1, dayStart: 1 },
+    { unique: true, partialFilterExpression: { dayStart: { $type: 'date' } } }
+);
 
 // "X/Y Tamamlandı" ifadesinin PAYI: günün NİHAİ cevabı verilmiş kelime sayısı.
 //

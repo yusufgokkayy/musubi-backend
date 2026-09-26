@@ -27,10 +27,14 @@ const StudySessionService = {
             return existingSession;
         }
 
-        return StudySession.create({
-            user: userId,
-            jlptLevel
-        });
+        // Gün anahtarıyla oluşturulur: aynı anda gelen ikinci istek unique
+        // index'e çarpar ve diğerinin açtığı oturumu kullanır
+        try {
+            return await StudySession.create({ user: userId, jlptLevel, dayStart: today });
+        } catch (err) {
+            if (err.code !== 11000) throw err;
+            return StudySession.findOne({ user: userId, dayStart: today });
+        }
     },
 
     // fromEmpty: ertelenmiş ("Şimdilik Geç") kelimenin günün ilk gerçek cevabı —

@@ -48,8 +48,15 @@ const StreakService = {
     // Cron ile her saat başı çalışır: her kullanıcının KENDİ saat diliminde
     // "dünden beri çalışmamış" olanların serisi sıfırlanır. İdempotent.
     async resetExpiredStreaks() {
-        const streaks = await Streak.find({ currentStreak: { $gt: 0 } })
-            .populate('user', 'timezone');
+        // Ön filtre: sıfırlanacak seri, kullanıcının "dün"ünün başlangıcından
+        // önce çalışmıştır; o an her saat diliminde en geç ŞİMDİ - 24 saattir.
+        // Yani son 24 saatte çalışmış kimse sıfırlanamaz ve taranmaz. Eskiden
+        // her saat tüm aktif seriler yükleniyordu.
+        const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000);
+        const streaks = await Streak.find({
+            currentStreak: { $gt: 0 },
+            $or: [{ lastStudyDate: { $lt: cutoff } }, { lastStudyDate: null }]
+        }).populate('user', 'timezone');
 
         for (const streak of streaks) {
             try {
