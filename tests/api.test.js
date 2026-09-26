@@ -2685,7 +2685,8 @@ describe('Ana ekran (Home)', () => {
         assert.equal(d.avatarUrl, null, 'avatar yükleme yolu henüz yok');
 
         assert.equal(d.unreadNotifications, 0);
-        await api('POST', '/notifications/test', { token, body: {} });
+        const me = (await api('GET', '/auth/me', { token })).json.data;
+        await NotificationService.create(me._id, { type: 'test', title: 'T', body: 'B' });
         const sonra = (await api('GET', '/home/summary', { token })).json.data;
         assert.equal(sonra.unreadNotifications, 1, 'zil ikonunun rozeti');
     });
@@ -4592,6 +4593,57 @@ describe('Güvenlik regresyonları (26.09.2026 incelemesi)', () => {
         const me = (await api('GET', '/auth/me', { token: soc.json.accessToken })).json.data;
         assert.equal(me.name, 'Kurban', 'ad sağlayıcıdan alınmalı');
         assert.equal(me.isEmailVerified, true);
+    });
+
+    it('gövdede sorgu operatörü reddedilir (NoSQL enjeksiyonu)', async () => {
+        const u = await createVerifiedUser('nosql-hedef@test.com');
+        for (const body of [
+            { email: { $ne: null }, password: 'x' },
+            { email: 'a@b.com', nested: [{ deep: { $regex: '^a' } }] }
+        ]) {
+            const res = await api('POST', '/auth/login', { body });
+            assert.equal(res.status, 400, JSON.stringify(body));
+        }
+        const hedef = await User.findById(u._id);
+        assert.ok(!hedef.loginThrottle?.failureCount, 'rastgele hesaba hatalı deneme yazılmamalı');
+
+        // Derin iç içe gövde yığını taşırmaz (özyinelemesiz tarama)
+        let derin = 'x';
+        for (let i = 0; i < 5000; i++) derin = [derin];
+        const { hasOperatorKey } = require('../middlewares/sanitize');
+        assert.equal(hasOperatorKey({ a: derin }), false);
+    });
+
+    it('PUT /streak/update kaldırıldı: çalışmadan seri sürdürülemez', async () => {
+        await createVerifiedUser('seri-hile@test.com');
+        const { accessToken } = await login('seri-hile@test.com');
+        const res = await api('PUT', '/streak/update', { token: accessToken });
+        assert.equal(res.status, 404);
+        const s = await api('GET', '/streak', { token: accessToken });
+        assert.equal(s.json.data.currentStreak, 0);
+    });
+
+    it('POST /notifications/test yalnızca admin; metin uzunluğu sınırlı', async () => {
+        await createVerifiedUser('bildirim-user@test.com');
+        await createVerifiedUser('bildirim-admin@test.com', { role: 'admin' });
+        const user = (await login('bildirim-user@test.com')).accessToken;
+        const admin = (await login('bildirim-admin@test.com')).accessToken;
+        assert.equal((await api('POST', '/notifications/test', { token: user, body: {} })).status, 403);
+        const ok = await api('POST', '/notifications/test', { token: admin, body: { title: 'x'.repeat(500) } });
+        assert.equal(ok.status, 200);
+        assert.equal(ok.json.data.title.length, 100);
+    });
+
+    it('App Check: zorlama açıkken başlıksız kayıt/giriş 401, kapalıyken geçirgen', async () => {
+        process.env.APP_CHECK_ENFORCE = 'true';
+        try {
+            const res = await api('POST', '/auth/check-email', { body: { email: 'appcheck@test.com' } });
+            assert.equal(res.status, 401);
+        } finally {
+            delete process.env.APP_CHECK_ENFORCE;
+        }
+        const res = await api('POST', '/auth/check-email', { body: { email: 'appcheck@test.com' } });
+        assert.equal(res.status, 200);
     });
 
     it('Apple token iptali: yapılandırma yoksa silme yine tamamlanır', async () => {

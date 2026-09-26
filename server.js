@@ -1,6 +1,18 @@
 const dotenv = require('dotenv');
 dotenv.config({ path: './.env' });
 
+// Ortam doğrulaması — her şeyden ÖNCE. Bazı davranışlar NODE_ENV'e bağlı ve
+// "test" değeri bilerek gevşektir: sosyal giriş token imzası doğrulanmaz, mail
+// gönderilmez, rate limit kapalıdır. Test süiti app.js'i doğrudan kullanır,
+// server.js'i hiç çalıştırmaz; yani gerçek bir sunucunun test modunda açılması
+// yalnızca yanlış yapılandırma olabilir ve bu, herkesin herkes olarak giriş
+// yapabildiği bir sunucu demektir. Tanınmayan/boş değerde de açılmaz.
+const ALLOWED_ENVS = ['production', 'development'];
+if (!ALLOWED_ENVS.includes(process.env.NODE_ENV)) {
+    console.error(`NODE_ENV="${process.env.NODE_ENV ?? ''}" geçersiz — production veya development olmalı. Sunucu başlatılmadı.`);
+    process.exit(1);
+}
+
 const connectDatabase = require('./config/db');
 const cron = require('node-cron');
 

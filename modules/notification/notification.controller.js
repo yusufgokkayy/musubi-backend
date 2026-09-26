@@ -22,11 +22,11 @@ const NotificationController = {
     // Elle push testi: giriş yapmış kullanıcının kayıtlı fcmToken'ına anında
     // gönderir, notificationSettings'ten bağımsız (test tipi SETTING_MAP'te yok)
     sendTest: catchAsync(async (req, res) => {
-        const { title, body } = req.body;
+        const { title, body } = req.body || {};
         const notification = await NotificationService.create(req.user.id, {
             type: 'test',
-            title: title || 'Test Bildirimi',
-            body: body || 'Bu bir test bildirimidir.',
+            title: String(title || 'Test Bildirimi').slice(0, 100),
+            body: String(body || 'Bu bir test bildirimidir.').slice(0, 500),
             data: { test: true }
         });
         res.status(200).json({ success: true, data: notification });
