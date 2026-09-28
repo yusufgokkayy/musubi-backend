@@ -4,6 +4,8 @@ Mobil entegrasyon için tam sözleşme. Tüm yollar `/api` önekiyle başlar, t�
 
 **Genel kurallar:** İstek gövdesinde `$` ile başlayan hiçbir anahtar kabul edilmez (`400 "Geçersiz istek gövdesi"`) — sorgu operatörü enjeksiyonuna karşı. Açık auth uçları (`check-email`, `register`, `login`, `social`, `forgot-password`, `resend-verification-email`) sunucuda `APP_CHECK_ENFORCE=true` iken `X-Firebase-AppCheck` başlığı ister (Firebase App Check token'ı); başlık yoksa/geçersizse `401`. Varsayılan kapalıdır.
 
+**Bekleme süresi:** Giriş kilidi ve mail kısıtı `429`'larında `details.retryAfterSeconds` (kaç saniye sonra tekrar denenebileceği) ve standart `Retry-After` başlığı döner — "Tekrar Gönder (54)" gibi geri sayımlar bununla kurulur.
+
 **Zarf:** Her başarılı yanıt `{ "success": true, ... }`, her hata `{ "success": false, "message": "..." }` biçimindedir. Bazı hatalar ayrıca `details` nesnesi taşır — istemcinin üzerine iş yapabileceği makine-okur veri (örn. `POST /quiz/start` cooldown'ında `nextAttemptAllowedAt`). `details` isteğe bağlıdır, yokluğunda hata biçimi değişmez.
 
 **Kimlik doğrulama:** 🔒 işaretli endpoint'ler `Authorization: Bearer <accessToken>` başlığı ister. ✉️ işaretli olanlar ayrıca doğrulanmış e-posta gerektirir (aksi halde `403 "Please verify your email first"`). Access token ~15 dk geçerlidir; `401 "Token expired"` alınca `/auth/refresh` çağrılır, o da 401 dönerse login ekranına dönülür.
@@ -1088,7 +1090,8 @@ istemcinin hiçbir şey hatırlaması gerekmez: kuyruk, sıra ve ilerleme sunucu
                                 // (gün başına tek StudySession var; ikinci havuz
                                 //  açılınca yeni oturum açılmaz, aynı kayıt
                                 //  yeniden açılır). Havuz değişimi poolNo'dan anlaşılır.
-    "jlptLevel": "N5",          // kullanıcının activeLevel'ı
+    "jlptLevel": "N5",          // DERSİN seviyesi (gün içinde seviye değiştiyse activeLevel'dan farklı)
+    "levelStartsTomorrow": false,
     "poolNo": 1,                // aktif havuz (1 = günün havuzu, 2 = ekstra)
     "startedAt": "2026-09-21T06:12:00.000Z",
     "queue": ["665f2b...", "665f2c..."],  // önce dokunulmamışlar, SONDA ertelenenler
@@ -1133,18 +1136,15 @@ liste sırası: kilitli üstte, tamamlanan altta).
   "success": true,
   "data": {
     "completionThreshold": 75,   // "Bir sonraki seviyeye geçmek için listeyi %75 oranında tamamlayın" kutusu
-    "activeLevel": "N4",
-    // BUGÜNKÜ DERSİN seviyesi. activeLevel anında değişir ama derse
-    // başlandıysa bugün eski seviyede devam eder (bkz. GET /userwords/today)
-    "lessonLevel": "N5",
-    "levelStartsTomorrow": true,         // günlük dersin çekildiği seviye
+    "activeLevel": "N4",         // seçili seviye. Bugünkü DERSİN seviyesi bundan farklı
+                                 // olabilir → lessonLevel/levelStartsTomorrow GET /home/summary'de
     "levels": [
       {
         "jlptLevel": "N3",
         "label": "Orta",         // satır başlığı: "N3 • Orta"
         "isUnlocked": false,
         "completionRate": 0,
-        "totalWords": 500,
+        "totalWords": 1045,
         "isActive": false,
         "state": "locked",       // locked | available | active | completed
         "canSelect": false,      // satırdaki "Geç" bağlantısı çizilir mi
@@ -1152,12 +1152,12 @@ liste sırası: kilitli üstte, tamamlanan altta).
       },
       {
         "jlptLevel": "N4", "label": "Temel", "isUnlocked": true,
-        "completionRate": 42, "totalWords": 400,
+        "completionRate": 42, "totalWords": 533,
         "isActive": true, "state": "active", "canSelect": false, "unlockHint": null
       },
       {
         "jlptLevel": "N5", "label": "Başlangıç", "isUnlocked": true,
-        "completionRate": 88, "totalWords": 300,
+        "completionRate": 88, "totalWords": 451,
         "isActive": false, "state": "completed", "canSelect": true, "unlockHint": null
       }
     ]
@@ -1192,16 +1192,21 @@ Yanıt, `GET /progress` ile **birebir aynı gövdedir** (güncellenmiş hâliyle
 
 Hatalar: `400 "jlptLevel N5-N1 arasında olmalı"` · `403 "Bu seviye henüz kilitli"`.
 
-İlerleme **hiçbir şekilde silinmez**: geçiş yalnızca günlük dersin hangi havuzdan
-çekileceğini değiştirir. Gün ortasında seviye değiştiren kullanıcının eski
-havuzu da durur (havuz anahtarı `{user, gün, jlptLevel}`), geri döndüğünde
-kaldığı yerden devam eder. Seri (streak) seviyeden bağımsızdır, bozulmaz.
+İlerleme **hiçbir şekilde silinmez**: geçiş yalnızca günlük dersin hangi seviyeden
+çekileceğini değiştirir. Seri (streak) seviyeden bağımsızdır, bozulmaz.
+
+**Gün içinde değişim (21.09.2026):** `activeLevel` anında değişir, ama bugün
+derse başlanmışsa (en az bir kelimeye dokunulmuşsa) **bugünkü ders eski
+seviyede sürer, yeni seviye yarın başlar**. Bunu `GET /home/summary`'deki
+`lessonLevel` + `levelStartsTomorrow: true` söyler ("Bugünkü dersine başladığın
+için N4 yarın başlayacak"). Bugün hiç cevap verilmemişse ders anında yeni
+seviyeden kurulur. Ayrıntı: `GET /userwords/today`.
 
 Bu alan `PUT /auth/update-info` ile **değiştirilemez**; kilit kontrolünün tek
 kapısı burasıdır.
 
 **İstisna — Seviye Tespit Sınavı:** placement bittiğinde `activeLevel` belirlenen
-seviyeye (`summary.determinedLevel`) sunucu tarafından taşınır, ayrıca onay
+seviyeye (`result.determinedLevel`) sunucu tarafından taşınır, ayrıca onay
 istenmez. Sınavın amacı zaten kullanıcıyı doğru seviyeye yerleştirmektir.
 
 ### GET /progress/:jlptLevel/distribution 🔒✉️
@@ -1598,6 +1603,12 @@ Anasayfanın tek istekte tüm verisi. **Hikâye şeridi buna dahil değildir** �
     // Başlığın altındaki seviye bandı: "N4 • Temel Seviyesi"
     "activeLevel": "N4",
     "activeLevelLabel": "Temel",
+    // BUGÜNKÜ DERSİN seviyesi. Gün içinde seviye değiştirilmiş ve bugün derse
+    // başlanmışsa activeLevel'dan farklıdır: ders bugün eski seviyede sürer,
+    // yeni seviye yarın başlar → levelStartsTomorrow: true ve istemci
+    // "Bugünkü dersine başladığın için N4 yarın başlayacak" der.
+    "lessonLevel": "N5",
+    "levelStartsTomorrow": true,
     // "🔓 Kilit Açıldı / N4 • Temel Seviyesi Hazır / [Şimdi Geç]" kartı.
     // Yalnızca aktif seviyenin BİR SONRAKİSİ açıldıysa dolu, aksi halde null —
     // kart da yalnızca doluyken çizilir. Buton PUT /progress/active-level çağırır;
