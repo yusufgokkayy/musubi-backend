@@ -1,7 +1,7 @@
 // veri-seti/musubi_n{1..5}.json içeriğini Word koleksiyonuna aktarır.
 // Ders kitabı kökenli, meaningTr/örnek cümle/eş anlamlı cevap dizileriyle
-// zaten zenginleştirilmiş omurga müfredat verisi — eski content-pipeline
-// hattının yerini alır (bkz. seeds/PLAN.md).
+// zaten zenginleştirilmiş omurga müfredat verisi — 22.07.2026'da terk edilen
+// eski content-pipeline (LLM + kotoba-analyzer) hattının yerini aldı.
 //
 // Kullanım: node seeds/seed-veri-seti.js
 const mongoose = require('mongoose');

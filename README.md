@@ -166,7 +166,7 @@ models/                    # Mongoose şemaları
 modules/<özellik>/         # her özellik: routes → controller → service üçlüsü
 utils/                     # jwt, catchAsync, AppError, sendEmail, notification (FCM), date.util, event.util,
                            # i18n (TR/EN), webPage (HTML sayfa kabuğu), emailTemplate, password.util
-seeds/                     # seed-veri-seti.js, furigana-merge.js, export-vocab.js, PLAN.md
+seeds/                     # seed-veri-seti.js, furigana-merge.js
 tests/                     # API sözleşme testleri (npm test)
 ```
 

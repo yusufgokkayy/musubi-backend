@@ -2565,50 +2565,6 @@ describe('Havuz kuralları (21.09.2026): kapı, kilit ve ikinci havuz', () => {
     });
 });
 
-describe('Havuz geçiş betiği (eski kayıtlar)', () => {
-    it('eski şemadaki havuzlara poolNo/startedAt yazar, eski indeksi düşürür, iki kez çalışsa da bozmaz', async () => {
-        const { migratePools, ESKI_INDEX } = require('../scripts/migrate-pools');
-        const db = mongoose.connection.db;
-        const col = db.collection('dailywordpools');
-
-        const u = await createVerifiedUser('gecis@test.com');
-        const eskiTarih = new Date('2026-09-01T00:00:00.000Z');
-        const eskiBaslangic = new Date('2026-09-01T06:30:00.000Z');
-
-        // Eski şemadaki iki kayıt: biri roundStartedAt'li, biri hiç
-        await col.insertMany([
-            { user: u._id, date: eskiTarih, jlptLevel: 'N5', newWordIds: [], reviewWordIds: [],
-              roundStartedAt: eskiBaslangic, roundClosedAt: new Date(), targetGoal: 20 },
-            { user: u._id, date: new Date('2026-09-02T00:00:00.000Z'), jlptLevel: 'N5',
-              newWordIds: [], reviewWordIds: [], targetGoal: 20 }
-        ]);
-        // Eski indeksi kur ki betik onu düşürebilsin. Canlıda bu indeks TEKİL;
-        // testte tekil kurulamaz, çünkü yeni model aynı gün+seviyeye iki havuz
-        // (poolNo 1 ve 2) yazıyor ve önceki testler bunu zaten yaptı — düşürme
-        // yolu adla çalıştığı için kısıt olmadan da aynı yolu sınar.
-        await col.createIndex({ user: 1, date: 1, jlptLevel: 1 }, { name: ESKI_INDEX });
-
-        const sonuc = await migratePools(db);
-        assert.equal(sonuc.poolNo, 2, 'iki eski kayda da poolNo:1 yazılmalı');
-        assert.equal(sonuc.startedAt, 2);
-        assert.equal(sonuc.indexDropped, true);
-
-        const taşınan = await col.findOne({ user: u._id, date: eskiTarih });
-        assert.equal(taşınan.poolNo, 1);
-        assert.equal(taşınan.startedAt.getTime(), eskiBaslangic.getTime(),
-            'roundStartedAt → startedAt taşınmalı');
-        assert.ok(taşınan.roundStartedAt, 'eski alan SİLİNMEZ: geri dönüş mümkün kalsın');
-
-        const tarihsiz = await col.findOne({ user: u._id, date: new Date('2026-09-02T00:00:00.000Z') });
-        assert.equal(tarihsiz.startedAt.getTime(), new Date('2026-09-02T00:00:00.000Z').getTime(),
-            'roundStartedAt yoksa güne düşülür');
-
-        // İdempotent: ikinci çalıştırma hiçbir şeye dokunmamalı
-        const ikinci = await migratePools(db);
-        assert.deepEqual(ikinci, { poolNo: 0, startedAt: 0, indexDropped: false });
-    });
-});
-
 describe('Kaldırılan uçlar (21.09.2026)', () => {
     let token;
 

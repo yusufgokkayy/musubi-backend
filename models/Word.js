@@ -72,8 +72,9 @@ const WordSchema = new mongoose.Schema({
     imageUrl: {
         type: String
     },
-    // Aktif oyun havuzu: seviye başına frekansa göre seçilen çekirdek kelimeler
-    // (N5:300, N4:400, N3:550, N2:750, N1:1000). seeds/select-core.js ile işaretlenir.
+    // Aktif oyun havuzu (ders, sınav, kütüphane yalnızca isCore kelimeleri
+    // kullanır). 22.07.2026'dan beri seed-veri-seti.js veri setindeki TÜM
+    // kelimeleri true yazar; eskiden frekansa göre seçilen bir alt kümeydi.
     isCore: {
         type: Boolean,
         default: false
