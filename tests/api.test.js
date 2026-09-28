@@ -385,6 +385,8 @@ describe('Auth', () => {
         });
         assert.equal(besinci.status, 429);
         assert.match(besinci.json.message, /hatalı giriş/);
+        // Kilidin kalan süresi istemciye söylenir (geri sayım için)
+        assert.ok(besinci.json.details?.retryAfterSeconds > 0 && besinci.json.details.retryAfterSeconds <= 60);
 
         // Kilitliyken DOĞRU şifre de geçmemeli — yoksa kilit anlamsız olurdu
         const dogruSifre = await api('POST', '/auth/login', {
@@ -636,6 +638,8 @@ describe('Auth', () => {
         // dolunca çalışır (mobilde bu buton geri sayım göstermeli)
         const erken = await api('POST', '/auth/resend-verification-email', { body: { email } });
         assert.equal(erken.status, 429, 'kayıttan hemen sonra tekrar gönderim engellenmeli');
+        const kalan = erken.json.details?.retryAfterSeconds;
+        assert.ok(kalan > 0 && kalan <= 60, '"Tekrar Gönder (54)" geri sayımı sunucudan gelmeli');
 
         await expireMailCooldown(email);
         const ilk = await api('POST', '/auth/resend-verification-email', { body: { email } });

@@ -56,11 +56,22 @@ const errorHandler = (err, req, res, next) => {
         }
     }
 
+    // Bekleme gerektiren hatalar (giriş kilidi, mail kısıtı) kaç saniye
+    // beklenmesi gerektiğini err.retryAfterSeconds'ta taşır. Eskiden bu değer
+    // hesaplanıp HİÇBİR YERE yazılmıyordu — istemci "Tekrar Gönder (54)" geri
+    // sayımını tahminle kuruyordu. Hem standart Retry-After başlığına hem
+    // details'e yazılır.
+    let details = err.details;
+    if (Number.isFinite(err.retryAfterSeconds) && err.retryAfterSeconds > 0) {
+        res.set('Retry-After', String(err.retryAfterSeconds));
+        details = { ...(details || {}), retryAfterSeconds: err.retryAfterSeconds };
+    }
+
     res.status(statusCode).json({
         success: false,
         message,
         // Yalnızca AppError açıkça verdiyse eklenir (bkz. utils/AppError.js)
-        ...(err.details !== undefined && { details: err.details })
+        ...(details !== undefined && { details })
     });
 };
 
