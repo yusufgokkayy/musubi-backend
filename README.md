@@ -478,4 +478,4 @@ Test ortamında `sendEmail` gerçek gönderim yapmaz; mailler bellek içi bir ou
 
 ## Lisans
 
-Kod: bkz. [LICENSE](LICENSE). Kelime verisi CC BY — yukarıdaki atıflar korunmalıdır.
+Kod: Tüm hakları saklıdır (All Rights Reserved); yalnızca inceleme amacıyla yayınlanmıştır, izinsiz kullanılamaz. Bkz. [LICENSE](LICENSE). Kelime verisi CC BY — yukarıdaki atıflar korunmalıdır.
