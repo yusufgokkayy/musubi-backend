@@ -20,7 +20,10 @@ const QuizQuestionSchema = new mongoose.Schema({
     // fillblank: örnek cümlede boşluğa gelecek kelimeyi seçtir | image: görsele uyan kelimeyi seçtir
     format: {
         type: String,
-        enum: ['meaning', 'reverse', 'reading', 'typing', 'fillblank', 'image'],
+        // Üretilenler: meaning, reading, spelling, fillblank (bkz. quiz.service.js
+        // FORMAT_MIX). reverse/typing/image 13.10.2026'da karışımdan çıktı;
+        // eski denemelerin kayıtları okunabilsin diye enum'da duruyorlar.
+        enum: ['meaning', 'reading', 'spelling', 'fillblank', 'reverse', 'typing', 'image'],
         required: true
     },
     prompt: {

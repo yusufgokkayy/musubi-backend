@@ -1533,6 +1533,11 @@ Tek seferde **40 soruluk** karma sınav. Beş seviyeden soru gelir (N5:6, N4:6,
 N3:8, N2:10, N1:10), sorular kolaydan zora sıralıdır ve her soru kendi seviye
 rozetini taşır. **Geçme/kalma yoktur** — sınavın çıktısı bir seviyedir.
 
+> **Değişiklik (13.10.2026) — soru karışımı.** Sınav artık **dört format** üretir ve
+> hepsi 4 şıklıdır: `meaning` (anlam), `reading` (okunuş), `spelling` (yazılış — **yeni**),
+> `fillblank` (boşluk doldurma). `typing`, `reverse` ve `image` **artık üretilmiyor**.
+> `reading` şıkları **kana**dır (eskiden romaji). Ayrıntı: `POST /quiz/start`.
+
 > **Değişiklik (07.08.2026):** Sınav eskiden "merdiven"di — 10'ar soruluk beş
 > ayrı basamak, basamak başına %70 eşiği, `nextRung` ile devam. Tamamen kalktı.
 > **Seviye atlama sınavı (`levelup`) de kaldırıldı**: seviye artık yalnızca
@@ -1600,7 +1605,8 @@ gösterilir.
         "index": 0,
         "jlptLevel": "N5",                    // soru başlığındaki rozet
         "format": "meaning",
-        "prompt": { "kanji": "駅", "romaji": "eki", "audioUrl": "https://..." },
+        "prompt": { "kanji": "駅", "kana": "えき", "romaji": "eki", "type": "isim",
+                    "isKana": false, "audioUrl": "https://..." },
         "choices": ["istasyon", "tren", "araba", "ben"],  // doğru cevap işaretli DEĞİL
         "answered": false
       }
@@ -1614,20 +1620,38 @@ dolunca boş cevap gönderir (boş = yanlış). Sunucu tarafı denetim ağ
 gecikmesinde haksız "süren doldu" üretirdi ve burada hile motivasyonu yok —
 kullanıcı yüksek seviye çıkarsa kendine zor ders getirmiş olur.
 
-Soru formatları ve `prompt` biçimleri:
-| format | Ekran | prompt | choices |
-|---|---|---|---|
-| `meaning` | kelime → anlam seç | `{ kanji, romaji, audioUrl? }` | 4 anlam |
-| `reverse` | anlam → kelime seç | `{ meaning }` (ses YOK — cevabı söylerdi) | 4 kelime |
-| `reading` | kanji → okunuş seç | `{ kanji }` (ses YOK — okunuşu, yani cevabı söylerdi) | 4 okunuş |
-| `typing` | "Bu kelimenin Türkçesini yazınız" | `{ kanji, romaji, audioUrl? }` | YOK (serbest metin) |
-| `fillblank` | "Boşluğa uygun kelimeyi yerleştir" | `{ sentence: "東京____で会いましょう。" }` (ses yok) | 4 kelime |
-| `image` | "Doğru şıkkı işaretleyiniz" (görsel) | `{ imageUrl }` (ses yok) | 4 kelime |
+Soru formatları ve `prompt` biçimleri (hepsi **4 şıklı**, cevap seçilen şıkkın indeksidir):
 
-`fillblank` ve `image` yalnızca örnek cümlesi/görseli olan kelimelerde
-üretilir — içerik DB'ye girdikçe karışımda kendiliğinden görünmeye başlarlar,
-kod değişikliği gerekmez. `audioUrl` varsa "Dinle" butonu gösterilebilir
-("Yavaş" client'ta oynatma hızıyla yapılır).
+| format | Ekran | prompt | choices | Pay |
+|---|---|---|---|---|
+| `meaning` | "Bu kelimenin anlamını seçiniz" | `{ kanji, kana, romaji, type, isKana, audioUrl? }` | 4 anlam (kullanıcının dilinde) | %50 |
+| `reading` | "Kelimenin okunuşunu seçiniz" (漢字読み) | `{ kanji, type }` — **kana ve ses YOK**, cevabı söylerdi | 4 okunuş (**kana**) | %20 |
+| `spelling` | "Okunuşu verilen kelimenin yazılışını seçiniz" (表記) | `{ kana, type, audioUrl? }` — **kanji YOK** | 4 yazılış (kanji) | %15 |
+| `fillblank` | "Boşluğa uygun kelimeyi yerleştir" (文脈) | `{ sentence, sentenceFurigana? }` — ses yok | 4 kelime | %15 |
+
+Paylar **seviye başına** uygulanır: 6 soruluk seviye 3/1/1/1, 8 soruluk 4/2/1/1, 10 soruluk
+5/2/2/1 → 40 soruda 20 anlam, 8 okunuş, 7 yazılış, 5 boşluk doldurma. Bir kelime
+istenen formata uymuyorsa (kana ile yazılan kelimede okunuş/yazılış sorusu olmaz) yerine
+anlam sorusu gelir, yani sayılar veri eksikse anlam lehine kayabilir.
+
+- **`prompt`'ta boş alan bulunmaz** (sesi olmayan kelimede `audioUrl` hiç gelmez, `null` değil).
+- **`meaning`:** `isKana: true` ise kelime kana ile yazılır (`kanji` ve `kana` aynıdır);
+  okunuş satırını ikinci kez çizme.
+- **`reading`:** yanlış şıklar doğru okunuşun küçük bozulmalarıdır (びょういん →
+  ひょういん / びょいん / びよういん): sesli-sessiz, uzun-kısa ünlü, küçük っ ve ゃゅょ.
+  Kelimenin ekranda yazan okurigana'sı (食**べる**) şıklarda değişmez.
+- **`spelling`:** eş sesli kelime (紙 / 髪 → かみ) aynı soruda şık olmaz.
+- **`fillblank`:** boşluk `____` (dört alt çizgi) ile gösterilir. `sentence` düz cümledir;
+  `sentenceFurigana` aynı cümlenin okunuşlu hâlidir (`東京[とうきょう]____で会[あ]いましょう。`,
+  köşeli parantez kendinden önceki kanjinin okunuşu — `Word.exampleFurigana` ile aynı
+  kural). Tasarımdaki kart bunu çizer; alan yoksa `sentence`'a düş. Cümlede `**` işareti
+  **bulunmaz**.
+- **Kelime seçimi:** her seviye müfredat sırasına göre eşit dilimlere bölünür ve her
+  dilimden bir kelime sorulur — sınav seviyeyi baştan sona yoklar.
+
+**Artık üretilmeyen formatlar:** `typing` (yazma), `reverse` (anlam → kelime) ve `image`
+(görselli). Karışım değişmeden önce başlamış yarım bir sınavda hâlâ görülebilirler (sınav
+30 dakikada kendiliğinden biter); cevapları eskisi gibi puanlanır.
 
 Süresi dolmamış yarım bir sınav varsa **yenisi açılmaz, o döner** (`answeredCount`
 ile nerede kalındığı bellidir). Aynı anda iki açık sınav, hangisinin cevabının
@@ -1645,17 +1669,17 @@ Her soru cevaplanır cevaplanmaz çağrılır; anlık "Doğru! / Yanlış Cevap!
 kartının verisi döner. Son soru cevaplanınca sınav otomatik sonuçlanır ve
 yanıta `result` eklenir.
 ```jsonc
-// İstek — şıklı soruda seçilen indeks (0-3), typing sorusunda yazılan METİN.
-// "Şimdilik Geç" ve süre dolması için null veya "" gönderilir (yanlış sayılır).
-{ "index": 4, "answer": 2 }        // veya { "index": 4, "answer": "istasyon" }
+// İstek — seçilen şıkkın indeksi (0-3).
+// "Şimdilik Geç" ve süre dolması için null gönderilir (yanlış sayılır).
+{ "index": 4, "answer": 2 }
 
 // 200 — ara soru
 {
   "success": true,
   "data": {
     "correct": true,
-    "word": { "kanji": "駅", "meaning": "istasyon" },  // kartın "駅 — istasyon" satırı
-    "correctIndex": 2,             // şıklı soruda; typing'de yerine "correctAnswer": "istasyon"
+    "word": { "kanji": "駅", "kana": "えき", "meaning": "istasyon" },  // kartın "駅 (えき) — istasyon" satırı
+    "correctIndex": 2,             // doğru şıkkın indeksi
     "answeredCount": 5,
     "totalQuestions": 40,
     "finished": false
@@ -1695,10 +1719,6 @@ yanıta `result` eklenir.
 `passed`, `passThreshold`, `nextRung`, `placementFinished`, `summary`,
 `failCount`, `cooldownDays` alanları **artık dönmüyor** — merdiven ve
 geçme/kalma kavramlarıyla birlikte kalktılar.
-
-Typing cevapları sunucuda toleranslı puanlanır: büyük/küçük harf, noktalama,
-fazla boşluk ve parantez içleri yok sayılır; anlamın virgülle ayrılmış her
-varyantı tek başına kabul edilir.
 
 Hatalar: `404 "Quiz not found"`, `400 "Bu quiz zaten sonuçlanmış"` (terk edilmiş
 sınav da bunu döner), `400 "Quiz süresi doldu, yeniden başlat"` (30 dk),

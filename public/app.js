@@ -1465,10 +1465,14 @@ async function beginQuiz() {
   reset('quiz-question');
 }
 
+// Üretilen dört format: meaning, reading, spelling, fillblank. reverse/typing/
+// image 13.10.2026'da karışımdan çıktı; yarım kalmış eski bir sınav açılırsa
+// bozulmasın diye çizimleri duruyor.
 const QUIZ_INSTR = {
-  meaning: 'Bu kelimenin Türkçesini seçiniz.', reverse: 'Anlama uyan kelimeyi seçiniz.',
-  reading: 'Kelimenin okunuşunu seçiniz.', typing: 'Bu kelimenin Türkçesini yazınız.',
-  fillblank: 'Boşluğa uygun kelimeyi yerleştir.', image: 'Doğru şıkkı işaretleyiniz.'
+  meaning: 'Bu kelimenin anlamını seçiniz.', reading: 'Kelimenin okunuşunu seçiniz.',
+  spelling: 'Okunuşu verilen kelimenin yazılışını seçiniz.', fillblank: 'Boşluğa uygun kelimeyi yerleştir.',
+  reverse: 'Anlama uyan kelimeyi seçiniz.', typing: 'Bu kelimenin Türkçesini yazınız.',
+  image: 'Doğru şıkkı işaretleyiniz.'
 };
 
 function showQuizQuestion() {
@@ -1478,11 +1482,18 @@ function showQuizQuestion() {
 
   const prompt =
     q.format === 'reverse' ? `<div class="wordcard"><div class="kanji" style="font-size:26px;font-family:inherit;font-weight:750">${esc(q.prompt.meaning)}</div></div>`
-    : q.format === 'fillblank' ? `<div class="wordcard"><div class="kanji" style="font-size:28px">${esc(q.prompt.sentence)}</div></div>`
+    : q.format === 'fillblank' ? `<div class="wordcard"><div class="example" style="background:none;font-size:24px">${furigana(q.prompt.sentenceFurigana, q.prompt.sentence)}</div></div>`
     : q.format === 'image' ? `<img class="qimage" src="${esc(q.prompt.imageUrl)}" alt="soru görseli">`
+    // Yazılış sorusu: ekranda yalnızca okunuş var
+    : q.format === 'spelling' ? `<div class="wordcard">
+         ${q.prompt.type ? `<div class="type">${esc(q.prompt.type)}</div>` : ''}
+         <div class="kanji">${esc(q.prompt.kana)}</div>
+       </div>`
+    // Anlam sorusu kelimeyi okunuşuyla gösterir; okunuş sorusunda kana GELMEZ
     : `<div class="wordcard">
+         ${q.prompt.type ? `<div class="type">${esc(q.prompt.type)}</div>` : ''}
          <div class="kanji">${esc(q.prompt.kanji)}</div>
-         ${q.prompt.romaji ? `<div class="kana">${esc(q.prompt.romaji)}</div>` : ''}
+         ${q.prompt.kana && !q.prompt.isKana ? `<div class="kana">${esc(q.prompt.kana)}</div>` : ''}
        </div>`;
 
   const answer = q.format === 'typing'
@@ -1532,11 +1543,14 @@ async function answerQuiz(answer) {
     const ok = $(`[data-choice="${d.correctIndex}"]`); if (ok) ok.classList.add('correct');
     if (!d.correct && typeof answer === 'number') { const bad = $(`[data-choice="${answer}"]`); if (bad) bad.classList.add('wrong'); }
   }
-  const shown = d.correctAnswer ?? (d.correctIndex !== undefined ? Q.questions[Q.idx].choices?.[d.correctIndex] : '');
+  // Kart her formatta aynı satırı gösterir: "駅 (えき) — istasyon". Doğru şık
+  // zaten yukarıda yeşile boyandı; satır kelimenin tamamını öğretir.
+  const shown = d.correctAnswer ?? d.word?.meaning;
+  const reading = d.word?.kana && d.word.kana !== d.word.kanji ? ` (${d.word.kana})` : '';
   $('#q-foot').innerHTML = `<div class="footer" style="padding:0">
       <div class="feedback ${d.correct ? 'good' : 'bad'}">
         <div class="hd">${d.correct ? I.checkCircle : I.xCircle}<b>${d.correct ? 'Doğru!' : 'Yanlış Cevap!'}</b></div>
-        <div class="ans"><span class="jp">${esc(d.word?.kanji || '')}</span> — ${esc(shown || d.word?.meaning || '')}</div>
+        <div class="ans"><span class="jp">${esc((d.word?.kanji || '') + reading)}</span> — ${esc(shown || '')}</div>
         <button class="btn ${d.correct ? 'btn-ok' : 'btn-primary'}" id="b-qnext">${d.finished ? 'Sonucu Gör' : 'Devam Et'}</button>
       </div></div>`;
   $('#b-qnext').addEventListener('click', () => {

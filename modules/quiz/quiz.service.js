@@ -5,13 +5,9 @@ const User = require('../../models/User');
 const AppError = require('../../utils/AppError');
 const ProgressService = require('../progress/progress.service');
 const logEvent = require('../../utils/event.util');
-const { gradeTyping, wordAnswerVariants, meaningIn } = require('../../utils/answer.util');
+const { gradeTyping, wordAnswerVariants, meaningIn, normalizeAnswer } = require('../../utils/answer.util');
+const { readingMutations } = require('../../utils/kana.util');
 const storage = require('../../config/storage');
-
-// Kelimenin sesi depolama ANAHTARI olarak saklanır (Word.audioKey); soru
-// istemciye URL ile gider. Aggregate düz nesne döndürdüğü için Word'ün
-// audioUrl virtual'ı burada çalışmaz.
-const audioUrlOf = (word) => (word.audioKey ? storage.publicUrl(word.audioKey) : undefined);
 
 // Soruların dili kullanıcının arayüz dilidir (User.preferences.language)
 const userLang = async (userId) =>
@@ -62,6 +58,244 @@ const shuffle = (arr) => {
     return a;
 };
 
+// ——— SORU KARIŞIMI (13.10.2026) ———
+//
+// JLPT'nin kelime bölümünün (文字・語彙) bizim veriyle kurulabilen üç soru tipi
+// + uygulamanın öğrettiği şeyin kendisi (Türkçe anlam). Hepsi 4 şıklıdır:
+//
+//   meaning   → kelime (kanji + kana) gösterilir, ANLAMI seçilir
+//   reading   → kanji gösterilir, OKUNUŞU seçilir            (漢字読み)
+//   spelling  → okunuş (kana) gösterilir, YAZILIŞI seçilir    (表記)
+//   fillblank → cümledeki boşluğa uyan kelime seçilir         (文脈規定)
+//
+// Eski karışımdan çıkanlar ve nedenleri:
+//   typing  — 20 saniyede Türkçe yazmak bilgiden çok klavye hızını ve eş
+//             anlamlı eşleşmesini ölçüyordu; derslerde zaten var.
+//   reverse — "anlam → kelime seç" meaning ile aynı bilgiyi ölçüyordu.
+//   image   — yalnızca somut isimler çizilebilir, 5816 kelimeye görsel yok.
+// Bu üçü artık ÜRETİLMEZ ama şemada ve puanlamada durur: yarım kalmış eski bir
+// denemenin soruları cevaplanabilmeli.
+const FORMAT_MIX = { meaning: 0.5, reading: 0.2, spelling: 0.15, fillblank: 0.15 };
+
+// count soruyu karışıma böler (en büyük kalan yöntemi): 6 → 3/1/1/1,
+// 8 → 4/2/1/1, 10 → 5/2/2/1. Oranlar seviye başına uygulanır ki her seviyenin
+// soruları aynı çeşitlilikte olsun.
+const allocateFormats = (count) => {
+    const parts = Object.entries(FORMAT_MIX).map(([format, share]) => {
+        const exact = count * share;
+        return { format, n: Math.floor(exact), rest: exact - Math.floor(exact) };
+    });
+    let left = count - parts.reduce((sum, p) => sum + p.n, 0);
+    for (const p of [...parts].sort((a, b) => b.rest - a.rest)) {
+        if (left-- <= 0) break;
+        p.n += 1;
+    }
+    return parts.flatMap(p => Array(p.n).fill(p.format));
+};
+
+const KANJI_RE = /[㐀-䶿一-鿿]/;
+const hasKanji = (w) => KANJI_RE.test(w.kanji || '');
+
+// Kelimenin "kalıbı": kanjiler K'ye çevrilir, okurigana olduğu gibi kalır
+// (努める → Kめる, 家族 → KK). Aynı kalıptaki kelimeler birbirinin inandırıcı
+// yanlış şıkkıdır; kalıbı farklı olan şık bakmadan elenir.
+const shapeOf = (w) => [...w.kanji].map(c => (KANJI_RE.test(c) ? 'K' : c)).join('');
+
+// Okunuşu kanjinin karşıladığı kısım ile ekranda zaten yazan okurigana'ya
+// ayırır: 食べる / たべる → { prefix: '', core: 'た', suffix: 'べる' }.
+// Okunuş sorusunda yalnızca `core` bozulur — okurigana soruda göründüğü için
+// onu değiştiren şık (たへる) kendini ele verir.
+const splitOkurigana = (kanji, kana) => {
+    const chars = [...kanji];
+    let start = 0;
+    while (start < chars.length && !KANJI_RE.test(chars[start])) start++;
+    let end = chars.length;
+    while (end > start && !KANJI_RE.test(chars[end - 1])) end--;
+    const prefix = chars.slice(0, start).join('');
+    const suffix = chars.slice(end).join('');
+    return kana.startsWith(prefix) && kana.endsWith(suffix) && kana.length > prefix.length + suffix.length
+        ? { prefix, core: kana.slice(prefix.length, kana.length - suffix.length), suffix }
+        : { prefix: '', core: kana, suffix: '' };
+};
+
+// Boşluk doldurma yalnızca içerik kelimelerinde sorulur. İşlev kelimelerinde
+// (この / あの / どの, と / や …) aynı türden her şık boşluğa dilbilgisi olarak
+// oturur; "____音楽をよく聞きますか" sorusunun tek doğru cevabı olmaz.
+const FILLBLANK_TYPES = new Set(['isim', 'fiil', 'i-sıfat', 'na-sıfat', 'zarf', 'kalıp']);
+const BLANK = '____';
+// Örnek cümledeki hedef kelime işareti: 東京**駅**で会いましょう。
+const BOLD = /\*\*(.+?)\*\*/;
+const audioUrlOf = (word) => (word.audioKey ? storage.publicUrl(word.audioKey) : undefined);
+
+// Boşluk doldurma cümlesi. Hedef kelime cümlede ** ile işaretlidir; işaretli
+// parça kelimenin SÖZLÜK biçimi değilse (食べ**ました**) soru kurulmaz —
+// şıklar sözlük biçimindedir, çekimli boşluğa oturmazlar.
+//
+// Eskiden cümle `example.replaceAll(kanji, '____')` ile kuruluyordu ve veri
+// setindeki her cümle ** taşıdığı için istemciye "**____**はどこで…" gidiyordu
+// (13.10.2026 bulgusu). Furigana da artık ayrı alanla gider: tasarımdaki
+// soru kartı diğer kanjilerin okunuşunu gösteriyor.
+const buildBlank = (word) => {
+    const example = word.example || '';
+    const marked = BOLD.exec(example);
+    let sentence;
+    if (marked) {
+        if (marked[1] !== word.kanji) return null;
+        sentence = example.replace(BOLD, BLANK).replaceAll('**', '');
+    } else if (example.includes(word.kanji)) {
+        // İşaretsiz (eski) kayıt
+        sentence = example.replace(word.kanji, BLANK);
+    } else {
+        return null;
+    }
+    // Kelime cümlede ikinci kez geçiyorsa cevap ekranda yazıyor demektir
+    if (sentence.includes(word.kanji)) return null;
+
+    const furigana = word.exampleFurigana || '';
+    const markedF = BOLD.exec(furigana);
+    // İşaretli parçanın okunuşu ([えき]) atılınca kelimenin kendisi kalmalı
+    const sentenceFurigana = markedF && markedF[1].replace(/\[[^\]]*\]/g, '') === word.kanji
+        ? furigana.replace(BOLD, BLANK).replaceAll('**', '')
+        : undefined;
+
+    return { sentence, ...(sentenceFurigana && { sentenceFurigana }) };
+};
+
+// Aday kelimelerden `valueOf` ile 3 benzersiz yanlış şık seçer. `tiers`
+// öncelik sırasıdır (ör. önce aynı türden kelimeler); her katman kendi içinde
+// karıştırılır. `allow` false dönen aday hiçbir katmandan alınmaz.
+const pickDistractors = (tiers, valueOf, correct, allow = () => true, need = 3) => {
+    const seen = new Set([correct]);
+    const picked = [];
+    if (need <= 0) return picked;
+    for (const tier of tiers) {
+        for (const cand of shuffle(tier)) {
+            const value = valueOf(cand);
+            if (!value || seen.has(value) || !allow(cand)) continue;
+            seen.add(value);
+            picked.push(value);
+            if (picked.length === need) return picked;
+        }
+    }
+    return null;
+};
+
+// Boş alanlar soruya hiç yazılmaz (sesi olmayan kelimede audioUrl: null
+// dönmesin — Word yanıtlarındaki "boş alan yanıtta bulunmaz" kuralı)
+const compact = (obj) =>
+    Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined && v !== null));
+
+// Tek kelimeden tek soru; kelime bu formata uygun değilse ya da 3 yanlış şık
+// bulunamıyorsa null.
+const buildQuestion = (word, format, levelWords, lang) => {
+    const others = levelWords.filter(w => w !== word);
+    const sameType = others.filter(w => w.type === word.type);
+    const otherType = others.filter(w => w.type !== word.type);
+    let prompt, correct, distractors;
+
+    if (format === 'meaning') {
+        correct = meaningIn(word, lang);
+        // Eş anlamlı eleme: Türkçe anlamlar sık çakışır ("büyük" / "büyük, iri").
+        // Doğru cevabın kabul edilen HERHANGİ bir varyantını taşıyan aday şık
+        // olursa soruda iki doğru cevap olurdu.
+        const accepted = new Set(wordAnswerVariants(word, lang).map(normalizeAnswer));
+        const isSynonym = (cand) =>
+            wordAnswerVariants(cand, lang).some(v => accepted.has(normalizeAnswer(v)));
+        distractors = pickDistractors(
+            [sameType, otherType], (w) => meaningIn(w, lang), correct, (w) => !isSynonym(w)
+        );
+        // Ses kelimeyi okur; okunuş (kana) zaten ekranda, anlamı sızdırmaz
+        prompt = {
+            kanji: word.kanji, kana: word.kana, romaji: word.romaji, type: word.type,
+            isKana: !hasKanji(word), audioUrl: audioUrlOf(word)
+        };
+    } else if (format === 'reading') {
+        // Kana ile yazılan kelimenin "okunuşu" sorulmaz
+        if (!hasKanji(word) || !word.kana) return null;
+        correct = word.kana;
+        // Aynı yazımın veritabanındaki başka bir okunuşu yanlış şık olamaz (今日: きょう / こんにち)
+        const valid = new Set(levelWords.filter(w => w.kanji === word.kanji).map(w => w.kana));
+        const { prefix, core, suffix } = splitOkurigana(word.kanji, word.kana);
+        const groups = Object.values(readingMutations(core))
+            .map(group => shuffle(group.map(v => prefix + v + suffix).filter(v => !valid.has(v))));
+        // Türler arasında dönerek seç: üç şık da aynı bozulma türünden olmasın
+        const mutated = [];
+        for (let round = 0; mutated.length < 3 && groups.some(g => g.length > round); round++) {
+            for (const g of groups) {
+                if (g[round] && !mutated.includes(g[round]) && mutated.length < 3) mutated.push(g[round]);
+            }
+        }
+        // Kısa kelimede (目 → め) yeterli bozulma çıkmaz; kalanı başka
+        // kelimelerin okunuşuyla tamamlanır. Önce aynı okurigana ile biten ve
+        // benzer uzunlukta olanlar (貰う için 洗う, 習う): okurigana'sı tutmayan
+        // şık soruya bakılarak elenir.
+        const readable = others.filter(w => hasKanji(w) && w.kana);
+        const similar = readable.filter(w =>
+            Math.abs([...w.kana].length - [...word.kana].length) <= 1);
+        const rest = pickDistractors(
+            [
+                similar.filter(w => w.type === word.type && suffix && w.kana.endsWith(suffix)),
+                similar.filter(w => w.type === word.type),
+                similar,
+                readable
+            ],
+            (w) => w.kana, correct,
+            (w) => !valid.has(w.kana) && !mutated.includes(w.kana), 3 - mutated.length
+        );
+        if (rest === null) return null;
+        distractors = [...mutated, ...rest];
+        // Ses YOK: kelimeyi seslendirmek okunuşu, yani doğru şıkkı söylerdi
+        prompt = { kanji: word.kanji, type: word.type };
+    } else if (format === 'spelling') {
+        if (!hasKanji(word) || !word.kana) return null;
+        correct = word.kanji;
+        const chars = [...word.kanji].filter(c => KANJI_RE.test(c));
+        const shape = shapeOf(word);
+        const written = others.filter(hasKanji);
+        const sameShape = written.filter(w => shapeOf(w) === shape);
+        const sharesKanji = (w) => chars.some(c => w.kanji.includes(c));
+        distractors = pickDistractors(
+            [
+                // En zor çeldiriciler: aynı kalıp + ortak kanji (電車 için 電話, 電気)
+                sameShape.filter(sharesKanji),
+                sameShape.filter(w => w.type === word.type),
+                sameShape,
+                written.filter(sharesKanji),
+                written.filter(w => w.type === word.type),
+                written
+            ],
+            (w) => w.kanji, correct,
+            // Eş sesli kelime (紙 / 髪 / 神 → かみ) de doğru cevap olurdu
+            (w) => w.kana !== word.kana
+        );
+        // Ses okunuşu söyler — o zaten ekranda yazıyor, yazılışı sızdırmaz
+        prompt = { kana: word.kana, type: word.type, audioUrl: audioUrlOf(word) };
+    } else if (format === 'fillblank') {
+        const blank = FILLBLANK_TYPES.has(word.type) ? buildBlank(word) : null;
+        if (!blank) return null;
+        correct = word.kanji;
+        // Cümlede zaten geçen kelime şık olmasın
+        distractors = pickDistractors(
+            [sameType, otherType], (w) => w.kanji, correct, (w) => !blank.sentence.includes(w.kanji)
+        );
+        // Ses YOK: kelimeyi seslendirmek cevabı söylerdi
+        prompt = blank;
+    } else {
+        return null;
+    }
+
+    if (!distractors || distractors.length < 3) return null;
+    const choices = shuffle([correct, ...distractors]);
+    return {
+        word: word._id,
+        jlptLevel: word.jlptLevel,
+        format,
+        prompt: compact(prompt),
+        choices,
+        correctIndex: choices.indexOf(correct)
+    };
+};
+
 // Client'a cevap anahtarı sızdırmadan soru listesi (typing sorusunun şıkkı
 // yoktur). jlptLevel sızıntı değil, ekranda zaten rozet olarak gösteriliyor.
 // answeredToday benzeri bir alan gerekmiyor: yarım sınav devam ederse istemci
@@ -87,104 +321,55 @@ const attemptResponse = (attempt) => ({
 });
 
 const QuizService = {
-    // Bir seviyeden `count` soruluk taze set üretir. Dört format da karışıma
-    // girer: şıklı (meaning/reverse/reading), yazma (typing), boşluk doldurma
-    // (fillblank) ve görselli (image) — son ikisi yalnızca verisi olan kelimede.
+    // Bir seviyeden `count` soruluk taze set üretir (karışım: FORMAT_MIX).
     //
-    // Hedefler count'un iki katı çekilir: çeldirici bulunamayan kelimeler
-    // eleniyor (aşağıda `continue`), tam count kadar çekseydik sınav eksik
-    // soruyla çıkardı.
-    // lang: anlam şıkları, "anlam → kelime" sorusunun metni ve yazma sorusunun
-    // "doğru cevap" satırı bu dilde üretilir. Eskiden şıklar `meaning`
-    // (İngilizce) alanından geliyordu — Türk kullanıcı da İngilizce şık
-    // görüyordu (26.09.2026 incelemesi).
+    // KELİME SEÇİMİ: seviye müfredat sırasına (frequencyRank) göre `count`
+    // eşit dilime bölünür ve her dilimden bir kelime alınır. Eskiden kelimeler
+    // tamamen rastgele çekiliyordu; 6 soruluk N5 sınavı tesadüfen hep ilk
+    // derslerin kelimelerine düşebiliyor, seviyenin sonunu hiç yoklamıyordu.
+    // Dilimleme her sınavın seviyeyi baştan sona örneklemesini sağlar.
+    //
+    // Bir dilimde istenen formata uygun kelime yoksa (kana ile yazılan kelimede
+    // okunuş sorusu, örnek cümlesi uymayan kelimede boşluk doldurma) aynı
+    // dilimden anlam sorusu, o da olmazsa seviyenin herhangi bir yerinden anlam
+    // sorusu kurulur — sınav hiçbir zaman eksik soruyla çıkmaz.
+    //
+    // lang: anlam şıkları kullanıcının arayüz dilinde üretilir.
     async generateQuestions(jlptLevel, count, lang = 'tr') {
-        const targets = await Word.aggregate([
-            { $match: { jlptLevel, isCore: true } },
-            { $sample: { size: count * 2 } }
-        ]);
+        const words = await Word.find({ jlptLevel, isCore: true })
+            .sort({ frequencyRank: 1, _id: 1 })
+            .select('kanji kana romaji meaning meaningTr meaningTrAccepted meaningEnAccepted type jlptLevel example exampleFurigana audioKey')
+            .lean();
 
-        if (targets.length < count) {
+        if (words.length < count) {
             throw new AppError('Bu seviyede quiz için yeterli kelime yok', 400);
         }
 
-        // Çeldirici havuzu: aynı seviyenin tamamı. Hedef kelimeleri havuzdan
-        // ÇIKARMIYORUZ — dar seviyelerde (ya da count büyükken) targets havuzun
-        // tamamını yutup çeldirici bırakmıyordu ve tek bir soru bile
-        // üretilemiyordu. Sorunun kendi cevabı zaten `seen` ile eleniyor.
-        const pool = await Word.aggregate([
-            { $match: { jlptLevel, isCore: true } },
-            { $sample: { size: 80 } }
-        ]);
+        const formats = shuffle(allocateFormats(count));
+        const used = new Set();
+        const firstQuestion = (candidates, format) => {
+            for (const word of shuffle(candidates)) {
+                if (used.has(word)) continue;
+                const question = buildQuestion(word, format, words, lang);
+                if (question) {
+                    used.add(word);
+                    return question;
+                }
+            }
+            return null;
+        };
 
         const questions = [];
-        for (const word of targets) {
-            if (questions.length === count) break;
-
-            const formats = ['meaning', 'reverse'];
-            if (word.kanji !== word.romaji) formats.push('reading'); // kana-only kelimede okunuş sorusu anlamsız
-            formats.push('typing');
-            // İçerik formatları yalnızca verisi olan kelimede seçilebilir
-            if (word.example?.includes(word.kanji)) formats.push('fillblank');
-            if (word.imageUrl) formats.push('image');
-            const format = formats[Math.floor(Math.random() * formats.length)];
-
-            if (format === 'typing') {
-                questions.push({
-                    word: word._id,
-                    jlptLevel,
-                    format,
-                    // Kelime gösterilir, anlamı yazılır; ses de kelimeyi söyler (cevabı sızdırmaz)
-                    prompt: { kanji: word.kanji, romaji: word.romaji, audioUrl: audioUrlOf(word) },
-                    correctAnswers: wordAnswerVariants(word, lang)
-                });
-                continue;
-            }
-
-            // fillblank/image cevabı kelimenin kendisidir (kanji şıkları);
-            // ses bu ikisinde YOK — kelimeyi seslendirmek cevabı söylemek olur
-            const valueOf = (w) => (format === 'meaning') ? meaningIn(w, lang)
-                : (format === 'reading') ? w.romaji
-                : w.kanji; // reverse | fillblank | image
-            const correct = valueOf(word);
-
-            // Aynı tür öncelikli, benzersiz metinli 3 çeldirici
-            const sameType = pool.filter(p => p.type === word.type);
-            const otherType = pool.filter(p => p.type !== word.type);
-            const seen = new Set([correct]);
-            const distractors = [];
-            for (const cand of [...shuffle(sameType), ...shuffle(otherType)]) {
-                const val = valueOf(cand);
-                if (!val || seen.has(val)) continue;
-                seen.add(val);
-                distractors.push(val);
-                if (distractors.length === 3) break;
-            }
-            if (distractors.length < 3) continue; // yeterli çeldirici yoksa soruyu atla
-
-            const choices = shuffle([correct, ...distractors]);
-            // reverse/fillblank/image'da ses YOK: kelimeyi seslendirmek doğru şıkkı söylemek olur
-            const prompt =
-                format === 'meaning' ? { kanji: word.kanji, romaji: word.romaji, audioUrl: audioUrlOf(word) } :
-                format === 'reverse' ? { meaning: meaningIn(word, lang) } :
-                format === 'fillblank' ? { sentence: word.example.replaceAll(word.kanji, '____') } :
-                format === 'image' ? { imageUrl: word.imageUrl } :
-                // reading: ses YOK — kelimeyi seslendirmek okunuşu, yani doğru
-                // şıkkı söylemek olur
-                { kanji: word.kanji }; // reading
-
-            questions.push({
-                word: word._id,
-                jlptLevel,
-                format,
-                prompt,
-                choices,
-                correctIndex: choices.indexOf(correct)
-            });
-        }
-
-        if (questions.length < count) {
-            throw new AppError('Bu seviyede quiz için yeterli kelime yok', 400);
+        for (let i = 0; i < count; i++) {
+            const slice = words.slice(
+                Math.floor(i * words.length / count),
+                Math.floor((i + 1) * words.length / count)
+            );
+            const question = firstQuestion(slice, formats[i])
+                || firstQuestion(slice, 'meaning')
+                || firstQuestion(words, 'meaning');
+            if (!question) throw new AppError('Bu seviyede quiz için yeterli kelime yok', 400);
+            questions.push(question);
         }
         return questions;
     },
@@ -335,7 +520,7 @@ const QuizService = {
 
         // Geri bildirim kartındaki "駅 — istasyon" satırı
         const [word, lang] = await Promise.all([
-            Word.findById(q.word).select('kanji meaning meaningTr'),
+            Word.findById(q.word).select('kanji kana meaning meaningTr'),
             userLang(userId)
         ]);
 
@@ -344,7 +529,8 @@ const QuizService = {
 
         const response = {
             correct: isCorrect,
-            word: word ? { kanji: word.kanji, meaning: meaningIn(word, lang) } : null,
+            // kana: okunuş ve yazılış sorularının geri bildiriminde "駅 (えき) — istasyon"
+            word: word ? { kanji: word.kanji, kana: word.kana, meaning: meaningIn(word, lang) } : null,
             // Yanlışta "Cevap: ..." satırı için anahtar (soru artık cevaplandı, sızıntı değil)
             ...(q.format === 'typing'
                 ? { correctAnswer: q.correctAnswers[0] }

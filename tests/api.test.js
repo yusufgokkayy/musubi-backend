@@ -2047,46 +2047,160 @@ describe('Quiz', () => {
     });
 });
 
-describe('İçerikli soru tipleri (boşluk doldurma & görselli)', () => {
+describe('Sınav soru karışımı (13.10.2026): anlam, okunuş, yazılış, boşluk doldurma', () => {
+    let QuizService;
+    const KANJI = /[㐀-䶿一-鿿]/;
+
     before(async () => {
-        // Tüm N5 kelimelerine örnek cümle + görsel işle: içerik formatları seçilebilir olsun
+        QuizService = require('../modules/quiz/quiz.service');
+        // N5 kelimelerine okunuş + veri setindeki biçimde (** işaretli) örnek
+        // cümle işle: dört format da seçilebilir olsun
         await Word.updateMany({ jlptLevel: 'N5' }, [{
             $set: {
-                example: { $concat: ['これは', '$kanji', 'です。'] },
-                imageUrl: { $concat: ['https://img.test/', '$romaji', '.jpg'] }
+                kana: { $concat: ['か', '$romaji'] },
+                example: { $concat: ['東京は**', '$kanji', '**です。'] },
+                exampleFurigana: { $concat: ['東京[とうきょう]は**', '$kanji', '[よみ]**です。'] }
             }
         }], { updatePipeline: true });
+        // N4: iki eş sesli + anlamı çakışan kelime (çift doğru cevap tuzağı)
+        await Word.updateMany({ jlptLevel: 'N4' }, [{ $set: { kana: { $concat: ['よ', '$romaji'] } } }], { updatePipeline: true });
+        await Word.updateOne({ kanji: '語四0' }, { kana: 'かみ', meaningTr: 'büyük' });
+        await Word.updateOne({ kanji: '語四1' }, { kana: 'かみ', meaningTr: 'büyük, iri' });
     });
 
-    it('içeriği olan kelimede fillblank/image üretilir ve doğru biçimlidir', async () => {
-        const QuizService = require('../modules/quiz/quiz.service');
-        // 6 formatlı 40 çekilişte içerik formatlarından en az biri pratikte kesin çıkar
+    after(async () => {
+        await Word.updateMany({ jlptLevel: 'N4' }, { $unset: { kana: 1, meaningTr: 1 } });
+    });
+
+    it('karışım seviye başına sabittir: 20 soruda 10 anlam, 4 okunuş, 3 yazılış, 3 boşluk', async () => {
+        const questions = await QuizService.generateQuestions('N5', 20);
+        const say = (f) => questions.filter(q => q.format === f).length;
+        assert.deepEqual(
+            [say('meaning'), say('reading'), say('spelling'), say('fillblank')], [10, 4, 3, 3]
+        );
+        assert.ok(questions.every(q => q.jlptLevel === 'N5'), 'her soru rozeti için kendi seviyesini taşımalı');
+        assert.ok(questions.every(q => new Set(q.choices).size === 4 && q.choices[q.correctIndex]),
+            'dört farklı şık ve aralarında doğru cevap olmalı');
+        assert.equal(new Set(questions.map(q => String(q.word))).size, 20, 'aynı kelime iki kez sorulmamalı');
+        // Eski karışımın formatları artık üretilmez
+        assert.ok(!questions.some(q => ['typing', 'reverse', 'image'].includes(q.format)));
+    });
+
+    it('her formatın sorusu yalnızca kendi ipucunu taşır (cevabı sızdırmaz)', async () => {
         const questions = [
             ...await QuizService.generateQuestions('N5', 20),
             ...await QuizService.generateQuestions('N5', 20)
         ];
+        const of = (f) => questions.filter(q => q.format === f);
 
-        const fillblanks = questions.filter(q => q.format === 'fillblank');
-        const images = questions.filter(q => q.format === 'image');
-        assert.ok(fillblanks.length + images.length > 0, 'içerik formatları karışıma girmeli');
-
-        for (const q of fillblanks) {
-            assert.match(q.prompt.sentence, /____/, 'cümlede boşluk olmalı');
-            assert.ok(!q.prompt.audioUrl, 'ses cevabı söylerdi — fillblank\'te olmamalı');
-            assert.equal(q.choices.length, 4);
-            assert.ok(q.choices[q.correctIndex], 'doğru şık listede olmalı');
+        for (const q of of('meaning')) {
+            assert.ok(q.prompt.kanji && q.prompt.kana && q.prompt.type, 'kart: kelime, okunuş, tür');
+            assert.ok(q.choices.every(c => c.startsWith('meaning n5')), 'şıklar anlam olmalı');
         }
-        for (const q of images) {
-            assert.ok(q.prompt.imageUrl);
-            assert.ok(!q.prompt.audioUrl, 'ses cevabı söylerdi — image\'da olmamalı');
-            assert.equal(q.choices.length, 4);
+        for (const q of of('reading')) {
+            assert.deepEqual(Object.keys(q.prompt).sort(), ['kanji', 'type'], 'okunuş ve ses soruda OLMAMALI');
+            assert.ok(q.choices[q.correctIndex].startsWith('か'), 'doğru şık kelimenin okunuşu');
+            assert.ok(q.choices.every(c => !KANJI.test(c)), 'şıklar okunuş olmalı');
         }
-
-        // Üretilen her soru rozeti için kendi seviyesini taşımalı
-        assert.ok(questions.every(q => q.jlptLevel === 'N5'));
+        for (const q of of('spelling')) {
+            assert.ok(q.prompt.kana && !q.prompt.kanji, 'yazılış soruda OLMAMALI');
+            assert.ok(q.choices.every(c => KANJI.test(c)), 'şıklar yazılış olmalı');
+        }
+        for (const q of of('fillblank')) {
+            // Veri setindeki ** vurgu işareti cümleyle birlikte gidiyordu:
+            // istemci "東京は**____**です。" görüyordu (13.10.2026 bulgusu)
+            assert.equal(q.prompt.sentence, '東京は____です。');
+            assert.equal(q.prompt.sentenceFurigana, '東京[とうきょう]は____です。',
+                'hedef kelimenin okunuşu boşlukla birlikte gitmeli, diğer kanjilerinki kalmalı');
+            assert.ok(!q.prompt.audioUrl, 'ses cevabı söylerdi');
+        }
+        assert.ok(of('meaning').length && of('reading').length && of('spelling').length && of('fillblank').length);
     });
 
-    it('fillblank/image cevapları API üzerinden puanlanır', async () => {
+    it('çekimli işaretlenmiş ya da kelimeyi iki kez içeren cümleden boşluk sorusu kurulmaz', async () => {
+        const [w1, w2] = await Word.find({ jlptLevel: 'N5', isCore: true }).limit(2);
+        const eski = [[w1._id, w1.example], [w2._id, w2.example]];
+        // Çekimli biçim işaretli: şıklar sözlük biçiminde olduğu için boşluğa oturmaz
+        await Word.updateOne({ _id: w1._id }, { example: `昨日**${w1.kanji}ました**。` });
+        // Kelime boşluğun dışında bir kez daha geçiyor: cevap ekranda yazardı
+        await Word.updateOne({ _id: w2._id }, { example: `**${w2.kanji}**と${w2.kanji}。` });
+        try {
+            for (let i = 0; i < 5; i++) {
+                const blanks = (await QuizService.generateQuestions('N5', 30)).filter(q => q.format === 'fillblank');
+                assert.ok(!blanks.some(q => [String(w1._id), String(w2._id)].includes(String(q.word))));
+            }
+        } finally {
+            for (const [id, example] of eski) await Word.updateOne({ _id: id }, { example });
+        }
+    });
+
+    it('iki doğru cevaplı soru üretilmez: eş sesli yazılış ve eş anlamlı şık elenir', async () => {
+        const [a, b] = await Promise.all([Word.findOne({ kanji: '語四0' }), Word.findOne({ kanji: '語四1' })]);
+        // 50 kelimelik seviyeden 50 soru: iki kelime de her üretimde sorulur
+        for (let i = 0; i < 8; i++) {
+            for (const q of await QuizService.generateQuestions('N4', 50, 'tr')) {
+                const ben = String(q.word) === String(a._id) ? a : String(q.word) === String(b._id) ? b : null;
+                if (!ben) continue;
+                const oteki = ben === a ? b : a;
+                if (q.format === 'spelling') {
+                    assert.ok(!q.choices.includes(oteki.kanji), 'aynı okunuşlu kelime de doğru cevap olurdu');
+                }
+                if (q.format === 'meaning') {
+                    assert.ok(!q.choices.includes(oteki.meaningTr), '"büyük" ile "büyük, iri" aynı soruda şık olamaz');
+                }
+            }
+        }
+    });
+
+    it('kelimeler seviyenin başından sonuna eşit dilimlerden seçilir', async () => {
+        // N3 dolgu kelimeleri müfredat sırasında 1000…1029; 6 soru = 5'erli 6 dilim
+        for (let i = 0; i < 5; i++) {
+            const questions = await QuizService.generateQuestions('N3', 6);
+            const ranks = (await Word.find({ _id: { $in: questions.map(q => q.word) } }).select('frequencyRank'))
+                .map(w => w.frequencyRank).sort((x, y) => x - y);
+            assert.deepEqual(ranks.map(r => Math.floor((r - 1000) / 5)), [0, 1, 2, 3, 4, 5],
+                `her dilimden tam bir kelime gelmeli, gelen sıralar: ${ranks}`);
+        }
+    });
+
+    it('okunuş çeldiricileri doğru okunuşun küçük bozulmalarıdır; okurigana\'ya dokunulmaz', async () => {
+        const { readingMutations } = require('../utils/kana.util');
+        const tum = (kana) => Object.values(readingMutations(kana)).flat();
+        assert.deepEqual(new Set(tum('びょういん')), new Set(['ひょういん', 'ぴょういん', 'びょいん', 'びよういん']));
+        assert.ok(tum('がっこう').includes('がこう') && tum('がっこう').includes('かっこう'));
+        assert.ok(!tum('きょう').includes('きょうう'), 'zaten uzun ünlü bir daha uzatılmaz');
+        assert.ok(!tum('えき').includes('えき'), 'doğru okunuşun kendisi çeldirici olamaz');
+
+        // 食べる: yalnızca kanjinin karşıladığı "た" bozulur, ekranda yazan "べる"
+        // aynen kalır. Bozulma yetmediği için kalan şıklar aynı okurigana ile
+        // biten başka fiillerden gelir (比べる, 調べる, 並べる).
+        const fiiller = await Word.insertMany([
+            ['食べる', 'たべる'], ['比べる', 'くらべる'], ['調べる', 'しらべる'], ['並べる', 'ならべる']
+        ].map(([kanji, kana], i) => ({
+            kanji, kana, romaji: `fiil${i}`, meaning: `verb ${i}`, type: 'fiil',
+            jlptLevel: 'N2', isCore: true, frequencyRank: 5000 + i
+        })));
+        try {
+            // 34 kelimeden 34 soru: her kelime her üretimde bir kez sorulur,
+            // formatı ise rastgeledir — okunuş sorusu olana kadar üret
+            let soru;
+            for (let i = 0; i < 200 && !soru; i++) {
+                soru = (await QuizService.generateQuestions('N2', 34))
+                    .find(q => String(q.word) === String(fiiller[0]._id) && q.format === 'reading');
+            }
+            assert.ok(soru, '食べる en az bir kez okunuş sorusu olmalıydı');
+            assert.equal(soru.choices[soru.correctIndex], 'たべる');
+            assert.ok(soru.choices.includes('だべる'), `"た" bozulmalı, gelen: ${soru.choices}`);
+            assert.ok(soru.choices.every(c => c.endsWith('べる')),
+                `okurigana soruda yazıyor; onu tutmayan şık kendini ele verir, gelen: ${soru.choices}`);
+        } finally {
+            await Word.deleteMany({ _id: { $in: fiiller.map(w => w._id) } });
+        }
+    });
+
+    // image artık ÜRETİLMİYOR ama puanlaması duruyor: karışım değişmeden önce
+    // başlamış bir denemenin soruları cevaplanabilmeli
+    it('fillblank ve eski formatların (image) cevapları API üzerinden puanlanır', async () => {
         const user = await createVerifiedUser('icerik@test.com');
         const t = (await login('icerik@test.com')).accessToken;
         const word = await Word.findOne({ jlptLevel: 'N5', isCore: true });
@@ -5217,31 +5331,45 @@ describe('Güvenlik regresyonları (26.09.2026 incelemesi)', () => {
         assert.equal(wordAnswerVariants({ meaning: 'water' }, 'tr')[0], 'water', 'Türkçesi olmayan kelime İngilizceye düşer');
     });
 
-    it('dil: sınav şıkları ve anlam metni kullanıcının dilinde; okunuş sorusunda ses yok', async () => {
+    it('dil: sınav şıkları kullanıcının dilinde; ses yalnızca cevabı sızdırmayan soruda', async () => {
         const QuizService = require('../modules/quiz/quiz.service');
         await Word.updateMany({ jlptLevel: 'N3' },
-            [{ $set: { meaningTr: { $concat: ['tr ', '$meaning'] }, audioUrl: 'https://ses.test/a.mp3' } }],
+            [{ $set: {
+                meaningTr: { $concat: ['tr ', '$meaning'] },
+                kana: { $concat: ['さ', '$romaji'] },
+                audioKey: 'audio/0123456789abcdef0123456789abcdef.mp3'
+            } }],
             { updatePipeline: true });
         try {
-            const byFormat = async (lang) => {
-                const qs = [];
-                for (let i = 0; i < 6; i++) qs.push(...await QuizService.generateQuestions('N3', 8, lang));
-                return qs;
-            };
-            const tr = await byFormat('tr');
-            const en = await byFormat('en');
+            const tr = await QuizService.generateQuestions('N3', 30, 'tr');
+            const en = await QuizService.generateQuestions('N3', 30, 'en');
             const choicesOf = (qs, f) => qs.filter(q => q.format === f).flatMap(q => q.choices);
             assert.ok(choicesOf(tr, 'meaning').length && choicesOf(tr, 'meaning').every(c => c.startsWith('tr ')),
                 'Türk kullanıcı Türkçe anlam şıkları görmeli');
             assert.ok(choicesOf(en, 'meaning').every(c => !c.startsWith('tr ')), 'İngilizce kullanıcı İngilizce görmeli');
-            for (const q of tr.filter(q => q.format === 'reverse')) assert.ok(q.prompt.meaning.startsWith('tr '));
-            for (const q of tr.filter(q => q.format === 'typing')) assert.ok(q.correctAnswers[0].startsWith('tr '));
-            for (const q of [...tr, ...en].filter(q => q.format === 'reading')) {
-                assert.equal(q.prompt.audioUrl, undefined, 'ses okunuşu, yani cevabı söylerdi');
+
+            for (const q of [...tr, ...en]) {
+                if (q.format === 'meaning' || q.format === 'spelling') {
+                    assert.match(q.prompt.audioUrl, /\/uploads\/audio\/[a-f0-9]{32}\.mp3$/,
+                        'kelimenin okunuşu ekranda yazan soruda ses çalınabilir');
+                } else {
+                    assert.equal(q.prompt.audioUrl, undefined, 'ses okunuşu/kelimeyi, yani cevabı söylerdi');
+                }
             }
+            assert.ok(tr.some(q => q.format === 'reading'), 'okunuş sorusu üretilmiş olmalı');
         } finally {
-            await Word.updateMany({ jlptLevel: 'N3' }, { $unset: { meaningTr: 1, audioUrl: 1 } });
+            await Word.updateMany({ jlptLevel: 'N3' }, { $unset: { meaningTr: 1, kana: 1, audioKey: 1 } });
         }
+    });
+
+    it('sesi olmayan kelimenin sorusunda audioUrl alanı hiç yok (null değil)', async () => {
+        const u = await createVerifiedUser('sessiz-sinav@test.com');
+        const t = (await login('sessiz-sinav@test.com')).accessToken;
+        const res = await api('POST', '/quiz/start', { token: t, body: {} });
+        assert.equal(res.status, 200);
+        assert.ok(res.json.data.questions.every(q => !('audioUrl' in q.prompt)));
+        assert.ok(!JSON.stringify(res.json.data.questions.map(q => q.prompt)).includes('null'));
+        await QuizAttempt.deleteMany({ user: u._id });
     });
 
     it('aynı anda gelen oturum başlatma istekleri günün TEK oturumunu açar', async () => {
