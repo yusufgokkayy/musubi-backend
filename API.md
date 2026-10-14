@@ -769,7 +769,21 @@ anında yeni seviyeden kurulur (dokunulmamış eski havuz silinir).
 
 Böylece **güne tek havuz** kuralı korunur: eskiden seviye değişimi aynı güne
 ikinci bir havuz açıyor, anasayfa çemberi iki havuzu toplayıp 40 gösterirken
-ders ekranı 20 gösteriyordu. Havuz asla karışık seviyeli olmaz.
+ders ekranı 20 gösteriyordu. Havuzun **yeni kelimeleri** asla karışık seviyeli
+olmaz.
+
+**HAVUZUN İÇERİĞİ (05.10.2026).** Havuzun yeni kelimeye ayrılan payı hedefin
+%10'udur (en az 1; hedef 20 → 18 tekrar + 2 yeni). Vadesi gelmiş tekrar pay
+kadar yoksa boşluk yeni kelimeyle dolar (ilk gün havuzun tamamı yenidir).
+Vadesi gelmiş kelime sayısı **iki dersi aşarsa** (hedef 20 → 40'tan fazla) o
+gün havuzun tamamı tekrar olur, `newWords` boş döner. Eski kural (%70 tekrar,
+%30 her gün yeni) hedefini her gün tamamlayan kullanıcıda bile tekrar borcu
+biriktiriyordu.
+
+`reviewWords` **her seviyeden** kelime içerebilir: N4 çalışan kullanıcının
+vadesi gelmiş N5 kelimeleri de sorulur. Her kelime kendi `word.jlptLevel`
+alanını taşır; yanıtın kökündeki `jlptLevel` dersin seviyesidir ve yalnızca
+`newWords` için bağlayıcıdır.
 
 **GÜNDE EN FAZLA İKİ HAVUZ (21.09.2026).** Bu uç **asla kendiliğinden yeni
 havuz açmaz**. Eskiden oturum tamamlandıktan sonraki ilk `/today` çağrısı taze
@@ -892,6 +906,11 @@ noktaya istek atarak sınırsız/rastgele kelime cevaplama girişimini kapatır.
 // tek başına kabul edilir, parantez içleri opsiyoneldir, büyük/küçük harf
 // ve noktalama önemsizdir). Boş METİN ("") "empty" sayılır.
 { "wordId": "665f2b...", "answer": "to see" }
+
+// OPSİYONEL — iki biçimde de eklenebilir: sorunun ekranda kaldığı süre (ms,
+// 0–600000 arası tam sayı). Yanıtı ETKİLEMEZ, yalnızca tekrar geçmişine
+// yazılır; geçersiz değer cevabı reddettirmez, yok sayılır.
+{ "wordId": "665f2b...", "result": "correct", "durationMs": 4200 }
 
 // İkisinden de yoksa 400: `result` yok + `answer` yok/null belirsiz bir
 // istektir, sessizce "boş geçildi" sayılmaz (bkz. aşağıdaki not).

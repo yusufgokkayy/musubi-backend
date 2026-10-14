@@ -13,7 +13,7 @@ const fs = require('node:fs/promises');
 const { MongoMemoryServer } = require('mongodb-memory-server');
 
 let mongod, server, BASE, uploadDir;
-let User, Word, UserWord, Notification, QuizAttempt, Event, Progress, Streak, DeviceSession, DailyWordPool;
+let User, Word, UserWord, Notification, QuizAttempt, Event, Progress, Streak, DeviceSession, DailyWordPool, ReviewLog;
 let UserWordService, NotificationService, ProgressService, StreakService, StudySessionService, AuthService, WordService, sendEmail;
 
 const sleep = (ms) => new Promise(r => setTimeout(r, ms));
@@ -137,6 +137,7 @@ before(async () => {
     Streak = require('../models/Streak');
     DeviceSession = require('../models/DeviceSession');
     DailyWordPool = require('../models/DailyWordPool');
+    ReviewLog = require('../models/ReviewLog');
     sendEmail = require('../utils/sendEmail');
     UserWordService = require('../modules/userword/userword.service');
     NotificationService = require('../modules/notification/notification.service');
@@ -2569,6 +2570,216 @@ describe('Havuz kuralları (21.09.2026): kapı, kilit ve ikinci havuz', () => {
     });
 });
 
+describe('Tekrar kotası (05.10.2026): borç freni ve seviyeler arası tekrar', () => {
+    // Vadesi dün gelmiş tekrar kayıtları; `gunOnce` ile daha eskisi kurulabilir
+    const vadesiGelmis = (userId, words, gunOnce = 1) => UserWord.insertMany(words.map(w => ({
+        user: userId, word: w._id, status: 'learning',
+        masteryLevel: 2, repetitions: 1, interval: 1, easeFactor: 2.5,
+        nextReviewDate: new Date(Date.now() - gunOnce * 86400000)
+    })));
+
+    it('borç 2 dersi aşmıyorsa yeni kelimeye pay ayrılır (hedef 10 → 9 tekrar + 1 yeni)', async () => {
+        const u = await createVerifiedUser('kota-pay@test.com', { dailyGoal: 10 });
+        const token = (await login('kota-pay@test.com')).accessToken;
+        await vadesiGelmis(u._id, await Word.find({ jlptLevel: 'N5', isCore: true }).limit(15));
+
+        const d = (await api('GET', '/userwords/today', { token })).json.data;
+        // Eskiden kota %70'ti: 7 tekrar + 3 yeni. Günde 3 yeni kelimenin doğurduğu
+        // tekrar talebi 7'lik kotayı aşıyor, borç her gün büyüyordu.
+        assert.equal(d.reviewWords.length, 9);
+        assert.equal(d.newWords.length, 1, 'her gün en az bir yeni kelime');
+        assert.equal(d.progress.total, 10, 'havuz hedef kadar');
+    });
+
+    it('borç 2 dersi aşınca havuzun TAMAMI tekrar olur', async () => {
+        const u = await createVerifiedUser('kota-fren@test.com', { dailyGoal: 10 });
+        const token = (await login('kota-fren@test.com')).accessToken;
+        await vadesiGelmis(u._id, await Word.find({ jlptLevel: 'N5', isCore: true }).limit(21));
+
+        const d = (await api('GET', '/userwords/today', { token })).json.data;
+        assert.equal(d.reviewWords.length, 10, 'önce borç');
+        assert.equal(d.newWords.length, 0, 'yeni kelime borcu büyütürdü');
+    });
+
+    it('tekrarlar TÜM seviyelerden gelir; yeni kelimeler yalnızca dersin seviyesinden', async () => {
+        const u = await createVerifiedUser('kota-seviye@test.com', { dailyGoal: 10, activeLevel: 'N4' });
+        const token = (await login('kota-seviye@test.com')).accessToken;
+        const n5 = await Word.find({ jlptLevel: 'N5', isCore: true }).limit(3);
+        await vadesiGelmis(u._id, n5);
+
+        const d = (await api('GET', '/userwords/today', { token })).json.data;
+        // Eskiden tekrarlar dersin seviyesine kilitliydi: N4'e geçen kullanıcının
+        // N5 kelimeleri bir daha hiç sorulmuyor, decay ile çürüyordu.
+        assert.equal(d.jlptLevel, 'N4', 'dersin seviyesi değişmez');
+        assert.deepEqual(
+            d.reviewWords.map(uw => String(uw.word._id)).sort(),
+            n5.map(w => String(w._id)).sort()
+        );
+        assert.equal(d.newWords.length, 7);
+        assert.ok(d.newWords.every(w => w.jlptLevel === 'N4'));
+
+        // Alt seviyeden gelen tekrarın cevabı havuz kontrolünden geçer ve sayılır
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N4' } });
+        const cevap = await api('POST', '/userwords/answer', {
+            token, body: { wordId: n5[0]._id, result: 'correct' }
+        });
+        assert.equal(cevap.status, 200);
+        assert.equal(cevap.json.data.counted, true);
+        assert.equal(cevap.json.data.today.completedWords, 1);
+    });
+
+    it('kelimesi silinmiş tekrar kaydı kotadan yer yemez', async () => {
+        const u = await createVerifiedUser('kota-yetim@test.com', { dailyGoal: 10 });
+        const token = (await login('kota-yetim@test.com')).accessToken;
+        await vadesiGelmis(u._id, await Word.find({ jlptLevel: 'N5', isCore: true }).limit(9));
+        // Vadesi en eski kayıt: elenmeseydi her gün sıranın başında dururdu
+        await vadesiGelmis(u._id, [{ _id: new mongoose.Types.ObjectId() }], 30);
+
+        const d = (await api('GET', '/userwords/today', { token })).json.data;
+        assert.equal(d.reviewWords.length, 9);
+        assert.ok(d.reviewWords.every(uw => uw.word), 'havuza boş kelime girmemeli');
+        assert.equal(d.progress.total, 10);
+    });
+
+    it('hedef gün içinde artınca gelen ek tekrarlar da seviyeye bakmaz', async () => {
+        const u = await createVerifiedUser('kota-genisle@test.com', { dailyGoal: 5, activeLevel: 'N4' });
+        const token = (await login('kota-genisle@test.com')).accessToken;
+        await vadesiGelmis(u._id, await Word.find({ jlptLevel: 'N5', isCore: true }).limit(8));
+
+        const ilk = (await api('GET', '/userwords/today', { token })).json.data;
+        assert.equal(ilk.reviewWords.length, 4, 'hedef 5 → 4 tekrar + 1 yeni');
+
+        await User.updateOne({ _id: u._id }, { dailyGoal: 9 });
+        const sonra = (await api('GET', '/userwords/today', { token })).json.data;
+        assert.equal(sonra.reviewWords.length, 8, 'sabahki kotaya sığmayan 4 N5 tekrarı eklendi');
+        assert.equal(sonra.progress.total, 9);
+    });
+});
+
+describe('Tekrar geçmişi (ReviewLog)', () => {
+    let token, userId, queue;
+    const cevapla = (body) => api('POST', '/userwords/answer', { token, body });
+    const satirlar = (wordId) => ReviewLog.find({ user: userId, ...(wordId && { word: wordId }) }).lean();
+
+    before(async () => {
+        const u = await createVerifiedUser('gecmis@test.com', { dailyGoal: 6 });
+        userId = u._id;
+        token = (await login('gecmis@test.com')).accessToken;
+        queue = (await api('GET', '/userwords/today', { token })).json.data.queue;
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
+    });
+
+    it('sayılan cevap, önceki/sonraki durumuyla TEK satır yazar', async () => {
+        const res = await cevapla({ wordId: queue[0], result: 'correct', durationMs: 4200 });
+        assert.equal(res.status, 200);
+
+        const [log, ...fazla] = await satirlar(queue[0]);
+        assert.equal(fazla.length, 0);
+        assert.equal(log.result, 'correct');
+        assert.equal(log.answerMode, 'reported');
+        assert.equal(log.firstReview, true);
+        assert.equal(log.elapsedDays, null, 'ilk cevabın önceki tekrarı yok');
+        assert.equal(log.afterPostpone, false);
+        assert.equal(log.scheduler, 'sm2');
+        assert.equal(log.durationMs, 4200);
+        assert.equal(log.wordLevel, 'N5');
+        assert.equal(log.lessonLevel, 'N5');
+        assert.equal(log.poolNo, 1);
+        assert.deepEqual(
+            [log.before.repetitions, log.before.masteryLevel, log.after.repetitions, log.after.interval, log.after.masteryLevel],
+            [0, 1, 1, 1, 2]
+        );
+    });
+
+    it('tekrar çalışma turu ve "Şimdilik Geç" satır YAZMAZ', async () => {
+        await cevapla({ wordId: queue[0], result: 'wrong' });   // nihai cevap zaten var → nötr
+        await cevapla({ wordId: queue[1], result: 'empty' });   // erteleme
+        await cevapla({ wordId: queue[1], result: 'empty' });   // yeniden erteleme
+
+        assert.equal((await satirlar(queue[0])).length, 1);
+        assert.equal((await satirlar(queue[0]))[0].result, 'correct', 'nötr cevap satırı değiştirmedi');
+        assert.equal((await satirlar(queue[1])).length, 0);
+    });
+
+    it('ertelenmiş kelimenin gerçek cevabında afterPostpone dolar', async () => {
+        await cevapla({ wordId: queue[1], result: 'wrong' });
+
+        const [log] = await satirlar(queue[1]);
+        assert.equal(log.afterPostpone, true);
+        assert.equal(log.result, 'wrong');
+        assert.equal(log.firstReview, true, 'erteleme gerçek cevap değildir');
+    });
+
+    it('yazma sorusunda answerMode "typed" olur; geçersiz durationMs yok sayılır', async () => {
+        const word = await Word.findById(queue[2]);
+        const res = await cevapla({ wordId: queue[2], answer: word.meaning, durationMs: 'çok uzun' });
+        assert.equal(res.status, 200, 'bozuk süre cevabı reddetmemeli');
+
+        const [log] = await satirlar(queue[2]);
+        assert.equal(log.answerMode, 'typed');
+        assert.equal(log.result, 'correct');
+        assert.equal(log.durationMs, undefined);
+    });
+
+    it('eşzamanlı iki istek tek satır bırakır', async () => {
+        await Promise.all([
+            cevapla({ wordId: queue[3], result: 'correct' }),
+            cevapla({ wordId: queue[3], result: 'correct' })
+        ]);
+        assert.equal((await satirlar(queue[3])).length, 1);
+    });
+
+    it('vadesi gelmiş tekrarda elapsedDays = aralık + gecikme', async () => {
+        const u = await createVerifiedUser('gecmis-tekrar@test.com', { dailyGoal: 5 });
+        const t2 = (await login('gecmis-tekrar@test.com')).accessToken;
+        const word = await Word.findOne({ jlptLevel: 'N5', isCore: true });
+        // 6 günlük aralıkla planlanmış, vadesi 3 gün önce geçmiş → 9 gün önce soruldu
+        await UserWord.create({
+            user: u._id, word: word._id, status: 'learning', correctCount: 2,
+            masteryLevel: 3, repetitions: 2, interval: 6, easeFactor: 2.5,
+            nextReviewDate: new Date(Date.now() - 3 * 86400000)
+        });
+
+        await api('GET', '/userwords/today', { token: t2 });
+        await api('POST', '/sessions/start', { token: t2, body: { jlptLevel: 'N5' } });
+        await api('POST', '/userwords/answer', { token: t2, body: { wordId: word._id, result: 'wrong' } });
+
+        const log = await ReviewLog.findOne({ user: u._id, word: word._id }).lean();
+        assert.equal(log.firstReview, false);
+        assert.equal(log.elapsedDays, 9);
+        assert.deepEqual(
+            [log.before.interval, log.before.masteryLevel, log.after.interval, log.after.masteryLevel],
+            [6, 3, 1, 1]
+        );
+    });
+
+    it('satır yazılamazsa cevap yine başarılı döner', async (t) => {
+        t.mock.method(ReviewLog, 'create', async () => { throw new Error('disk dolu'); });
+        t.mock.method(console, 'error', () => {});
+
+        const res = await cevapla({ wordId: queue[4], result: 'correct' });
+        assert.equal(res.status, 200);
+        assert.equal(res.json.data.counted, true);
+        assert.equal(console.error.mock.callCount(), 1, 'hata sessizce yutulmaz, loglanır');
+        assert.match(console.error.mock.calls[0].arguments[0], /\[reviewlog\]/);
+    });
+
+    it('hatırlama raporu aralık kovalarına göre doğru oranı verir', async () => {
+        const { buildReport } = require('../scripts/review-report');
+        const r = await buildReport();
+
+        assert.equal(r.count, await ReviewLog.countDocuments({}));
+        assert.equal(r.firstReviews.count, await ReviewLog.countDocuments({ firstReview: true }));
+        // Yukarıdaki 6 günlük aralıklı tekrar yanlış cevaplandı
+        const kova = r.byInterval.find(b => b.label === '2-6 gün');
+        assert.ok(kova.count >= 1);
+        assert.ok(kova.recall < 100);
+        assert.equal(r.byInterval.reduce((n, b) => n + b.count, 0),
+            await ReviewLog.countDocuments({ firstReview: { $ne: true } }),
+            'her tekrar tam bir kovaya düşer');
+    });
+});
+
 describe('Kaldırılan uçlar (21.09.2026)', () => {
     let token;
 
@@ -3802,7 +4013,12 @@ describe('Hesap silme (KVKK)', () => {
         const tokens = await login('kvkk@test.com');
 
         // Biraz veri üret
-        await api('GET', '/userwords/today', { token: tokens.accessToken });
+        const ders = (await api('GET', '/userwords/today', { token: tokens.accessToken })).json.data;
+        await api('POST', '/sessions/start', { token: tokens.accessToken, body: { jlptLevel: 'N5' } });
+        await api('POST', '/userwords/answer', {
+            token: tokens.accessToken, body: { wordId: ders.queue[0], result: 'correct' }
+        });
+        assert.equal(await ReviewLog.countDocuments({ user: user._id }), 1);
 
         const del = await api('DELETE', '/auth/delete-account', {
             token: tokens.accessToken,
@@ -3817,9 +4033,10 @@ describe('Hesap silme (KVKK)', () => {
             Progress.countDocuments({ user: user._id }),
             Streak.countDocuments({ user: user._id }),
             Notification.countDocuments({ user: user._id }),
-            Event.countDocuments({ user: user._id })
+            Event.countDocuments({ user: user._id }),
+            ReviewLog.countDocuments({ user: user._id })
         ]);
-        assert.deepEqual(leftovers, [0, 0, 0, 0, 0, 0]);
+        assert.deepEqual(leftovers, [0, 0, 0, 0, 0, 0, 0]);
     });
 });
 

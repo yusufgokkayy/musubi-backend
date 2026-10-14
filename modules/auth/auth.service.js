@@ -26,6 +26,7 @@ const { CONSENT_DOCS, CURRENT_CONSENT_VERSIONS } = require('../../config/consent
 const { DOC_KEYS, docSummary } = require('../../config/legal/texts');
 const { safeTimezone } = require('../../utils/date.util');
 const Event = require('../../models/Event');
+const ReviewLog = require('../../models/ReviewLog');
 const logEvent = require('../../utils/event.util');
 const UserService = require('../user/user.service');
 const { revokeAppleTokens } = require('../../utils/appleRevoke');
@@ -132,7 +133,8 @@ const purgeUserData = async (userId) => {
         QuizAttempt.deleteMany({ user: userId }),
         DeviceSession.deleteMany({ user: userId }),
         StoryView.deleteMany({ user: userId }),
-        Event.deleteMany({ user: userId })
+        Event.deleteMany({ user: userId }),
+        ReviewLog.deleteMany({ user: userId })
     ]);
     await User.findByIdAndDelete(userId);
     if (owner?.avatarKey) await UserService.releaseAvatarFile(owner.avatarKey);

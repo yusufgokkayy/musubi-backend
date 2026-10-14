@@ -5,6 +5,7 @@ const User = require('../../models/User');
 const AppError = require('../../utils/AppError');
 const DailyWordPool = require('../../models/DailyWordPool');
 const StudySession = require('../../models/StudySession');
+const ReviewLog = require('../../models/ReviewLog');
 const StreakService = require('../streak/streak.service');
 const ProgressService = require('../progress/progress.service');
 const StudySessionService = require('../studysession/studysession.service');
@@ -24,6 +25,22 @@ const qualityMap = {
     correct: 4,
     empty: 2,
     wrong: 1
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+// Bundan uzun süre bir sorunun süresi değildir (uygulama arka planda kalmıştır)
+const MAX_ANSWER_DURATION_MS = 10 * 60 * 1000;
+
+// Tekrar geçmişine satır yazar (bkz. models/ReviewLog.js). Await EDİLİR ama
+// ASLA fırlatmaz: buraya gelindiğinde cevap UserWord'e işlenmiştir. Hata
+// yukarı çıksaydı istemci yeniden dener, cevap "bugün zaten verildi" dalına
+// düşer ve günün sayaçları hiç işlemezdi.
+const writeReviewLog = async (doc) => {
+    try {
+        await ReviewLog.create(doc);
+    } catch (err) {
+        console.error(`[reviewlog] yazılamadı (user ${doc.user}, word ${doc.word}):`, err.message);
+    }
 };
 
 // Günün NİHAİ cevabı bunlardan biridir; 'empty' ("Şimdilik Geç") erteleme
@@ -302,36 +319,70 @@ const readPoolWords = async (pool) => {
     return { reviewWords, newWords: newDocs };
 };
 
+// Günün havuzunda yeni kelimeye ayrılan pay ve bu payı kapatan borç eşiği
+// (bkz. selectPoolWords)
+const NEW_WORD_SHARE = 0.1;
+const DEBT_BRAKE_LESSONS = 2;
+
+// En eski vade önce; eşitlikte en kırılgan (düşük seviyeli) kelime kazanır
+const DUE_ORDER = { nextReviewDate: 1, masteryLevel: 1 };
+
+// Vadesi gelmiş tekrarların kapsamı — TÜM SEVİYELERDEN (05.10.2026).
+//
+// Eskiden tekrarlar dersin seviyesine kilitliydi: N4'e geçen kullanıcının N5
+// kelimeleri bir daha hiç sorulmuyor, decay ile çürüyordu. Yeni kelimeler hâlâ
+// yalnızca dersin seviyesinden gelir; karışan yalnızca tekrarlardır.
+//
+// Kelimesi silinmiş kayıtlar burada elenir. populate sonrası elemek olmaz:
+// öyle bir kayıt hiç cevaplanamadığı için vadesi hep en eski kalır ve her gün
+// kotadan bir yer yerdi (eski seviye filtresi bunu dolaylı olarak yapıyordu).
+const dueReviewScope = async (userId, { excludeReviewIds = [], excludeWordIds = [] } = {}) => {
+    const filter = {
+        user: userId,
+        _id: { $nin: excludeReviewIds },
+        word: { $nin: excludeWordIds },
+        nextReviewDate: { $lte: new Date() },
+        status: { $in: ['learning', 'learned'] }
+    };
+    const wordIds = await Word.find({
+        _id: { $in: await UserWord.find(filter).distinct('word') }
+    }).distinct('_id');
+
+    return { filter: { ...filter, word: { $in: wordIds } }, count: wordIds.length };
+};
+
 // Havuz için tekrar+yeni kelime seçimi — hem ilk kurulumda hem session bitip
 // yeni tur açılırken (excludeReviewIds/excludeWordIds ile önceki havuz hariç
 // tutularak) kullanılır. jlptLevel çağıran yerde zaten doğrulanmış/zorunlu.
-const selectPoolWords = async (userId, jlptLevel, goal, { excludeReviewIds = [], excludeWordIds = [], reviewRatio = 0.7 } = {}) => {
+const selectPoolWords = async (userId, jlptLevel, goal, { excludeReviewIds = [], excludeWordIds = [], reviewsOnly = false } = {}) => {
     // Kontenjan yoksa hiç sorgulama. Mongoose'ta .limit(0) "sınırsız" demektir:
     // goal=0 ile çağrılsaydı (ertelenenler turun tamamını doldurduğunda olur)
     // vadesi gelmiş TÜM kelimeler havuza dolardı.
     if (goal <= 0) return { reviewWordsRaw: [], newWordsRaw: [] };
 
-    // Günün havuzunda tekrarlar kontenjanın %70'ini alır (kalanı yeni kelime).
-    // EKSTRA havuzda oran 1'dir: "biraz daha çalışayım" diyen kullanıcıya önce
-    // borcunu ödetiriz, yeni kelime ancak vadesi gelmiş tekrar kalmayınca
-    // girer. Yoksa aynı gün iki kat yeni kelime ertesi güne iki kat tekrar
-    // borcu olarak döner ve kullanıcı birkaç gün sonra yığını görüp bırakır.
-    const reviewLimit = Math.ceil(goal * reviewRatio);
-    const levelWordIds = await Word.find({ jlptLevel }).distinct('_id');
+    const due = await dueReviewScope(userId, { excludeReviewIds, excludeWordIds });
 
-    // Seviye filtresi populate-match ile YAPILMAZ: eşleşmeyen kayıtlar
-    // word:null olarak dönüp limit kontenjanını yer, havuza boş kelime girerdi.
-    const reviewWordsRaw = await UserWord.find({
-        user: userId,
-        _id: { $nin: excludeReviewIds },
-        word: { $in: levelWordIds, $nin: excludeWordIds },
-        nextReviewDate: { $lte: new Date() },
-        status: { $in: ['learning', 'learned'] }
-    })
-        .populate('word')
-        // En eski vade önce; eşitlikte en kırılgan (düşük seviyeli) kelime kazanır
-        .sort({ nextReviewDate: 1, masteryLevel: 1 })
-        .limit(reviewLimit);
+    // TEKRAR KOTASI (05.10.2026). Günün havuzunda yeni kelimeye hedefin %10'u
+    // ayrılır (en az 1), gerisi vadesi gelmiş tekrarlarındır. Vadesi gelenler
+    // DEBT_BRAKE_LESSONS dersi aşınca o pay da tekrarlara geçer.
+    //
+    // Eskiden kota %70'ti ve kalan %30 HER GÜN yeni kelimeyle doluyordu. Günde
+    // 6 yeni kelimenin doğurduğu tekrar talebi 14'lük kotayı aşıyor; hedefini
+    // her gün tamamlayan kullanıcı bile bir ay sonra ~100, üç ay sonra ~400
+    // vadesi geçmiş kelimeyle kalıyor ve decay bildirimi almaya başlıyordu.
+    //
+    // EKSTRA havuz (reviewsOnly) baştan beri böyle çalışır: "biraz daha
+    // çalışayım" diyen kullanıcıya önce borcunu ödetiriz, yeni kelime ancak
+    // vadesi gelmiş tekrar kalmayınca girer.
+    const indebted = due.count > DEBT_BRAKE_LESSONS * goal;
+    const reservedForNew = reviewsOnly || indebted
+        ? 0
+        : Math.max(1, Math.round(goal * NEW_WORD_SHARE));
+    const reviewLimit = goal - reservedForNew;
+
+    const reviewWordsRaw = reviewLimit > 0
+        ? await UserWord.find(due.filter).populate('word').sort(DUE_ORDER).limit(reviewLimit)
+        : [];
 
     const learnedWordIds = await UserWord.find({ user: userId }).distinct('word');
 
@@ -359,7 +410,8 @@ const selectPoolWords = async (userId, jlptLevel, goal, { excludeReviewIds = [],
 // Neden: havuz kimliği {user, gün, seviye, havuz no}. Kural olmasaydı seviye
 // değişimi aynı güne İKİNCİ bir havuz açardı — anasayfa çemberinin paydası
 // iki havuzu toplayıp 40 gösterirken ders ekranı 20 gösteriyordu (21.09
-// bulgusu H2). Havuzun karışık seviyeli olması da istenmiyor.
+// bulgusu H2). Yeni kelimelerin karışık seviyeli olması da istenmiyor
+// (tekrarlar 05.10.2026'dan beri her seviyeden gelir, bkz. dueReviewScope).
 //
 // Bugün hiç cevap verilmemişse beklemeye gerek yok: kurulmuş ama dokunulmamış
 // havuz silinir, ders anında yeni seviyeden kurulur.
@@ -405,16 +457,13 @@ const expandPoolIfGoalRaised = async (userId, pool, jlptLevel, currentGoal) => {
     let need = currentGoal - poolSize;
 
     // Önce VADESİ GELMİŞ tekrarlar: "daha çok çalışmak istiyorum" diyen
-    // kullanıcıya önce borcu verilir; sabahki %70 kotasına sığmayanlar burada
-    // havuza girer
-    const levelWordIds = await Word.find({ jlptLevel }).distinct('_id');
-    const extraReviews = await UserWord.find({
-        user: userId,
-        _id: { $nin: pool.reviewWordIds },
-        word: { $in: levelWordIds, $nin: pool.newWordIds },
-        nextReviewDate: { $lte: new Date() },
-        status: { $in: ['learning', 'learned'] }
-    }).sort({ nextReviewDate: 1, masteryLevel: 1 }).limit(need);
+    // kullanıcıya önce borcu verilir; sabahki tekrar kotasına sığmayanlar
+    // burada havuza girer
+    const due = await dueReviewScope(userId, {
+        excludeReviewIds: pool.reviewWordIds,
+        excludeWordIds: pool.newWordIds
+    });
+    const extraReviews = await UserWord.find(due.filter).sort(DUE_ORDER).limit(need);
 
     if (extraReviews.length > 0) {
         pool.reviewWordIds.push(...extraReviews.map(uw => uw._id));
@@ -557,12 +606,12 @@ const UserWordService = {
         const size = Math.max(1, Math.ceil(dailyGoal / 2));
 
         // Birinci havuzun kelimeleri hariç tutulur; içerik önce vadesi gelmiş
-        // tekrarlardan kurulur (reviewRatio: 1).
+        // tekrarlardan kurulur (reviewsOnly).
         const firstPoolWordIds = await UserWord.find({ _id: { $in: first.reviewWordIds } }).distinct('word');
         const { reviewWordsRaw, newWordsRaw } = await selectPoolWords(userId, jlptLevel, size, {
             excludeReviewIds: first.reviewWordIds,
             excludeWordIds: [...firstPoolWordIds, ...first.newWordIds],
-            reviewRatio: 1
+            reviewsOnly: true
         });
 
         if (reviewWordsRaw.length + newWordsRaw.length === 0) {
@@ -637,7 +686,7 @@ const UserWordService = {
         };
     },
 
-    async submitAnswer(userId, wordId, result, answer) {
+    async submitAnswer(userId, wordId, result, answer, { durationMs } = {}) {
         // wordId gerçekten var mı kontrol et
         const wordExists = await Word.findById(wordId);
         if (!wordExists) throw new AppError('Word not found', 404);
@@ -660,6 +709,7 @@ const UserWordService = {
         if (result == null && answer == null) {
             throw new AppError('result veya answer gönderilmeli', 400);
         }
+        const answerMode = result == null ? 'typed' : 'reported';
         if (result == null) {
             // "Doğru cevap" satırı kullanıcının dilinde gösterilir; kabul
             // listesi iki dili de içerir (bkz. answer.util.js)
@@ -838,12 +888,25 @@ const UserWordService = {
                 // 3) Günün nihai cevabı (ilk gerçek cevap — doğrudan ya da
                 // ertelenmişin yükseltmesi): SM-2 + sayaçlar + streak burada,
                 // günde bir kez işler
+                //
+                // Tekrar geçmişi için cevaptan ÖNCEKİ durum: aşağıda üzerine
+                // yazılıyor, sonradan hiçbir yerden geri kurulamaz.
+                const now = new Date();
+                const before = {
+                    interval: userWord.interval,
+                    easeFactor: userWord.easeFactor,
+                    repetitions: userWord.repetitions,
+                    masteryLevel: userWord.masteryLevel || 1,
+                    dueAt: userWord.nextReviewDate
+                };
+                const firstReview = userWord.correctCount + userWord.wrongCount === 0;
+
                 const { easeFactor, interval, repetitions, nextReviewDate } = sm2(userWord, quality);
                 userWord.easeFactor = easeFactor;
                 userWord.interval = interval;
                 userWord.repetitions = repetitions;
                 userWord.nextReviewDate = nextReviewDate;
-                userWord.lastReviewDate = new Date();
+                userWord.lastReviewDate = now;
                 userWord.lastResult = result;
 
                 const previousLevel = userWord.masteryLevel || 1;
@@ -872,6 +935,39 @@ const UserWordService = {
                 }
 
                 await userWord.save();
+
+                // save()'in HEMEN ardından: eşzamanlı iki istekten yalnızca
+                // kazanan buraya ulaşır, kaybeden VersionError ile dönmüştür.
+                //
+                // Önceki tekrarın anı vade − aralık'tır (SM-2 vadeyi "cevap anı
+                // + aralık" olarak yazar). lastReviewDate kullanılamaz:
+                // "Şimdilik Geç" de onu tazeliyor.
+                const wordPool = pools.find(p =>
+                    p.newWordIds.some(id => String(id) === String(wordId)) ||
+                    p.reviewWordIds.some(id => String(id) === String(userWord._id))
+                );
+                await writeReviewLog({
+                    user: userId,
+                    word: wordId,
+                    reviewedAt: now,
+                    day: today,
+                    result,
+                    afterPostpone: emptyToday,
+                    answerMode,
+                    firstReview,
+                    elapsedDays: firstReview || !before.dueAt
+                        ? null
+                        : Math.max(0, Math.round(
+                            ((now - before.dueAt) / DAY_MS + before.interval) * 100
+                        ) / 100),
+                    before,
+                    after: { interval, easeFactor, repetitions, masteryLevel: userWord.masteryLevel },
+                    wordLevel: wordExists.jlptLevel,
+                    lessonLevel: activeLevel,
+                    poolNo: wordPool?.poolNo,
+                    ...(Number.isInteger(durationMs) && durationMs >= 0 && durationMs <= MAX_ANSWER_DURATION_MS
+                        && { durationMs })
+                });
 
                 // levelDropped için BİLEREK bildirim atılmıyor: kullanıcı cevabı
                 // verirken zaten uygulamanın içinde ve düşüş bilgisi bu çağrının
