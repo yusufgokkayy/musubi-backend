@@ -11,8 +11,8 @@ const UserWordController = {
 
     submitAnswer: catchAsync(async (req, res) => {
         // result (şıklı/kart akışı) VEYA answer (yazma sorusu, backend puanlar)
-        // durationMs opsiyoneldir (sorunun ekranda kaldığı süre); yalnızca
-        // tekrar geçmişine yazılır, geçersizse yok sayılır
+        // durationMs opsiyoneldir (sorunun ekranda kaldığı süre): dersin
+        // "Süre"sine ve tekrar geçmişine yazılır, geçersizse yok sayılır
         const { wordId, result, answer, durationMs } = req.body;
         const data = await UserWordService.submitAnswer(req.user.id, wordId, result, answer, { durationMs });
         res.status(200).json({ success: true, data: data });

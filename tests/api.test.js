@@ -2780,6 +2780,148 @@ describe('Tekrar geçmişi (ReviewLog)', () => {
     });
 });
 
+describe('Ders istatistikleri (13.10.2026): üst üste, süre ve bitiş ekranı', () => {
+    let token, userId, queue;
+    const cevapla = (body, tok = token) => api('POST', '/userwords/answer', { token: tok, body });
+
+    before(async () => {
+        const u = await createVerifiedUser('dersistat@test.com', { dailyGoal: 12 });
+        userId = u._id;
+        token = (await login('dersistat@test.com')).accessToken;
+        queue = (await api('GET', '/userwords/today', { token })).json.data.queue;
+        await api('POST', '/sessions/start', { token, body: { jlptLevel: 'N5' } });
+    });
+
+    it('doğru cevap seriyi büyütür; ekran yalnızca 5. doğruda açılır', async () => {
+        for (let i = 0; i < 4; i++) {
+            const { json } = await cevapla({ wordId: queue[i], result: 'correct' });
+            assert.equal(json.data.combo.current, i + 1);
+            assert.equal(json.data.combo.milestone, null, `${i + 1}. doğruda ekran açılmamalı`);
+        }
+        const { json } = await cevapla({ wordId: queue[4], result: 'correct' });
+        assert.deepEqual(json.data.combo, { current: 5, best: 5, milestone: 5 });
+        assert.equal(json.data.lesson.correctWords, 5);
+    });
+
+    it('"Şimdilik Geç" ve nötr tekrar cevabı seriye dokunmaz, ekranı yeniden açmaz', async () => {
+        const gec = await cevapla({ wordId: queue[5], result: 'empty' });
+        assert.deepEqual(gec.json.data.combo, { current: 5, best: 5, milestone: null });
+
+        // queue[0] bugün zaten cevaplandı → tekrar çalışma turu (counted:false).
+        // Yanlış bile olsa seriyi bozmamalı, doğru olsa da büyütmemeli.
+        const notrYanlis = await cevapla({ wordId: queue[0], result: 'wrong' });
+        assert.equal(notrYanlis.json.data.counted, false);
+        assert.deepEqual(notrYanlis.json.data.combo, { current: 5, best: 5, milestone: null });
+
+        const notrDogru = await cevapla({ wordId: queue[1], result: 'correct' });
+        assert.equal(notrDogru.json.data.combo.current, 5, 'havuzu baştan çözerek seri büyütülemez');
+        assert.equal(notrDogru.json.data.lesson.correctWords, 5, 'nötr cevap sayaca yazılmaz');
+    });
+
+    it('yanlış cevap seriyi sıfırlar, en iyisi kalır; doğruluk ertelenenleri saymaz', async () => {
+        const { json } = await cevapla({ wordId: queue[6], result: 'wrong' });
+        assert.deepEqual(json.data.combo, { current: 0, best: 5, milestone: null });
+        // 5 doğru + 1 yanlış; ertelenen queue[5] paydada yok
+        assert.deepEqual(
+            [json.data.lesson.correctWords, json.data.lesson.wrongWords, json.data.lesson.accuracy, json.data.lesson.bestCombo],
+            [5, 1, 83, 5]
+        );
+    });
+
+    it('ertelenen kelimenin gerçek cevabı seriye işler', async () => {
+        const { json } = await cevapla({ wordId: queue[5], result: 'correct' });
+        assert.equal(json.data.counted, true);
+        assert.equal(json.data.combo.current, 1);
+        assert.equal(json.data.lesson.correctWords, 6);
+    });
+
+    it('süre: istemcinin gönderdiği süreler toplanır, tek cevap en fazla 60 sn yazar', async () => {
+        const u = await createVerifiedUser('derssure@test.com', { dailyGoal: 6 });
+        const t = (await login('derssure@test.com')).accessToken;
+        const q = (await api('GET', '/userwords/today', { token: t })).json.data.queue;
+        await api('POST', '/sessions/start', { token: t, body: { jlptLevel: 'N5' } });
+
+        const a = await cevapla({ wordId: q[0], result: 'correct', durationMs: 4000 }, t);
+        assert.equal(a.json.data.lesson.durationSeconds, 4);
+
+        // Telefonu bırakıp giden kullanıcı: 5 dakika ekranda kalmış soru 60 sn sayılır
+        const b = await cevapla({ wordId: q[1], result: 'wrong', durationMs: 300000 }, t);
+        assert.equal(b.json.data.lesson.durationSeconds, 64);
+
+        // "Şimdilik Geç" de ekranda geçen süredir
+        const c = await cevapla({ wordId: q[2], result: 'empty', durationMs: 2000 }, t);
+        assert.equal(c.json.data.lesson.durationSeconds, 66);
+
+        // İstemci süre GÖNDERMEZSE sunucu bir önceki cevaptan bu yana geçen
+        // süreyi yazar; mola (1 saat) yine 60 sn ile sınırlanır
+        const pool = await DailyWordPool.findOne({ user: u._id, poolNo: 1 });
+        await DailyWordPool.updateOne({ _id: pool._id }, { lastAnswerAt: new Date(Date.now() - 10 * 1000) });
+        const d = await cevapla({ wordId: q[3], result: 'correct' }, t);
+        assert.ok(
+            d.json.data.lesson.durationSeconds >= 76 && d.json.data.lesson.durationSeconds <= 78,
+            `10 sn'lik boşluk yazılmalı, gelen: ${d.json.data.lesson.durationSeconds}`
+        );
+
+        await DailyWordPool.updateOne({ _id: pool._id }, { lastAnswerAt: new Date(Date.now() - 60 * 60 * 1000) });
+        const e = await cevapla({ wordId: q[4], result: 'correct' }, t);
+        const beklenen = d.json.data.lesson.durationSeconds + 60;
+        assert.ok(
+            Math.abs(e.json.data.lesson.durationSeconds - beklenen) <= 1,
+            `1 saatlik mola 60 sn yazmalı, gelen: ${e.json.data.lesson.durationSeconds}`
+        );
+    });
+
+    it('ilk cevapta süre gönderilmediyse uydurulmaz (0 yazılır)', async () => {
+        await createVerifiedUser('dersilk@test.com', { dailyGoal: 5 });
+        const t = (await login('dersilk@test.com')).accessToken;
+        const q = (await api('GET', '/userwords/today', { token: t })).json.data.queue;
+        await api('POST', '/sessions/start', { token: t, body: { jlptLevel: 'N5' } });
+
+        const { json } = await cevapla({ wordId: q[0], result: 'correct' }, t);
+        assert.equal(json.data.lesson.durationSeconds, 0);
+    });
+
+    it('bitiş ekranı ve derse dönüş aynı ders bloğunu okur', async () => {
+        const bitis = await api('PUT', '/sessions/complete', { token });
+        assert.equal(bitis.status, 200);
+        assert.deepEqual(
+            Object.keys(bitis.json.data.lesson).sort(),
+            ['accuracy', 'bestCombo', 'correctWords', 'durationSeconds', 'poolNo', 'wrongWords']
+        );
+        assert.deepEqual(
+            [bitis.json.data.lesson.poolNo, bitis.json.data.lesson.correctWords, bitis.json.data.lesson.wrongWords],
+            [1, 6, 1]
+        );
+
+        const [today, current] = await Promise.all([
+            api('GET', '/userwords/today', { token }),
+            api('GET', '/sessions/current', { token })
+        ]);
+        assert.deepEqual(today.json.data.lesson, bitis.json.data.lesson);
+        assert.deepEqual(current.json.data.lesson, bitis.json.data.lesson);
+        assert.deepEqual(today.json.data.combo, { current: 1, best: 5, milestone: null });
+    });
+
+    it('ikinci havuzun sayıları sıfırdan başlar (birincininkini taşımaz)', async () => {
+        await createVerifiedUser('dersiki@test.com', { dailyGoal: 6 });
+        const t = (await login('dersiki@test.com')).accessToken;
+        const q = (await api('GET', '/userwords/today', { token: t })).json.data.queue;
+        await api('POST', '/sessions/start', { token: t, body: { jlptLevel: 'N5' } });
+        for (const wordId of q) await cevapla({ wordId, result: 'correct', durationMs: 1000 }, t);
+
+        const ilk = (await api('PUT', '/sessions/complete', { token: t })).json.data.lesson;
+        assert.deepEqual([ilk.poolNo, ilk.correctWords, ilk.durationSeconds, ilk.bestCombo], [1, 6, 6, 6]);
+
+        const ikinci = await api('POST', '/sessions/next-pool', { token: t });
+        assert.equal(ikinci.status, 201);
+        assert.deepEqual(
+            [ikinci.json.data.lesson.poolNo, ikinci.json.data.lesson.correctWords, ikinci.json.data.lesson.durationSeconds],
+            [2, 0, 0]
+        );
+        assert.equal(ikinci.json.data.combo.current, 0, 'seri ders kapsamlıdır, yeni havuzda sıfırdan başlar');
+    });
+});
+
 describe('Kaldırılan uçlar (21.09.2026)', () => {
     let token;
 

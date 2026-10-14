@@ -43,7 +43,35 @@ const DailyWordPoolSchema = new mongoose.Schema({
     // çağrısında yeniden doldurmaya çalışmak paydayı sessizce büyütüyordu.
     targetGoal: {
         type: Number
-    }
+    },
+
+    // ——— DERSİN (bu havuzun) istatistikleri ———
+    // Bitiş ekranındaki "%85 Doğruluk · 4:15 Süre · +12 Kanji" ve ders içindeki
+    // "5 Kere Üstüste!" ekranı buradan beslenir. Sayaçların tek yazıcısı
+    // userword.service.js'teki recordLessonActivity'dir (atomik güncelleme).
+    //
+    // StudySession'da DEĞİL burada dururlar: oturum GÜNÜN özetidir ve ikinci
+    // havuzla birikir; bitiş ekranı ise az önce biten DERSİ anlatır.
+
+    // Günün nihai cevabı doğru/yanlış olan kelime sayısı. "Şimdilik Geç" ve
+    // tekrar çalışma turundaki nötr cevaplar sayılmaz.
+    correctCount: { type: Number, default: 0 },
+    wrongCount: { type: Number, default: 0 },
+
+    // Kelimelerin ekranda kaldığı toplam süre (ms). Her cevapta büyür; kaynağı
+    // istemcinin gönderdiği durationMs, yoksa sunucunun ölçtüğü cevaplar arası
+    // boşluktur. İkisi de tek cevap için ACTIVE_TIME_CAP_MS ile sınırlanır —
+    // dersi yarıda bırakıp akşam dönen kullanıcının molası süreye yazılmasın.
+    activeMs: { type: Number, default: 0 },
+    // Sunucu ölçümünün dayanağı: bu havuza gelen son cevabın anı
+    lastAnswerAt: { type: Date },
+
+    // Art arda doğru sayısı ve dersteki en yüksek değeri. Doğru +1, yanlış
+    // sıfırlar; "Şimdilik Geç" ve nötr tekrar cevabı DOKUNMAZ (ertelenen kelime
+    // aynı derste geri gelir, yanlışsa seriyi o zaman bozar; nötr cevap sayılsaydı
+    // havuzu baştan çözen kullanıcı seriyi sınırsız büyütürdü).
+    combo: { type: Number, default: 0 },
+    bestCombo: { type: Number, default: 0 }
 });
 
 // Gün + seviye + havuz numarası tekildir. Eskiden anahtar {user,date,jlptLevel}

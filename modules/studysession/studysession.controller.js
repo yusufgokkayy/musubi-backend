@@ -14,12 +14,20 @@ const StudySessionController = {
     // Bitiş ekranı: oturum özeti + "yeni havuz açabilir miyim" bayrağı.
     // canOpenNextPool havuzun durumundan türer (UserWordService), oturumdan
     // değil — bitiş ekranındaki "Çalışmaya Devam Et" butonu buna bakar.
+    //
+    // lesson: ekrandaki üç kutu (Doğruluk · Süre · +Kanji). Oturumun kendi
+    // alanları GÜNÜN toplamıdır; bitiş ekranı az önce biten DERSİ (havuzu)
+    // anlatır, o yüzden sayılar havuzdan gelir.
     completeSession: catchAsync(async (req, res) => {
         const session = await StudySessionService.completeSession(req.user.id);
         const round = await UserWordService.getCurrentRound(req.user.id);
         res.status(200).json({
             success: true,
-            data: { ...session, canOpenNextPool: round?.canOpenNextPool ?? false }
+            data: {
+                ...session,
+                canOpenNextPool: round?.canOpenNextPool ?? false,
+                lesson: round?.lesson ?? null
+            }
         });
     }),
 

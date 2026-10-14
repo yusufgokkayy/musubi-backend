@@ -1236,6 +1236,8 @@ function wireExit() {
 function renderQuestion() {
   const L = state.lesson;
   L.busy = false;
+  // Bitiş ekranındaki "Süre" ve tekrar geçmişi bu süreyi kullanır
+  L.shownAt = Date.now();
   const w = L.queue[L.idx].word;
   paint(lessonHead() + `
     <div class="pad">
@@ -1269,7 +1271,10 @@ async function submitAnswer(payload) {
 
   const tk = activeToken;
   const item = L.queue[L.idx];
-  const res = await api('POST', '/userwords/answer', { wordId: item.id, ...payload });
+  const res = await api('POST', '/userwords/answer', {
+    wordId: item.id, ...payload,
+    ...(L.shownAt && { durationMs: Math.min(Date.now() - L.shownAt, 600000) })
+  });
   if (stale(tk)) return;
   L.busy = false;
   if (!guard(res)) {
@@ -1284,7 +1289,10 @@ async function submitAnswer(payload) {
   L.done = d.progress.completed;
   L.total = d.progress.total;
   L.pending = d.progress.postponed;
-  L.streak = (d.result === 'correct' || d.result === 'easy') ? L.streak + 1 : 0;
+  // "Üst üste" ekranı sunucunun sayacından açılır: uygulama kapanıp açılsa da
+  // seri kaybolmaz, tekrar çözme turundaki nötr cevaplar seriyi büyütmez
+  L.streak = d.combo?.current ?? 0;
+  L.milestone = d.combo?.milestone ?? null;
 
   const tone = d.result === 'wrong' ? 'bad' : d.result === 'empty' ? 'warn' : 'good';
   const icon = d.result === 'wrong' ? I.xCircle : d.result === 'empty' ? I.qCircle : I.checkCircle;
@@ -1317,7 +1325,7 @@ async function submitAnswer(payload) {
 
 function advance() {
   const L = state.lesson;
-  if (L.streak > 0 && L.streak % 5 === 0) { L.phase = 'streak'; return renderLesson(); }
+  if (L.milestone) { L.phase = 'streak'; return renderLesson(); }
   nextWord();
 }
 
@@ -1350,11 +1358,11 @@ function renderStreakSplash() {
   const L = state.lesson;
   paint(`<div class="center-scr">
       <div class="blob">${I.flame}</div>
-      <h2>${L.streak} Kere Üstüste!</h2>
+      <h2>${L.milestone} Kere Üstüste!</h2>
       <p>Harika gidiyorsun. Böyle devam et!</p>
       <button class="btn btn-primary" id="b-go" style="max-width:260px">Devam Et</button>
     </div>`);
-  $('#b-go').addEventListener('click', nextWord);
+  $('#b-go').addEventListener('click', () => { L.milestone = null; nextWord(); });
 }
 
 async function finishLesson() {
@@ -1372,16 +1380,18 @@ async function finishLesson() {
 function renderLessonResult() {
   const r = state.lesson.result;
   const s = r.summary;
-  const mins = Math.floor((r.duration || 0));
+  // Üç kutu DERSİN sayılarıdır (lesson); oturumun alanları günün toplamıdır
+  const ders = r.lesson || {};
+  const sure = `${Math.floor((ders.durationSeconds || 0) / 60)}:${String((ders.durationSeconds || 0) % 60).padStart(2, '0')}`;
   paint(`<div class="center-scr">
       <div class="bigring">${ringSvg(1, { size: 168, stroke: 13 })}
         <span class="v"><b>${r.totalWords}/${r.totalWords}</b><span>Tamamlandı</span></span></div>
       <h2>Tebrikler! 🎉</h2>
       <p>Dersi başarıyla bitirdin! Bugünkü dersin analizine anasayfadan ulaşabilirsin.</p>
       <div class="tiles">
-        <div class="tile"><div class="ic">${I.target}</div><div class="v">%${r.accuracy ?? 0}</div><div class="k">Doğruluk</div></div>
-        <div class="tile"><div class="ic">${I.target}</div><div class="v">${mins} dk</div><div class="k">Süre</div></div>
-        <div class="tile"><div class="ic"><span class="jp">結</span></div><div class="v">+${r.correctCount ?? 0}</div><div class="k">Doğru</div></div>
+        <div class="tile"><div class="ic">${I.target}</div><div class="v">%${ders.accuracy ?? 0}</div><div class="k">Doğruluk</div></div>
+        <div class="tile"><div class="ic">${I.target}</div><div class="v">${sure}</div><div class="k">Süre</div></div>
+        <div class="tile"><div class="ic"><span class="jp">結</span></div><div class="v">+${ders.correctWords ?? 0}</div><div class="k">Kanji</div></div>
       </div>
       <button class="btn btn-primary gap-24" id="b-next" style="max-width:300px">Devam Et</button>
     </div>`);

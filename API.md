@@ -862,6 +862,11 @@ taşır; hiç dokunulmamış kelimede `todayResult: null`'dur.
     "canFinish": true,           // PUT /sessions/complete çağrılabilir mi (touched > 0)
     "canOpenNextPool": false,    // POST /sessions/next-pool çağrılabilir mi
 
+    // ——— DERSİN istatistikleri (13.10.2026) — bkz. "Ders istatistikleri" ———
+    "combo":  { "current": 3, "best": 7, "milestone": null },   // art arda doğru
+    "lesson": { "poolNo": 1, "correctWords": 7, "wrongWords": 2, "accuracy": 78,
+                "durationSeconds": 143, "bestCombo": 7 },      // bitiş ekranının üç kutusu
+
     // ——— GÜNÜN durumu (anasayfa çemberi bunu okur) ———
     "goal": 30,                  // GÜNÜN HEDEFİ = 1. havuzun boyutu; ekstra havuz bunu BÜYÜTMEZ
     "today": {                   // /home/summary ile AYNI kaynak ve şekil
@@ -907,9 +912,11 @@ noktaya istek atarak sınırsız/rastgele kelime cevaplama girişimini kapatır.
 // ve noktalama önemsizdir). Boş METİN ("") "empty" sayılır.
 { "wordId": "665f2b...", "answer": "to see" }
 
-// OPSİYONEL — iki biçimde de eklenebilir: sorunun ekranda kaldığı süre (ms,
-// 0–600000 arası tam sayı). Yanıtı ETKİLEMEZ, yalnızca tekrar geçmişine
-// yazılır; geçersiz değer cevabı reddettirmez, yok sayılır.
+// ÖNERİLİR — iki biçimde de eklenebilir: sorunun ekranda kaldığı süre (ms,
+// 0–600000 arası tam sayı). Puanlamayı ETKİLEMEZ; bitiş ekranındaki "Süre"
+// bu sürelerin toplamıdır ve tekrar geçmişine de yazılır (ileride FSRS'in
+// "zor/iyi/kolay" ayrımı bundan çıkarılacak). Geçersiz değer cevabı
+// reddettirmez, yok sayılır — o zaman süreyi sunucu kendisi ölçer.
 { "wordId": "665f2b...", "result": "correct", "durationMs": 4200 }
 
 // İkisinden de yoksa 400: `result` yok + `answer` yok/null belirsiz bir
@@ -937,6 +944,12 @@ noktaya istek atarak sınırsız/rastgele kelime cevaplama girişimini kapatır.
     "todayResult": "correct",  // kelimenin GÜNE KAYITLI sonucu — rozet bundan çizilir
     "correctAnswer": "to see", // yalnızca answer gönderildiyse: "Cevap: ..." satırı için
     "counted": true,           // false ise cevap kaydedilmedi (tekrar çalışma turu)
+
+    // "5 Kere Üstüste!" ekranı: milestone DOLUYSA göster (bkz. "Ders istatistikleri")
+    "combo":  { "current": 5, "best": 5, "milestone": 5 },
+    // Bitiş ekranının sayıları — PUT /sessions/complete de aynı bloğu döner
+    "lesson": { "poolNo": 1, "correctWords": 7, "wrongWords": 2, "accuracy": 78,
+                "durationSeconds": 143, "bestCombo": 5 },
 
     // Ders barı için TURUN durumu (bkz. /userwords/today'deki tablo)
     "goal": 20,
@@ -986,6 +999,41 @@ Tekrar çalışma turunda (`counted: false`) `result` yine puanlanıp döner ama
   içinde yeniden sorulur; gelen ilk gerçek cevap normal sayılır ve session
   sayacı düzeltilir (`emptyCount--`, sonuç sayacı `++`, toplam değişmez).
 - Ertesi gün her şey gerçek sinyaldir: doğru ilerletir, yanlış sıfırlar.
+
+#### Ders istatistikleri — `combo` ve `lesson` (13.10.2026)
+
+İkisinin de kapsamı **aktif havuzdur** (ders): ikinci havuz açılınca sıfırdan başlar.
+`GET /userwords/today`, `GET /sessions/current`, `POST /userwords/answer` ve
+`PUT /sessions/complete` aynı blokları döner. İstemci **kendi sayacını tutmamalı** —
+uygulama kapanıp açılsa da seri ve süre sunucuda durur.
+
+**`combo` — art arda doğru ("5 Kere Üstüste!" ekranı)**
+
+| Cevap | Seri |
+|---|---|
+| Doğru (günün nihai cevabı) | +1 |
+| Yanlış (günün nihai cevabı) | 0'a döner |
+| "Şimdilik Geç" | **değişmez** — kelime aynı derste geri gelir, yanlışsa seri o zaman bozulur |
+| Tekrar çözme turundaki nötr cevap (`counted: false`) | **değişmez** — havuzu baştan çözerek seri büyütülemez |
+
+`milestone`, seri **bu cevapla** 5'in bir katına ulaştıysa o sayıdır (5, 10, 15…), aksi
+halde `null`. Ekran yalnızca `milestone` doluyken açılır; `current % 5 === 0` kontrolü
+**yapma** — seri 5'teyken gelen "Şimdilik Geç" yanıtında da `current: 5` döner ve ekran
+ikinci kez açılır. `best` dersteki en yüksek seridir.
+
+**`lesson` — bitiş ekranının üç kutusu**
+
+| Alan | Ekranda | Tanım |
+|---|---|---|
+| `accuracy` | "%85 Doğruluk" | doğru / (doğru + yanlış); "Şimdilik Geç" paydada yok |
+| `durationSeconds` | "4:15 Süre" | kelimelerin ekranda kaldığı toplam süre (aşağıya bak) |
+| `correctWords` | "+12 Kanji" | bu derste doğru cevaplanan kelime sayısı |
+
+`durationSeconds` **aktif süredir**: her cevabın `durationMs`'i toplanır, tek cevap en
+fazla **60 saniye** yazar (soruyu açık bırakıp giden kullanıcının bekleyişi süreye
+girmez). `durationMs` gönderilmezse sunucu bir önceki cevaptan bu yana geçen süreyi
+kullanır (yine en fazla 60 sn; dersin ilk cevabında dayanak olmadığı için 0). Doğru
+sayı için **`durationMs` gönderin**.
 
 ### GET /userwords/stats 🔒✉️
 ```jsonc
@@ -1086,9 +1134,19 @@ Bitiş ekranını açar. **Havuzu KİLİTLEMEZ, yeni havuz AÇMAZ.**
   // Sonraya bırakılmış kelime sayısı — "3 kelimeyi sonraya bıraktın" satırı için
   "pendingWords": 3,
   // "Çalışmaya Devam Et" butonu bunu okur (POST /sessions/next-pool)
-  "canOpenNextPool": false
+  "canOpenNextPool": false,
+  // BİTİŞ EKRANININ ÜÇ KUTUSU (13.10.2026) — az önce biten DERSİN sayıları
+  "lesson": { "poolNo": 1, "correctWords": 12, "wrongWords": 2, "accuracy": 86,
+              "durationSeconds": 255, "bestCombo": 7 }
 } }
 ```
+
+**Bitiş ekranı `lesson` bloğunu okumalı** ("%86 Doğruluk · 4:15 Süre · +12 Kanji"; alan
+tanımları: [Ders istatistikleri](#ders-istatistikleri--combo-ve-lesson-13102026)).
+Kökteki `accuracy`, `correctCount` ve `duration` **günün** toplamıdır: ikinci havuzun
+bitiş ekranında birinci havuzun sayılarını da içerirler. `duration` ayrıca dakika
+cinsindendir ve günün oturumu açıldığı andan ölçülür (araya giren molalar dahil) —
+ekrandaki "Süre" için **kullanılmamalıdır**.
 
 **Tek koşul: en az bir kelimeye dokunulmuş olmalı.** Hiç dokunulmadıysa `400`
 döner — hiç çalışmadan "Tebrikler" ekranı görmek anlamsız.
@@ -1163,6 +1221,9 @@ istemcinin hiçbir şey hatırlaması gerekmez: kuyruk, sıra ve ilerleme sunucu
     "progress": { "total": 20, "completed": 7, "postponed": 3, "remaining": 10, "touched": 10 },
     "canFinish": true,
     "canOpenNextPool": false,
+    "combo":  { "current": 3, "best": 7, "milestone": null },
+    "lesson": { "poolNo": 1, "correctWords": 7, "wrongWords": 2, "accuracy": 78,
+                "durationSeconds": 143, "bestCombo": 7 },
     "goal": 20,                 // günün hedefi (1. havuz)
     "today": { "completedWords": 7, "extra": 0, "totalWords": 10, "correctCount": 5,
                "wrongCount": 2, "emptyCount": 3, "isCompleted": false }
