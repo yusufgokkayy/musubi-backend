@@ -1639,6 +1639,7 @@ anlam sorusu gelir, yani sayılar veri eksikse anlam lehine kayabilir.
   okunuş satırını ikinci kez çizme.
 - **`reading`:** yanlış şıklar doğru okunuşun küçük bozulmalarıdır (びょういん →
   ひょういん / びょいん / びよういん): sesli-sessiz, uzun-kısa ünlü, küçük っ ve ゃゅょ.
+  Bunlar çıkmayan kısa okunuşlarda aynı satırdan ünlü değişir (おんな → おんの / えんな).
   Kelimenin ekranda yazan okurigana'sı (食**べる**) şıklarda değişmez.
 - **`spelling`:** eş sesli kelime (紙 / 髪 → かみ) aynı soruda şık olmaz.
 - **`fillblank`:** boşluk `____` (dört alt çizgi) ile gösterilir. `sentence` düz cümledir;

@@ -2166,7 +2166,15 @@ describe('Sınav soru karışımı (13.10.2026): anlam, okunuş, yazılış, bo�
     it('okunuş çeldiricileri doğru okunuşun küçük bozulmalarıdır; okurigana\'ya dokunulmaz', async () => {
         const { readingMutations } = require('../utils/kana.util');
         const tum = (kana) => Object.values(readingMutations(kana)).flat();
-        assert.deepEqual(new Set(tum('びょういん')), new Set(['ひょういん', 'ぴょういん', 'びょいん', 'びよういん']));
+        // JLPT tarzı bozulmalar (ünlü değişimi hariç — o yalnızca yedektir)
+        const { vowel, ...klasik } = readingMutations('びょういん');
+        assert.deepEqual(new Set(Object.values(klasik).flat()), new Set(['ひょういん', 'ぴょういん', 'びょいん', 'びよういん']));
+        assert.ok(!vowel.some(v => v.startsWith('ば') || v.startsWith('ぶ')), 'ゃゅょ önündeki hece değişmez (きょ\'nun き\'si)');
+        // Kısa okunuşta başka bozulma yok; şıklar ünlü değişiminden gelir, başka kelimeden değil
+        const onna = readingMutations('おんな');
+        assert.deepEqual([onna.voicing, onna.shorten, onna.sokuon, onna.yoon, onna.lengthen].flat(), []);
+        assert.ok(onna.vowel.includes('おんの') && onna.vowel.includes('あんな'));
+        assert.ok(!readingMutations('こう').vowel.includes('こあ'), 'uzatma ünlüsü değişmez');
         assert.ok(tum('がっこう').includes('がこう') && tum('がっこう').includes('かっこう'));
         assert.ok(!tum('きょう').includes('きょうう'), 'zaten uzun ünlü bir daha uzatılmaz');
         assert.ok(!tum('えき').includes('えき'), 'doğru okunuşun kendisi çeldirici olamaz');

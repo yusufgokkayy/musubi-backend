@@ -42,16 +42,33 @@ const inScript = (hiragana, like) => (isKatakana(like) ? toKatakana(hiragana) : 
 
 const VOWELS = bothScripts('あいうえお') + 'ー';
 
+// Aynı ünsüz satırının heceleri (な → に ぬ ね の). ぢ/づ bilerek yok: günlük
+// yazımda neredeyse hiç geçmezler, şıkta görünce "bu yanlış" diye elenirler.
+const SAME_ROW = new Map();
+for (const row of ['あいうえお', 'かきくけこ', 'がぎぐげご', 'さしすせそ', 'ざじずぜぞ', 'たちつてと',
+    'だでど', 'なにぬねの', 'はひふへほ', 'ばびぶべぼ', 'ぱぴぷぺぽ', 'まみむめも', 'やゆよ', 'らりるれろ']) {
+    for (const r of [row, toKatakana(row)]) {
+        for (const ch of r) SAME_ROW.set(ch, [...r].filter(c => c !== ch));
+    }
+}
+const SMALL_YOON = bothScripts('ゃゅょ');
+
 /**
  * Bir okunuşun tek adımlık bozulmaları, türüne göre gruplanmış. Sıra aynı
- * zamanda İNANDIRICILIK sırasıdır: `lengthen` sona kalır, çünkü ünlü uzatma
+ * zamanda İNANDIRICILIK sırasıdır: `lengthen` sonlara kalır, çünkü ünlü uzatma
  * kelimenin ortasında yapay duran şıklar da üretir (たべる → たべいる).
- * @returns {{voicing: string[], shorten: string[], sokuon: string[], yoon: string[], lengthen: string[]}}
+ *
+ * `vowel` (aynı satırda ünlü değişimi: おんな → おんの, えんな) en sondadır ve
+ * yalnızca diğerleri yetmeyince kullanılır. Kısa okunuşların (女, 目, 火) başka
+ * bozulması yoktur; o zaman şıklar başka kelimelerin okunuşlarından geliyordu
+ * (おんな / こうばん / もんだい) ve bakmadan eleniyordu.
+ * @returns {{voicing: string[], shorten: string[], sokuon: string[], yoon: string[], lengthen: string[], vowel: string[]}}
  */
 const readingMutations = (kana) => {
     const chars = [...String(kana || '')];
     const out = {
-        voicing: new Set(), shorten: new Set(), sokuon: new Set(), yoon: new Set(), lengthen: new Set()
+        voicing: new Set(), shorten: new Set(), sokuon: new Set(), yoon: new Set(), lengthen: new Set(),
+        vowel: new Set()
     };
     const splice = (i, remove, ...insert) => {
         const copy = [...chars];
@@ -94,6 +111,14 @@ const readingMutations = (kana) => {
         if (LARGE_TO_SMALL.has(ch) && prev && I_ROW_CONSONANT.includes(prev)) {
             out.yoon.add(splice(i, 1, LARGE_TO_SMALL.get(ch)));
         }
+
+        // Aynı satırda ünlü değişimi: おんな → おんの. Ardından küçük ゃゅょ gelen
+        // hece değişmez (きょ'nun き'si i-sırası olmak zorunda), kelime içindeki
+        // çıplak ünlü de değişmez — çoğu zaman uzatmadır (こう → こあ anlamsız).
+        const vowelInside = i > 0 && VOWELS.includes(ch);
+        if (!vowelInside && !(next && SMALL_YOON.includes(next))) {
+            for (const alt of SAME_ROW.get(ch) || []) out.vowel.add(splice(i, 1, alt));
+        }
     });
 
     const clean = (set) => [...set].filter(v => v && v !== kana);
@@ -102,7 +127,8 @@ const readingMutations = (kana) => {
         shorten: clean(out.shorten),
         sokuon: clean(out.sokuon),
         yoon: clean(out.yoon),
-        lengthen: clean(out.lengthen)
+        lengthen: clean(out.lengthen),
+        vowel: clean(out.vowel)
     };
 };
 
