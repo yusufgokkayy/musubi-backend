@@ -1,5 +1,24 @@
+const crypto = require('crypto');
 const Word = require('../../models/Word');
 const AppError = require('../../utils/AppError');
+const storage = require('../../config/storage');
+const { isMp3 } = require('../../utils/audio.util');
+
+const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
+
+// Ses türü → Word alanı. "word" kelimenin okunuşu ("Dinle" butonu),
+// "example" örnek cümlenin sesi ("ÖRNEK KULLANIM" başlığındaki hoparlör).
+const AUDIO_FIELDS = { word: 'audioKey', example: 'exampleAudioKey' };
+const AUDIO_FOLDER = 'audio';
+
+// Bir ses dosyasını hâlâ kullanan kelime var mı? Dosya adı içeriğin hash'i
+// olduğu için iki kelime AYNI dosyayı paylaşabilir (aynı baytlar iki kez
+// yüklenirse tek dosyaya düşer) — eski dosya körlemesine silinirse diğer
+// kelimenin sesi kırılır. Hikâye görsellerindeki kuralın aynısı.
+const removeAudioIfUnused = async (key) => {
+    const stillUsed = await Word.exists({ $or: [{ audioKey: key }, { exampleAudioKey: key }] });
+    if (!stillUsed) await storage.remove(key);
+};
 
 // Kullanıcı girdisindeki regex özel karakterlerini etkisizleştirir (ReDoS/regex injection koruması)
 const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -99,6 +118,85 @@ const WordService = {
         const word = await Word.findById(id);
         if (!word) throw new AppError('Word not found', 404);
         return word;
+    },
+
+    // POST /api/words/audio — ses dosyalarını kelimelere bağlar.
+    //
+    // files[i] ile items[i] eşleşir (sıra sözleşmenin parçası: multer dosya
+    // adındaki klasörü atıyor, "n5/0001.mp3" ile "n4/0001.mp3" aynı ada düşerdi).
+    //
+    // Kelime SEVİYE + MÜFREDAT SIRASI ile bulunur — ses üretimi veri setinden
+    // yapılıyor ve oradaki kimlik budur (veritabanı id'sini bilmez). Öğe
+    // `word` de taşıyorsa bulunan kelimenin yazımıyla KARŞILAŞTIRILIR: liste bir
+    // satır kayarsa 駅'e 電車'nin sesi sessizce yazılmasın, öğe reddedilsin.
+    //
+    // İstek bütün olarak başarısız OLMAZ: her öğenin sonucu ayrı döner, hatalı
+    // öğe diğerlerini durdurmaz (gönderici betik eksikleri raporlar ve yeniden
+    // çalıştırılabilir — aynı dosya ikinci kez gelirse "unchanged" olur).
+    async importAudio(files = [], items) {
+        if (!Array.isArray(items) || items.length === 0) {
+            throw new AppError("items gerekli: [{ level, order, kind, word? }] biçiminde JSON dizisi", 400);
+        }
+        if (files.length !== items.length) {
+            throw new AppError(
+                `Dosya sayısı (${files.length}) ile items sayısı (${items.length}) eşit olmalı`, 400
+            );
+        }
+
+        const results = [];
+        for (let index = 0; index < items.length; index++) {
+            results.push({ index, ...(await WordService.importOneAudio(files[index], items[index])) });
+        }
+
+        const count = (status) => results.filter(r => r.status === status).length;
+        const stored = count('stored');
+        const unchanged = count('unchanged');
+        return {
+            summary: { total: results.length, stored, unchanged, failed: results.length - stored - unchanged },
+            results
+        };
+    },
+
+    async importOneAudio(file, item) {
+        const fail = (status, message) => ({ status, message });
+
+        const level = String(item?.level ?? '').toUpperCase();
+        const order = Number(item?.order);
+        const field = AUDIO_FIELDS[item?.kind];
+        if (!LEVELS.includes(level)) return fail('invalid', 'level N5-N1 arasında olmalı');
+        if (!Number.isInteger(order) || order < 1) return fail('invalid', 'order pozitif tam sayı olmalı');
+        if (!field) return fail('invalid', 'kind "word" veya "example" olmalı');
+        if (!isMp3(file?.buffer)) return fail('invalid', 'Dosya MP3 değil (WAV/OGG kabul edilmez, MP3\'e çevirin)');
+
+        const candidates = await Word.find({ jlptLevel: level, frequencyRank: order, isCore: true });
+        if (candidates.length === 0) {
+            return fail('not_found', `${level} seviyesinde ${order}. sırada kelime yok`);
+        }
+        const expected = item.word == null ? null : String(item.word).trim();
+        const word = expected === null
+            ? (candidates.length === 1 ? candidates[0] : null)
+            : candidates.find(w => w.kanji === expected);
+        if (!word) {
+            return fail(
+                'mismatch',
+                expected === null
+                    ? `${level} #${order} birden çok kelimeye uyuyor; öğeye "word" ekleyin`
+                    : `${level} #${order} veritabanında "${candidates[0].kanji}", listede "${expected}"`
+            );
+        }
+
+        // Dosya adı İÇERİĞİN hash'i: aynı ses yeniden yüklenirse aynı dosyaya
+        // yazılır, içerik değişmedikçe URL değişmez (/uploads immutable cache)
+        const hash = crypto.createHash('sha256').update(file.buffer).digest('hex').slice(0, 32);
+        const key = await storage.put(file.buffer, { folder: AUDIO_FOLDER, filename: `${hash}.mp3` });
+
+        const previous = word[field];
+        const base = { wordId: word._id, kanji: word.kanji, kind: item.kind, url: storage.publicUrl(key) };
+        if (previous === key) return { status: 'unchanged', ...base };
+
+        await Word.updateOne({ _id: word._id }, { [field]: key });
+        if (previous) await removeAudioIfUnused(previous);
+        return { status: 'stored', replaced: Boolean(previous), ...base };
     },
 
     // Seviye başına çekirdek kelime sayısı. Uygulamadaki TÜM kelime sorguları

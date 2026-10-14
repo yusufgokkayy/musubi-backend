@@ -5318,3 +5318,196 @@ describe('Güvenlik regresyonları (26.09.2026 incelemesi)', () => {
         }
     });
 });
+
+describe('Kelime sesleri (13.10.2026): toplu yükleme ve yanıttaki URL', () => {
+    // Gerçek bir MP3 gerekmiyor: sunucu dosyayı çözmez, yalnızca sihirli bayta
+    // bakar. `tohum` içeriği (dolayısıyla hash'i ve dosya adını) farklılaştırır.
+    const mp3 = (tohum) => Buffer.concat([Buffer.from([0xFF, 0xFB, 0x90, 0x00]), Buffer.from(`ses-${tohum}`)]);
+    const mp3Id3 = (tohum) => Buffer.concat([Buffer.from('ID3'), Buffer.from(`ses-${tohum}`)]);
+
+    // files[i] ↔ items[i]
+    const yukle = async (items, files, { token, rawItems } = {}) => {
+        const form = new FormData();
+        form.append('items', rawItems ?? JSON.stringify(items));
+        files.forEach((bytes, i) => form.append('audio', new Blob([bytes]), `${i}.mp3`));
+        const res = await fetch(BASE + '/words/audio', {
+            method: 'POST',
+            headers: { ...(token && { Authorization: 'Bearer ' + token }) },
+            body: form
+        });
+        return { status: res.status, json: await res.json().catch(() => ({})) };
+    };
+    const dosyaVar = (key) => fs.access(path.join(uploadDir, key)).then(() => true, () => false);
+    const keyOf = (url) => url.split('/uploads/')[1];
+
+    let adminToken, userToken, eki, densha;
+
+    before(async () => {
+        await createVerifiedUser('ses-admin@test.com', { role: 'admin' });
+        await createVerifiedUser('ses-user@test.com');
+        adminToken = (await login('ses-admin@test.com')).accessToken;
+        userToken = (await login('ses-user@test.com')).accessToken;
+        // Ses yüklemesi kelimeyi seviye + müfredat sırasıyla bulur. Seviye N1 ve
+        // sıra yüksek: ders/kütüphane testlerinin saydığı kelimelere karışmasın.
+        [eki, densha] = await Word.insertMany([
+            { kanji: '駅', kana: 'えき', romaji: 'eki', meaning: 'station', type: 'isim', jlptLevel: 'N1', isCore: true, frequencyRank: 9001, example: '東京**駅**で会いましょう。' },
+            { kanji: '電車', kana: 'でんしゃ', romaji: 'densha', meaning: 'train', type: 'isim', jlptLevel: 'N1', isCore: true, frequencyRank: 9002 }
+        ]);
+    });
+
+    after(async () => {
+        await Word.deleteMany({ _id: { $in: [eki._id, densha._id] } });
+    });
+
+    it('yalnızca admin yükleyebilir', async () => {
+        const item = [{ level: 'N1', order: 9001, kind: 'word', word: '駅' }];
+        assert.equal((await yukle(item, [mp3(1)])).status, 401);
+        assert.equal((await yukle(item, [mp3(1)], { token: userToken })).status, 403);
+        assert.equal((await Word.findById(eki._id)).audioKey, undefined, 'reddedilen istek hiçbir şey yazmamalı');
+    });
+
+    it('kelime ve cümle sesi yüklenir; Word yanıtı URL taşır, depolama anahtarını taşımaz', async () => {
+        const res = await yukle(
+            [
+                { level: 'N1', order: 9001, kind: 'word', word: '駅' },
+                { level: 'n1', order: 9001, kind: 'example', word: '駅' },
+                { level: 'N1', order: 9002, kind: 'word', word: '電車' }
+            ],
+            [mp3('eki'), mp3Id3('eki-cumle'), mp3('densha')],
+            { token: adminToken }
+        );
+        assert.equal(res.status, 200, JSON.stringify(res.json));
+        assert.deepEqual(res.json.data.summary, { total: 3, stored: 3, unchanged: 0, failed: 0 });
+        assert.deepEqual(res.json.data.results.map(r => [r.index, r.status, r.kanji]), [
+            [0, 'stored', '駅'], [1, 'stored', '駅'], [2, 'stored', '電車']
+        ]);
+
+        const word = (await api('GET', `/words/${eki._id}`, { token: userToken })).json.data;
+        assert.match(word.audioUrl, /\/uploads\/audio\/[a-f0-9]{32}\.mp3$/);
+        assert.match(word.exampleAudioUrl, /\/uploads\/audio\/[a-f0-9]{32}\.mp3$/);
+        assert.notEqual(word.audioUrl, word.exampleAudioUrl);
+        assert.equal(word.audioKey, undefined, 'anahtar yanıtta dönmemeli');
+        assert.equal(word.exampleAudioKey, undefined);
+
+        // Dosya gerçekten servis ediliyor ve tarayıcı/oynatıcı onu ses olarak görüyor
+        const dosya = await fetch(BASE.replace(/\/api$/, '') + '/uploads/' + keyOf(word.audioUrl));
+        assert.equal(dosya.status, 200);
+        assert.match(dosya.headers.get('content-type'), /^audio\/mpeg/);
+        assert.deepEqual(Buffer.from(await dosya.arrayBuffer()), mp3('eki'));
+
+        // Sesi olmayan alan yanıtta HİÇ yok (null değil)
+        const sessiz = (await api('GET', `/words/${densha._id}`, { token: userToken })).json.data;
+        assert.ok(sessiz.audioUrl);
+        assert.ok(!('exampleAudioUrl' in sessiz));
+    });
+
+    it('arama (aggregate yolu) ve kütüphane listesi de ses URL\'sini taşır', async () => {
+        const arama = (await api('GET', '/words?q=densha&jlptLevel=N1', { token: userToken })).json.data.words;
+        assert.equal(arama.length, 1);
+        assert.match(arama[0].audioUrl, /\.mp3$/);
+        assert.equal(arama[0].audioKey, undefined);
+    });
+
+    it('aynı dosya yeniden gelirse "unchanged": yeniden çalıştırmak güvenlidir', async () => {
+        const res = await yukle(
+            [{ level: 'N1', order: 9001, kind: 'word', word: '駅' }], [mp3('eki')], { token: adminToken }
+        );
+        assert.deepEqual(res.json.data.summary, { total: 1, stored: 0, unchanged: 1, failed: 0 });
+    });
+
+    it('liste kaymışsa (kelime uyuşmuyor) ses YAZILMAZ; hatalı öğe diğerlerini durdurmaz', async () => {
+        const once = (await Word.findById(densha._id)).audioKey;
+        const res = await yukle(
+            [
+                { level: 'N1', order: 9002, kind: 'word', word: '駅' },          // 9002 aslında 電車
+                { level: 'N1', order: 7777, kind: 'word', word: '無' },          // öyle bir sıra yok
+                { level: 'N1', order: 9002, kind: 'word', word: '電車' },         // PNG, MP3 değil
+                { level: 'N9', order: 1, kind: 'word' },
+                { level: 'N1', order: 9002, kind: 'video', word: '電車' },
+                { level: 'N1', order: 9002, kind: 'example', word: '電車' }       // geçerli
+            ],
+            [mp3('kayik'), mp3('yok'), Buffer.from([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0]), mp3('n9'), mp3('video'), mp3('densha-cumle')],
+            { token: adminToken }
+        );
+        assert.equal(res.status, 200);
+        assert.deepEqual(res.json.data.results.map(r => r.status),
+            ['mismatch', 'not_found', 'invalid', 'invalid', 'invalid', 'stored']);
+        assert.match(res.json.data.results[0].message, /電車.*駅/);
+        assert.deepEqual(res.json.data.summary, { total: 6, stored: 1, unchanged: 0, failed: 5 });
+
+        const sonra = await Word.findById(densha._id);
+        assert.equal(sonra.audioKey, once, 'uyuşmayan öğe kelimenin sesini değiştirmemeli');
+        assert.ok(sonra.exampleAudioKey, 'aynı istekteki geçerli öğe işlenmeli');
+    });
+
+    it('ses değişince eski dosya silinir — ama başka kelime kullanıyorsa kalır', async () => {
+        const eskiKey = (await Word.findById(eki._id)).audioKey;
+        assert.equal(await dosyaVar(eskiKey), true);
+
+        const yeni = await yukle(
+            [{ level: 'N1', order: 9001, kind: 'word', word: '駅' }], [mp3('eki-v2')], { token: adminToken }
+        );
+        assert.equal(yeni.json.data.results[0].replaced, true);
+        assert.equal(await dosyaVar(eskiKey), false, 'kullanılmayan eski ses diskte kalmamalı');
+
+        // İki kelimeye AYNI baytlar: tek dosya, iki kullanıcı
+        await yukle(
+            [{ level: 'N1', order: 9002, kind: 'word', word: '電車' }], [mp3('eki-v2')], { token: adminToken }
+        );
+        const ortakKey = (await Word.findById(eki._id)).audioKey;
+        assert.equal((await Word.findById(densha._id)).audioKey, ortakKey);
+
+        await yukle(
+            [{ level: 'N1', order: 9001, kind: 'word', word: '駅' }], [mp3('eki-v3')], { token: adminToken }
+        );
+        assert.equal(await dosyaVar(ortakKey), true, '電車 hâlâ bu dosyayı kullanıyor');
+    });
+
+    it('bozuk istek hiçbir şey yazmadan 400 döner', async () => {
+        const bir = [{ level: 'N1', order: 9001, kind: 'word', word: '駅' }];
+
+        const sayiTutmuyor = await yukle([...bir, ...bir], [mp3('x')], { token: adminToken });
+        assert.equal(sayiTutmuyor.status, 400);
+        assert.match(sayiTutmuyor.json.message, /eşit olmalı/);
+
+        const bozukJson = await yukle(null, [mp3('x')], { token: adminToken, rawItems: '{bozuk' });
+        assert.equal(bozukJson.status, 400);
+        assert.match(bozukJson.json.message, /JSON/);
+
+        const cok = Array.from({ length: 51 }, (_, i) => mp3(`cok-${i}`));
+        const fazla = await yukle(cok.map(() => bir[0]), cok, { token: adminToken });
+        assert.equal(fazla.status, 400);
+        assert.match(fazla.json.message, /en fazla 50 ses dosyası/);
+
+        const buyuk = await yukle(bir, [Buffer.concat([mp3('b'), Buffer.alloc(600 * 1024)])], { token: adminToken });
+        assert.equal(buyuk.status, 400);
+        assert.match(buyuk.json.message, /Ses dosyası çok büyük/);
+    });
+
+    it('derste gelen kelime de ses URL\'lerini taşır (yeni kelime ve tekrar)', async () => {
+        const u = await createVerifiedUser('ses-ders@test.com', { activeLevel: 'N1' });
+        const t = (await login('ses-ders@test.com')).accessToken;
+        await Progress.updateMany({ user: u._id }, { isUnlocked: true });
+        // 駅 yeni kelime olarak, 電車 vadesi gelmiş tekrar olarak havuza girsin
+        const uw = await UserWord.create({
+            user: u._id, word: densha._id, status: 'learning',
+            nextReviewDate: new Date(Date.now() - 24 * 60 * 60 * 1000),
+            lastReviewDate: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000), lastResult: 'correct'
+        });
+        const { startOfDayInTz } = require('../utils/date.util');
+        await DailyWordPool.create({
+            user: u._id, date: startOfDayInTz('Europe/Istanbul'), jlptLevel: 'N1', poolNo: 1,
+            newWordIds: [eki._id], reviewWordIds: [uw._id], targetGoal: 2
+        });
+
+        const { data } = (await api('GET', '/userwords/today', { token: t })).json;
+        // Havuz günlük hedefe kadar başka kelimelerle genişler; bizimkini id ile bul
+        const yeni = data.newWords.find(w => w._id === String(eki._id));
+        const tekrar = data.reviewWords.find(r => r.word._id === String(densha._id));
+        assert.match(yeni.audioUrl, /\.mp3$/);
+        assert.match(yeni.exampleAudioUrl, /\.mp3$/);
+        assert.equal(yeni.audioKey, undefined);
+        assert.match(tekrar.word.audioUrl, /\.mp3$/);
+        assert.equal(tekrar.word.audioKey, undefined);
+    });
+});

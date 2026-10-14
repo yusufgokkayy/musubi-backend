@@ -6,6 +6,12 @@ const AppError = require('../../utils/AppError');
 const ProgressService = require('../progress/progress.service');
 const logEvent = require('../../utils/event.util');
 const { gradeTyping, wordAnswerVariants, meaningIn } = require('../../utils/answer.util');
+const storage = require('../../config/storage');
+
+// Kelimenin sesi depolama ANAHTARI olarak saklanır (Word.audioKey); soru
+// istemciye URL ile gider. Aggregate düz nesne döndürdüğü için Word'ün
+// audioUrl virtual'ı burada çalışmaz.
+const audioUrlOf = (word) => (word.audioKey ? storage.publicUrl(word.audioKey) : undefined);
 
 // Soruların dili kullanıcının arayüz dilidir (User.preferences.language)
 const userLang = async (userId) =>
@@ -129,7 +135,7 @@ const QuizService = {
                     jlptLevel,
                     format,
                     // Kelime gösterilir, anlamı yazılır; ses de kelimeyi söyler (cevabı sızdırmaz)
-                    prompt: { kanji: word.kanji, romaji: word.romaji, audioUrl: word.audioUrl },
+                    prompt: { kanji: word.kanji, romaji: word.romaji, audioUrl: audioUrlOf(word) },
                     correctAnswers: wordAnswerVariants(word, lang)
                 });
                 continue;
@@ -159,7 +165,7 @@ const QuizService = {
             const choices = shuffle([correct, ...distractors]);
             // reverse/fillblank/image'da ses YOK: kelimeyi seslendirmek doğru şıkkı söylemek olur
             const prompt =
-                format === 'meaning' ? { kanji: word.kanji, romaji: word.romaji, audioUrl: word.audioUrl } :
+                format === 'meaning' ? { kanji: word.kanji, romaji: word.romaji, audioUrl: audioUrlOf(word) } :
                 format === 'reverse' ? { meaning: meaningIn(word, lang) } :
                 format === 'fillblank' ? { sentence: word.example.replaceAll(word.kanji, '____') } :
                 format === 'image' ? { imageUrl: word.imageUrl } :

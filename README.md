@@ -139,6 +139,11 @@ Her istekte `X-Musubi-Client: simulator` başlığı gider. Bu bir **etikettir, 
 ```bash
 npm run make-admin -- ornek@mail.com            # mevcut kullanıcıyı yönetici yap
 npm run make-admin -- ornek@mail.com --revoke   # yöneticiliği geri al
+
+# Üretilmiş ses dosyalarını (kelime + örnek cümle) ÇALIŞAN sunucuya yükler.
+# Kimlik: MUSUBI_ADMIN_EMAIL / MUSUBI_ADMIN_PASSWORD. Ayrıntı: scripts/import-audio.js
+npm run import-audio -- --dir <klasör> --dry-run                           # yalnızca denetle
+npm run import-audio -- --dir <klasör> --api https://musubi.alpsoysoft.com # yükle
 ```
 
 Rol yükseltme bilinçli olarak panelde değil bu script'te: adminlik verme yetkisi de tarayıcıda olsaydı, ele geçirilen tek bir admin oturumu kalıcı arka kapı açabilirdi. Panel oturumu sekme kapanınca düşer.
@@ -158,7 +163,7 @@ admin/                     # admin paneli — /admin altında HER ortamda servis
                            # ayrı yüklenir ki tema gövde çizilmeden uygulansın
 public/                    # mobil simülatör — dev'de kökten, canlıda SIMULATOR_ENABLED ile /sim altında
 assets/                    # marka varlıkları (logo) — her ortamda /assets altında servis edilir
-scripts/                   # tek seferlik bakım script'leri (make-admin)
+scripts/                   # bakım script'leri (make-admin, import-audio, review-report)
 config/                    # db, firebase, resend, consents, legal/ (hukuki metinlerin kanonik kaynağı),
                            # storage/ (görsel depolama adaptörü — sürücü STORAGE_DRIVER ile seçilir)
 middlewares/               # auth (protect, isEmailVerified, isAdmin), rateLimiter, errorHandler, upload (multer)

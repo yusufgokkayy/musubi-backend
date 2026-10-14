@@ -231,8 +231,8 @@ function wordRow(w, { right, tail, click } = {}) {
   </button>`;
 }
 
-// Ses: "Yavaş" ayrı bir dosya değil, aynı sesin düşük hızda çalınmasıdır
-// (audioUrlSlow henüz backend'de yok — geldiğinde burası tek satır değişir).
+// Ses: "Yavaş" ayrı bir dosya DEĞİL, aynı sesin düşük hızda çalınmasıdır
+// (13.10.2026 kararı — ayrı yavaş dosya üretilmeyecek).
 function audioRow(url) {
   if (!url) return '';
   return `<div class="pillbtns gap-16">
@@ -262,7 +262,7 @@ function exampleBlock(w) {
   if (!w.example && !w.exampleFurigana) return '';
   return `<div class="row between gap-24" style="margin-bottom:8px">
       <span class="slabel">Örnek Kullanım</span>
-      ${w.audioUrl ? `<button class="bell" data-audio="${esc(w.audioUrl)}" style="width:22px;height:22px">${I.speaker}</button>` : ''}
+      ${w.exampleAudioUrl ? `<button class="bell" data-audio="${esc(w.exampleAudioUrl)}" style="width:22px;height:22px">${I.speaker}</button>` : ''}
     </div>
     <div class="example">${furigana(w.exampleFurigana, w.example)}</div>
     ${w.exampleTr ? `<p class="tiny gap-8">${esc(w.exampleTr)}</p>` : ''}`;

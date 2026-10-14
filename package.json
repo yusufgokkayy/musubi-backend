@@ -8,6 +8,7 @@
     "make-admin": "node scripts/make-admin.js",
     "check-data": "node scripts/check-data.js",
     "review-report": "node scripts/review-report.js",
+    "import-audio": "node scripts/import-audio.js",
     "test": "node --test",
     "dev": "nodemon server.js",
     "start": "node server.js"

@@ -1,4 +1,11 @@
 const mongoose = require('mongoose');
+const storage = require('../config/storage');
+
+function hideStorageKeys(doc, ret) {
+    delete ret.audioKey;
+    delete ret.exampleAudioKey;
+    return ret;
+}
 
 const WordSchema = new mongoose.Schema({
     kanji: {
@@ -44,7 +51,12 @@ const WordSchema = new mongoose.Schema({
         enum: ['N5', 'N4', 'N3', 'N2', 'N1'],
         required: [true, 'Please provide JLPT level']
     },
-    audioUrl: {
+    // Kelimenin okunuşunun ses dosyası — "Dinle" butonu. Depolama ANAHTARI
+    // saklanır (ör. "audio/9f2c….mp3"), URL değil: bkz. config/storage/index.js.
+    // İstemciye `audioUrl` olarak çıkar (aşağıdaki virtual). "Yavaş" için ayrı
+    // dosya YOKTUR — istemci aynı dosyayı düşük hızda oynatır (13.10.2026 kararı).
+    // Dosyalar toplu yüklenir: POST /api/words/audio + scripts/import-audio.js.
+    audioKey: {
         type: String
     },
     // Kelimenin geçtiği örnek cümle (東京駅で会いましょう。) — kütüphane detay
@@ -66,6 +78,11 @@ const WordSchema = new mongoose.Schema({
     },
     // example'ın Türkçe çevirisi.
     exampleTr: {
+        type: String
+    },
+    // Örnek cümlenin ses dosyası — "ÖRNEK KULLANIM" başlığındaki hoparlör.
+    // audioKey ile aynı kural: anahtar saklanır, `exampleAudioUrl` olarak çıkar.
+    exampleAudioKey: {
         type: String
     },
     // Görselli soru için kelime görseli; boş olan kelimeler bu tipe girmez
@@ -90,9 +107,20 @@ const WordSchema = new mongoose.Schema({
         default: Date.now
     }
 }, {
-    // isKana virtual'ı JSON yanıtlara da girsin
-    toJSON: { virtuals: true },
-    toObject: { virtuals: true }
+    // isKana/audioUrl virtual'ları JSON yanıtlara da girsin. Depolama
+    // anahtarları yanıtta dönmez — istemcinin işi URL'ledir, anahtarı görmesi
+    // onu URL'yi kendisi kurmaya davet eder (sürücü değişince kırılır).
+    toJSON: { virtuals: true, transform: hideStorageKeys },
+    toObject: { virtuals: true, transform: hideStorageKeys }
+});
+
+// Ses dosyalarının URL'leri. Dosya yoksa alan yanıtta HİÇ bulunmaz (null
+// gelmez) — Word'ün diğer boş alanlarıyla aynı kural.
+WordSchema.virtual('audioUrl').get(function () {
+    return this.audioKey ? storage.publicUrl(this.audioKey) : undefined;
+});
+WordSchema.virtual('exampleAudioUrl').get(function () {
+    return this.exampleAudioKey ? storage.publicUrl(this.exampleAudioKey) : undefined;
 });
 
 // Kana-only kelime (それから, いつも): kanji alanında hiç CJK ideografı yok.
@@ -103,5 +131,7 @@ WordSchema.virtual('isKana').get(function () {
 });
 
 WordSchema.index({ jlptLevel: 1, isCore: 1 });
+// Ses yüklemesi kelimeyi seviye + müfredat sırasıyla bulur (bkz. word.service.js)
+WordSchema.index({ jlptLevel: 1, frequencyRank: 1 });
 
 module.exports = mongoose.model('Word', WordSchema);

@@ -661,14 +661,22 @@ Hata: `401 "Şifreniz yanlış. Lütfen tekrar deneyin."` / `401 "Kimlik doğrul
   "example": "東京**駅**で会いましょう。",
   "exampleFurigana": "東京[とうきょう]**駅[えき]**で会[あ]いましょう。",
   "exampleTr": "Tokyo istasyonunda buluşalım.",
+  "audioUrl": "https://musubi.alpsoysoft.com/uploads/audio/9f2c…e1.mp3",         // kelimenin okunuşu — "Dinle"
+  "exampleAudioUrl": "https://musubi.alpsoysoft.com/uploads/audio/41ab…07.mp3",  // örnek cümle — başlıktaki hoparlör
   "isKana": false,         // kanji alanında hiç ideograf yok (それから, いつも)
   "isCore": true           // aktif oyun havuzunda mı
 }
 ```
 
-**Boş alanlar yanıtta bulunmaz, `null` olarak gelmez.** Yukarıdaki örnekte `audioUrl`
-(varsa "Dinle" butonu; "Yavaş" client'ta oynatma hızıyla) ve `imageUrl` yok — ikisi de
-bugün her kelimede boş. Client `x === null` değil, **alanın varlığını** kontrol etmeli.
+**Boş alanlar yanıtta bulunmaz, `null` olarak gelmez.** Sesi henüz yüklenmemiş kelimede
+`audioUrl` / `exampleAudioUrl` alanı **hiç yoktur**; `imageUrl` bugün her kelimede boştur.
+Client `x === null` değil, **alanın varlığını** kontrol etmeli (ses yoksa cihaz TTS'ine
+düşebilir).
+
+**Ses (13.10.2026).** İki ayrı dosya: `audioUrl` kelimenin okunuşu, `exampleAudioUrl`
+örnek cümle. İkisi de MP3'tür ve aynı kelime/cümle için URL **içerik değişmedikçe
+değişmez** (dosya adı içeriğin hash'i) — istemci süresiz önbelleğe alabilir.
+**"Yavaş" için ayrı dosya yoktur:** aynı dosya düşük oynatma hızıyla çalınır.
 
 Veri setindeki 5816 kelimenin tamamı çekirdektir (`isCore: true`), yani `includeAll`
 bugün bir fark yaratmaz; parametre ileride çekirdek dışı kelime eklenirse diye duruyor.
@@ -735,8 +743,54 @@ Hata: `400 "Please provide a search query"`.
 ```
 Hata: `404 "Word not found"`.
 
-### POST /words · PUT /words/:id · DELETE /words/:id 🔒 (yalnızca admin)
-Gövde `Word` alanlarıdır; mobil uygulamanın kullanması gerekmez.
+### POST /words/audio 🔒✉️ (yalnızca admin)
+Kelime ve örnek cümle seslerini **toplu** yükler. Mobil uygulama çağırmaz; gönderici
+`npm run import-audio` betiğidir (`scripts/import-audio.js`, kullanım notları dosyanın
+başında). `multipart/form-data`:
+
+| Alan | İçerik |
+|---|---|
+| `audio` | MP3 dosyaları (alan adı tekrarlanır) — istek başına en fazla **50**, dosya başına en fazla **512 KB** |
+| `items` | JSON **metni**: dosyalarla **aynı sırada** bir dizi (`items[i]` ↔ `audio[i]`) |
+
+```jsonc
+// items
+[
+  { "level": "N5", "order": 12, "kind": "word",    "word": "食べる" },   // kind: word | example
+  { "level": "N5", "order": 12, "kind": "example", "word": "食べる" }
+]
+
+// 200 — istek bütün olarak başarısız OLMAZ; her öğenin sonucu ayrı döner
+{
+  "success": true,
+  "data": {
+    "summary": { "total": 2, "stored": 1, "unchanged": 0, "failed": 1 },
+    "results": [
+      { "index": 0, "status": "stored", "replaced": false, "wordId": "665f2b...", "kanji": "食べる",
+        "kind": "word", "url": "https://.../uploads/audio/9f2c…e1.mp3" },
+      { "index": 1, "status": "mismatch", "message": "N5 #12 veritabanında \"食べる\", listede \"飲む\"" }
+    ]
+  }
+}
+```
+Kelime **seviye + müfredat sırası** (`order` = veri setindeki `order` = `frequencyRank`)
+ile bulunur. `word` isteğe bağlıdır ama önerilir: bulunan kelimenin yazımıyla
+karşılaştırılır, liste bir satır kaymışsa öğe `mismatch` ile reddedilir ve yanlış
+kelimeye ses yazılmaz.
+
+| `status` | Anlamı |
+|---|---|
+| `stored` | Yazıldı (`replaced: true` ise eski ses değiştirildi; eski dosya başka kelime kullanmıyorsa silinir) |
+| `unchanged` | Aynı dosya zaten yüklü — yeniden çalıştırmak güvenlidir |
+| `mismatch` | `word` veritabanındaki kelimeyle uyuşmuyor |
+| `not_found` | O seviyede o sırada kelime yok |
+| `invalid` | Geçersiz `level`/`order`/`kind` ya da dosya MP3 değil (WAV/OGG kabul edilmez) |
+
+Hatalar: `400` (`items` geçerli JSON dizisi değil · dosya sayısı `items` sayısına eşit değil ·
+50'den fazla dosya · 512 KB'ı aşan dosya), `403` (admin değil).
+
+> Kelime ekleme/düzenleme/silme uçları (`POST /words`, `PUT|DELETE /words/:id`) **yoktur** —
+> kodda kapalıdır. Kelimeler `npm run seed` ile veri setinden yüklenir.
 
 ---
 
