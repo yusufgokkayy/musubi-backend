@@ -30,7 +30,10 @@ const state = {
   lesson: null,
   quiz: null,
   library: { page: 1, totalPages: 1, level: '', q: '' },
-  memory: null
+  memory: null,
+  // v2 önizleme (geliştirici paneli): backend'i henüz olmayan v2 ekranlarını
+  // ÖRNEK VERİYLE gösterir — bkz. "v2 ÖNİZLEME" bölümü
+  v2: localStorage.getItem('musubi_v2_preview') === '1'
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -77,7 +80,16 @@ const I = {
   pause: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="M10 9v6M14 9v6"/></svg>',
   close: '<svg viewBox="0 0 20 20"><path d="m4 4 12 12M16 4 4 16"/></svg>',
   user: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></svg>',
-  levels: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>'
+  levels: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+  // v2 — profil / arkadaşlık
+  userPlus: '<svg viewBox="0 0 24 24"><circle cx="9.5" cy="8" r="3.8"/><path d="M2.8 20a6.8 6.8 0 0 1 13.4 0"/><path d="M19 8v6M16 11h6"/></svg>',
+  clock: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.6"/><path d="M12 7.5V12l3 2"/></svg>',
+  checks: '<svg viewBox="0 0 24 24"><path d="m2.5 12.5 4 4 8-9"/><path d="m11 16 1 .9 8.5-9.4"/></svg>',
+  users: '<svg viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M2.5 19.5a6.5 6.5 0 0 1 13 0"/><path d="M15.5 4.8a3.5 3.5 0 0 1 0 6.4M18.5 19.5a6.5 6.5 0 0 0-3-5.5"/></svg>',
+  sparkle: '<svg viewBox="0 0 24 24"><path d="M12 2.5c.7 4.6 2.9 6.8 7.5 7.5-4.6.7-6.8 2.9-7.5 7.5-.7-4.6-2.9-6.8-7.5-7.5 4.6-.7 6.8-2.9 7.5-7.5z"/></svg>',
+  dots: '<svg viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.3" fill="currentColor"/><circle cx="12" cy="12" r="1.3" fill="currentColor"/><circle cx="19" cy="12" r="1.3" fill="currentColor"/></svg>',
+  link: '<svg viewBox="0 0 24 24"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>',
+  star: '<svg viewBox="0 0 24 24"><path d="m12 2.8 2.7 5.6 6.1.9-4.4 4.3 1 6.1L12 16.8l-5.4 2.9 1-6.1-4.4-4.3 6.1-.9z"/></svg>'
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -180,7 +192,7 @@ function pagehead(jp, title, opts = {}) {
   return `<div class="pagehead">
     <div><div class="jp">${esc(jp)}</div><h1>${esc(title)}</h1></div>
     <div class="headtools">
-      <div class="bell" data-nav="notifications">${I.bell}<span class="dot" ${opts.unread ? '' : 'hidden'}></span></div>
+      <div class="bell" data-nav="notifications">${I.bell}<span class="dot" ${opts.unread || (state.v2 && mockIncomingCount() > 0) ? '' : 'hidden'}></span></div>
       ${avatarHtml()}
     </div>
   </div>`;
@@ -188,9 +200,11 @@ function pagehead(jp, title, opts = {}) {
 function avatarHtml() {
   const url = state.me?.avatarUrl ?? state.home?.avatarUrl;
   const initial = (state.me?.name || 'M').trim().charAt(0).toLocaleUpperCase('tr');
+  // v2 önizlemede avatar kendi profiline, değilse profil düzenlemeye gider
+  const target = state.v2 ? 'profile' : 'profile-edit';
   return url
-    ? `<img class="avatar" src="${esc(url)}" alt="" data-nav="profile-edit">`
-    : `<div class="avatar" data-nav="profile-edit">${esc(initial)}</div>`;
+    ? `<img class="avatar" src="${esc(url)}" alt="" data-nav="${target}">`
+    : `<div class="avatar" data-nav="${target}">${esc(initial)}</div>`;
 }
 
 function sheet(html) { $('#sheet-slot').innerHTML = `<div class="overlay" data-overlay><div class="sheet">${html}</div></div>`; }
@@ -202,6 +216,8 @@ document.addEventListener('click', (e) => {
   if (e.target.closest('[data-back]')) return back();
   const nav = e.target.closest('[data-nav]');
   if (nav) return go(nav.dataset.nav);
+  const person = e.target.closest('[data-user]');
+  if (person) return openUser(person.dataset.user);
   if (e.target.matches('[data-overlay]')) return closeSheet();
 });
 
@@ -1117,16 +1133,24 @@ const NOTIF_ICON = {
 async function showNotifications() {
   const tk = activeToken;
   loading(topbar());
-  const res = await api('GET', '/notifications?limit=30');
+  const [res, reqRes] = await Promise.all([
+    api('GET', '/notifications?limit=30'),
+    state.v2 ? v2api('GET', '/friends/requests') : null
+  ]);
   if (stale(tk)) return;
   if (!guard(res)) return back();
   const { notifications, unreadCount } = res.json.data;
+  const requests = reqRes?.ok ? reqRes.json.data : null;
 
   paint(topbar() + `<div class="pad">
       <div class="sec-row" style="margin-top:0">
         <h2>Bildirimler</h2>
         ${unreadCount > 0 ? `<button class="more" id="b-readall">Tümünü Okundu Yap</button>` : ''}
       </div>
+      ${requests?.total ? `${V2_PILL}<button class="req-banner" data-nav="friend-requests">
+          <span class="stack">${requests.items.slice(0, 2).map(r => personAvatar(r.from)).join('')}</span>
+          <b>${requests.total} Arkadaşlık İsteği</b><span class="chev">${I.chevR}</span>
+        </button>` : ''}
       ${notifications.length === 0 ? `<div class="empty">${I.bell}<div>Henüz bildirim yok.</div></div>`
         : notifications.map(n => `
         <div class="notif ${n.read ? 'read' : ''}" data-id="${n._id}">
@@ -1201,6 +1225,7 @@ function renderLesson() {
   // finishLesson tamamlanınca kendisi çiziyor
   if (L.phase === 'result') return L.result ? renderLessonResult() : loading();
   if (L.phase === 'streakday') return renderStreakDay();
+  if (L.phase === 'rankup') return renderRankUp();
   renderQuestion();
 }
 
@@ -1374,6 +1399,9 @@ async function finishLesson() {
   const sum = await api('GET', '/home/summary');
   if (stale(tk)) return;
   state.lesson.result = { ...res.json.data, summary: sum.ok ? sum.json.data : null };
+  // v2: bitiş yanıtındaki rankUps'ı örnek veri taklit eder (bkz. API.md v2 TASLAK)
+  state.lesson.rankUps = state.v2 ? mockLessonRankUps(res.json.data.lesson?.correctWords || 0) : [];
+  state.lesson.rankIdx = 0;
   renderLessonResult();
 }
 
@@ -1397,7 +1425,7 @@ function renderLessonResult() {
     </div>`);
   $('#b-next').addEventListener('click', () => {
     if (s?.streak?.current > 0) { state.lesson.phase = 'streakday'; return renderLesson(); }
-    reset('home');
+    afterStreakDay();
   });
 }
 
@@ -1414,7 +1442,13 @@ function renderStreakDay() {
         </div>`).join('')}</div>
       <button class="btn btn-primary gap-24" id="b-home" style="max-width:300px">Ana Sayfaya Dön</button>
     </div>`);
-  $('#b-home').addEventListener('click', () => reset('home'));
+  $('#b-home').addEventListener('click', afterStreakDay);
+}
+
+// Seri ekranından sonra sıra atlama ekranları (v2), yoksa anasayfa
+function afterStreakDay() {
+  if (state.lesson.rankUps?.length) { state.lesson.phase = 'rankup'; return renderLesson(); }
+  reset('home');
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2082,6 +2116,571 @@ function showSettingsDelete() {
 // ═══════════════════════════════════════════════════════════════
 // Ekran tablosu
 // ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// v2 ÖNİZLEME — profil, arkadaşlık, sıralama, sıra atlama (ÖRNEK VERİ)
+// ═══════════════════════════════════════════════════════════════
+// Bu ekranların backend'i HENÜZ YOK (v2 Aşama 2–6). Sözleşme API.md'deki
+// "v2 TASLAK" bölümündedir; v2api() o biçimi birebir, örnek veriyle döndürür.
+// Bir aşama bitince ilgili v2api(...) çağrısı api(...) olur — ekran kodu
+// değişmez, çünkü yanıt biçimi aynıdır.
+//
+// Yalnızca geliştirici panelindeki "v2 önizleme" açıkken görünür: simülatör
+// canlıda /sim altında açık ve test edenler örnek veriyi gerçek sanmamalı.
+// Her v2 ekranının üstünde bu yüzden "örnek veri" etiketi var.
+//
+// Gerçek olan tek parça: KENDİ serin (GET /home/summary). Puan, sıra, rozet,
+// arkadaşlar ve diğer kullanıcılar uydurmadır; sayfa yenilenince sıfırlanır.
+const V2_SCREENS = ['profile', 'user-profile', 'leaderboard', 'user-search', 'friend-requests'];
+const V2_PILL = '<div class="v2pill">v2 önizleme · örnek veri</div>';
+
+// [kullanıcı adı, ad, soyad, puan, premium, arkadaşlık durumu]
+const MOCK_PEOPLE = [
+  ['dost', 'Dost', '', 2410, true, 'friends'],
+  ['ahmet', 'Ahmet', 'Yılmaz', 2290, false, 'friends'],
+  ['naber', 'Naber', '', 2180, false, 'friends'],
+  ['mehmet.k', 'Mehmet', 'Kaya', 1960, false, 'friends'],
+  ['garipyolcu', 'Garip bir yolcu..', '', 1720, false, 'incoming'],
+  ['havaliadam', 'Havalı Adam', '', 3120, true, 'incoming'],
+  ['ayse.d', 'Ayşe', 'Demir', 880, false, 'incoming'],
+  ['zeynep', 'Zeynep', 'Çelik', 4050, false, 'outgoing']
+];
+const MOCK_FILL = ['Elif', 'Can', 'Burak', 'Selin', 'Deniz', 'Ece', 'Kaan', 'Mert', 'Yağmur', 'Arda', 'İrem', 'Onur',
+  'Melis', 'Tolga', 'Sude', 'Emre', 'Nil', 'Berk', 'Duru', 'Efe', 'Lale', 'Umut', 'Cansu', 'Barış'];
+const MOCK_SURNAME = ['A.', 'B.', 'Ç.', 'D.', 'E.', 'G.', 'K.', 'Ö.', 'S.', 'T.', 'Y.'];
+
+let mockDb = null;
+
+// Kullanıcı adına bağlı sabit sayı: aynı kişinin serisi/rozetleri her açılışta aynı kalsın
+const seedOf = (str) => [...String(str)].reduce((h, c) => (h * 31 + c.codePointAt(0)) >>> 0, 7);
+
+function mockInit() {
+  const meName = state.me?.username || 'sen';
+  if (mockDb && mockDb.owner === meName) return mockDb;
+  const users = new Map();
+  const add = (u) => { users.set(u.username, { avatarUrl: null, isPremium: false, friendship: { status: 'none', requestId: null }, ...u }); };
+  for (const [username, name, surname, points, isPremium, status] of MOCK_PEOPLE) {
+    add({ username, name, surname, points, isPremium,
+      friendship: { status, requestId: status === 'incoming' || status === 'outgoing' ? `rq-${username}` : null } });
+  }
+  mockDb = { owner: meName, users, myPoints: 2250, myGlobalRank: 3245, blocked: new Set() };
+  return mockDb;
+}
+
+const mockIncomingCount = () => [...mockInit().users.values()].filter(u => u.friendship.status === 'incoming').length;
+
+function mockMe() {
+  const db = mockInit();
+  const me = state.me || {};
+  return { username: me.username || 'sen', name: me.name || 'Sen', surname: me.surname || '',
+    avatarUrl: me.avatarUrl || null, isPremium: Boolean(me.isPremium), points: db.myPoints };
+}
+const rowOf = (u) => ({ username: u.username, name: u.name, surname: u.surname, avatarUrl: u.avatarUrl, isPremium: u.isPremium, points: u.points });
+
+// Genel sıra: puan farkından türetilir (her ~12 puan bir sıra) — tutarlı görünsün
+function mockGlobalRank(points) {
+  const db = mockInit();
+  return Math.max(51, db.myGlobalRank - Math.round((points - db.myPoints) / 12));
+}
+
+// Sıralamada adı geçen uydurma kişi; profili açılabilsin diye kayda girer
+function mockFiller(rank, points) {
+  const db = mockInit();
+  const i = rank % MOCK_FILL.length;
+  const name = MOCK_FILL[i];
+  const surname = MOCK_SURNAME[rank % MOCK_SURNAME.length];
+  const username = `${name.toLocaleLowerCase('tr').replace(/[^a-z]/g, '') || 'kisi'}${rank}`;
+  if (!db.users.has(username)) {
+    db.users.set(username, { username, name, surname, points, avatarUrl: null, isPremium: rank % 7 === 0,
+      friendship: { status: 'none', requestId: null }, rank });
+  }
+  return db.users.get(username);
+}
+
+function mockFriendsRanking() {
+  const db = mockInit();
+  const me = mockMe();
+  const friends = [...db.users.values()].filter(u => u.friendship.status === 'friends');
+  return [{ ...me, isMe: true }, ...friends.map(u => ({ ...rowOf(u), isMe: false }))]
+    .sort((a, b) => b.points - a.points)
+    .map((r, i) => ({ ...r, rank: i + 1 }));
+}
+
+// Seri: kendininki GERÇEK (anasayfa özeti), başkasınınki uydurma ama tutarlı
+function mockStreakOf(username, isMe) {
+  const real = state.home?.streak;
+  if (isMe && real) return { current: real.current, longest: real.longest, week: real.week };
+  const seed = seedOf(username);
+  const current = seed % 41;
+  const week = (real?.week || []).map(d => ({ ...d }));
+  const todayIdx = week.findIndex(d => d.isToday);
+  week.forEach((d, i) => { d.studied = i <= todayIdx && todayIdx - i < current && !(i === todayIdx && seed % 3 === 0); });
+  return { current, longest: current + (seed % 60), week };
+}
+
+function mockBadgesOf(username, isMe) {
+  const all = [
+    { key: 'level-N5', kind: 'level', value: 'N5', label: 'N5 Seviyesi Tamamlandı' },
+    { key: 'level-N4', kind: 'level', value: 'N4', label: 'N4 Seviyesi Tamamlandı' },
+    { key: 'level-N3', kind: 'level', value: 'N3', label: 'N3 Seviyesi Tamamlandı' },
+    { key: 'level-N2', kind: 'level', value: 'N2', label: 'N2 Seviyesi Tamamlandı' },
+    { key: 'streak-30', kind: 'streak', value: 30, label: '30 Günlük Seri!' },
+    { key: 'streak-60', kind: 'streak', value: 60, label: '60 Günlük Seri!' }
+  ];
+  if (isMe) return all;
+  const n = 1 + (seedOf(username) % all.length);
+  return all.slice(0, n);
+}
+
+function mockProfile(username) {
+  const db = mockInit();
+  const me = mockMe();
+  if (username === me.username) {
+    const ranking = mockFriendsRanking();
+    return { ...me, globalRank: db.myGlobalRank, streak: mockStreakOf(me.username, true),
+      badges: mockBadgesOf(me.username, true),
+      friends: { count: ranking.length - 1, ranking: ranking.slice(0, 4) },
+      inviteUrl: `${location.origin}/u/${me.username}` };
+  }
+  const u = db.users.get(username);
+  if (!u || db.blocked.has(username)) return null;
+  const friendsOfThem = u.friendship.status === 'friends'
+    ? [{ ...rowOf(u), isMe: false }, { ...me, isMe: true }, ...[0, 1].map(k => ({ ...rowOf(mockFiller(4000 + seedOf(username) % 50 + k, u.points - 140 * (k + 1))), isMe: false }))]
+      .sort((a, b) => b.points - a.points).map((r, i) => ({ ...r, rank: i + 1 }))
+    : null;
+  return { ...rowOf(u), globalRank: u.rank || mockGlobalRank(u.points),
+    streak: mockStreakOf(username, false), badges: mockBadgesOf(username, false),
+    friends: friendsOfThem ? { count: friendsOfThem.length - 1, ranking: friendsOfThem } : null,
+    friendship: { ...u.friendship } };
+}
+
+function mockLeaderboard(scope) {
+  const db = mockInit();
+  const me = mockMe();
+  if (scope === 'friends') return mockFriendsRanking();
+  if (scope === 'top') {
+    return Array.from({ length: 50 }, (_, k) => {
+      const rank = k + 1;
+      const points = 18600 - k * 213 - (seedOf(String(rank)) % 40);
+      return { ...rowOf(mockFiller(rank, points)), rank, isMe: false };
+    });
+  }
+  // around: sen ve üstünde/altında 4'er kişi
+  return Array.from({ length: 9 }, (_, k) => {
+    const rank = db.myGlobalRank - 4 + k;
+    if (rank === db.myGlobalRank) return { ...me, rank, isMe: true };
+    const points = db.myPoints + (db.myGlobalRank - rank) * 6 + (rank < db.myGlobalRank ? 1 : -1);
+    return { ...rowOf(mockFiller(rank, points)), rank, isMe: false };
+  });
+}
+
+// Ders bitince: puan artar, sıralar değişir → PUT /sessions/complete › rankUps
+function mockLessonRankUps(correctWords) {
+  if (!correctWords) return [];
+  const db = mockInit();
+  const before = mockFriendsRanking();
+  const prevFriendRank = before.find(r => r.isMe).rank;
+  const prevGlobal = db.myGlobalRank;
+  const previousPoints = db.myPoints;
+  db.myPoints += correctWords * 10;
+  const after = mockFriendsRanking();
+  const newFriendRank = after.find(r => r.isMe).rank;
+  const ups = [];
+  if (newFriendRank < prevFriendRank) {
+    ups.push({ scope: 'friends', previousRank: prevFriendRank, rank: newFriendRank, previousPoints,
+      passed: after[newFriendRank], me: after[newFriendRank - 1] });
+  }
+  const jump = Math.max(1, Math.round(correctWords * 10 / 12));
+  db.myGlobalRank = Math.max(1, prevGlobal - jump);
+  const passedGlobal = mockFiller(db.myGlobalRank + 1, db.myPoints - 4);
+  ups.push({ scope: 'global', previousRank: prevGlobal, rank: db.myGlobalRank, previousPoints,
+    passed: { ...rowOf(passedGlobal), rank: db.myGlobalRank + 1, isMe: false },
+    me: { ...mockMe(), rank: db.myGlobalRank, isMe: true } });
+  return ups;
+}
+
+// API.md "v2 TASLAK" uçlarının örnek veriyle taklidi — yanıt zarfı api() ile aynı
+async function v2api(method, path, body) {
+  await new Promise(r => setTimeout(r, 120));   // ağ gecikmesi hissi
+  const db = mockInit();
+  const ok = (data, status = 200) => ({ ok: true, status, json: { success: true, data } });
+  const fail = (status, message) => ({ ok: false, status, json: { success: false, message } });
+  const url = new URL(path, location.origin);
+  const p = url.pathname;
+  let m;
+
+  if (method === 'GET' && p === '/users/me/profile') return ok(mockProfile(mockMe().username));
+  if (method === 'GET' && p === '/users/search') {
+    const q = String(url.searchParams.get('username') || '').trim().replace(/^@/, '').toLocaleLowerCase('tr');
+    if (q === mockMe().username) return ok({ user: { ...mockMe(), friendship: { status: 'self', requestId: null } } });
+    const u = db.users.get(q);
+    return ok({ user: u && !db.blocked.has(q) ? { ...rowOf(u), friendship: { ...u.friendship } } : null });
+  }
+  if (method === 'GET' && (m = p.match(/^\/users\/([^/]+)$/))) {
+    const prof = mockProfile(decodeURIComponent(m[1]));
+    return prof ? ok(prof) : fail(404, 'Kullanıcı bulunamadı');
+  }
+  if (method === 'POST' && (m = p.match(/^\/users\/([^/]+)\/block$/))) {
+    const u = db.users.get(m[1]);
+    if (u) u.friendship = { status: 'none', requestId: null };
+    db.blocked.add(m[1]);
+    return ok({ blocked: true });
+  }
+  if (method === 'POST' && (m = p.match(/^\/users\/([^/]+)\/report$/))) return ok({ reported: true });
+  if (method === 'GET' && p === '/leaderboard') {
+    const scope = url.searchParams.get('scope') || 'top';
+    return ok({ scope, me: { rank: db.myGlobalRank, points: db.myPoints }, items: mockLeaderboard(scope) });
+  }
+  if (method === 'GET' && p === '/friends/requests') {
+    const items = [...db.users.values()].filter(u => u.friendship.status === 'incoming')
+      .map(u => ({ requestId: u.friendship.requestId, from: rowOf(u), createdAt: new Date().toISOString() }));
+    return ok({ total: items.length, items });
+  }
+  if (method === 'POST' && p === '/friends/requests') {
+    const u = db.users.get(String(body?.username || ''));
+    if (!u) return fail(404, 'Kullanıcı bulunamadı');
+    // Karşı taraf zaten istek gönderdiyse doğrudan arkadaş olunur
+    u.friendship = u.friendship.status === 'incoming'
+      ? { status: 'friends', requestId: null }
+      : { status: 'outgoing', requestId: `rq-${u.username}` };
+    return ok({ ...u.friendship }, 201);
+  }
+  const byRequest = (id) => [...db.users.values()].find(u => u.friendship.requestId === id);
+  if (method === 'POST' && (m = p.match(/^\/friends\/requests\/([^/]+)\/(accept|reject)$/))) {
+    const u = byRequest(m[1]);
+    if (!u) return fail(404, 'İstek bulunamadı');
+    u.friendship = { status: m[2] === 'accept' ? 'friends' : 'none', requestId: null };
+    return ok({ status: u.friendship.status });
+  }
+  if (method === 'DELETE' && (m = p.match(/^\/friends\/requests\/([^/]+)$/))) {
+    const u = byRequest(m[1]);
+    if (u) u.friendship = { status: 'none', requestId: null };
+    return ok({ status: 'none' });
+  }
+  if (method === 'DELETE' && (m = p.match(/^\/friends\/([^/]+)$/))) {
+    const u = db.users.get(decodeURIComponent(m[1]));
+    if (u) u.friendship = { status: 'none', requestId: null };
+    return ok({ status: 'none' });
+  }
+  return fail(404, `Örnek veride bu uç yok: ${method} ${p}`);
+}
+
+// ——— Ortak parçalar ———
+const fullName = (u) => [u.name, u.surname].filter(Boolean).join(' ');
+const initialOf = (u) => (u.name || '?').trim().charAt(0).toLocaleUpperCase('tr');
+
+function personAvatar(u, cls = '') {
+  return u?.avatarUrl
+    ? `<img class="pav ${cls}" src="${esc(u.avatarUrl)}" alt="">`
+    : `<span class="pav ${cls}">${esc(initialOf(u || {}))}</span>`;
+}
+function rankRow(r, extraCls = '') {
+  return `<button class="lb-row ${r.isMe ? 'me' : ''} ${extraCls}" data-user="${esc(r.username)}">
+    <span class="rk">#${r.rank}</span>${personAvatar(r)}
+    <span class="nm">${r.isPremium ? `<span class="star">${I.star}</span>` : ''}${esc(fullName(r))}</span>
+    <span class="pt"><b>${r.points}</b> puan</span>
+  </button>`;
+}
+
+// Başarım mührü: tırtıklı kırmızı daire, içinde seviye ya da alev
+function sealHtml(b) {
+  const petals = Array.from({ length: 12 }, (_, i) => {
+    const a = (i * Math.PI) / 6;
+    return `<circle cx="${(24 + 17 * Math.cos(a)).toFixed(2)}" cy="${(24 + 17 * Math.sin(a)).toFixed(2)}" r="6.4"/>`;
+  }).join('');
+  const inner = b.kind === 'level'
+    ? `<text x="24" y="28.4" text-anchor="middle" font-size="12.5" font-weight="800" fill="#fff">${esc(b.value)}</text>`
+    : `<g transform="translate(13.5 13) scale(.88)" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round"><path d="M13 2.5s.9 3.2-1.2 5.6c-2 2.3-4.6 3.4-4.6 7.1a6.3 6.3 0 0 0 12.6.3c0-3.6-2.2-5.5-3.2-6.6 0 1.6-.8 2.6-1.8 2.9.6-2.6-.3-6.7-1.8-9.3z"/></g>`;
+  return `<div class="seal"><svg viewBox="0 0 48 48"><g fill="var(--brand)">${petals}<circle cx="24" cy="24" r="18"/></g>${inner}</svg><span>${esc(b.label)}</span></div>`;
+}
+
+const DAY_SHORT = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
+function streakBlock(st) {
+  return `<div class="sec-row"><h2 class="ic-title">${I.flame}${st.current} Günlük Seri</h2><span class="more static">En iyi: ${st.longest}</span></div>
+    <div class="weekstrip">${(st.week || []).map((w, i) => `
+      <div class="d"><span class="${w.isToday ? 'today' : ''}">${DAY_SHORT[i]}</span>
+        <span class="weekdot ${w.studied ? 'done' : ''} ${w.isToday ? 'today' : ''}" style="margin:0 auto">${w.studied ? I.check : (w.isToday ? I.flame : '')}</span>
+      </div>`).join('')}</div>`;
+}
+function badgesBlock(badges) {
+  return `<div class="sec-row"><h2 class="ic-title">${I.sparkle}Başarımlar</h2><span class="more static">${badges.length} Başarım</span></div>
+    ${badges.length ? `<div class="seals">${badges.map(sealHtml).join('')}</div>` : '<p class="tiny">Henüz başarım yok.</p>'}`;
+}
+function friendsBlock(friends) {
+  return `<div class="sec-row"><h2 class="ic-title">${I.users}Arkadaş Sıralaması</h2><span class="more static">${friends.count} Arkadaş</span></div>
+    <div class="lb-list">${friends.ranking.map(r => rankRow(r)).join('')}</div>
+    <button class="morelink" data-lb="friends">${I.chevD}Daha Fazla Göster</button>`;
+}
+function statTiles(p) {
+  return `<div class="stat-tiles">
+    <button class="stat" data-lb="top"><b>${p.points}</b><span>Toplam Puan</span></button>
+    <button class="stat" data-lb="around"><b>#${p.globalRank}</b><span>Genel Sıralama</span></button>
+  </div>`;
+}
+function wireLeaderboardLinks() {
+  $$('[data-lb]').forEach(b => b.addEventListener('click', () => go('leaderboard', { scope: b.dataset.lb })));
+}
+
+function openUser(username) {
+  if (!state.v2) return;
+  if (username === mockMe().username) return go('profile');
+  go('user-profile', { username });
+}
+
+async function copyText(text, okMsg) {
+  try { await navigator.clipboard.writeText(text); toast(okMsg, 'ok'); }
+  catch { toast(text); }
+}
+
+// ——— Kendi profilin ("Profil 1. Bakış") ———
+async function showProfile() {
+  const tk = activeToken;
+  loading(topbar());
+  // Seri GERÇEK veridir: anasayfa özeti yoksa önce o çekilir
+  if (!state.home) { const h = await api('GET', '/home/summary'); if (h.ok) state.home = h.json.data; }
+  const res = await v2api('GET', '/users/me/profile');
+  if (stale(tk)) return;
+  if (!guard(res)) return back();
+  const p = res.json.data;
+
+  paint(topbar() + `<div class="pad">
+      ${V2_PILL}
+      <div class="prof-card">
+        <button class="prof-av" data-nav="profile-edit">${personAvatar(p, 'lg')}<span class="edit">${I.pencil}</span></button>
+        <div class="prof-id">
+          <b>${p.isPremium ? `<span class="star">${I.star}</span>` : ''}${esc(fullName(p))}</b>
+          <button class="handle" data-nav="profile-edit">@${esc(p.username)}${I.pencil}</button>
+        </div>
+      </div>
+      ${statTiles(p)}
+      <div class="prof-actions">
+        <button class="btn btn-outline btn-sm" data-nav="user-search">${I.userPlus}<span>Arkadaş Ekle</span></button>
+        <button class="btn btn-outline btn-sm" id="b-invite">${I.link}<span>Davet Et</span></button>
+      </div>
+      ${streakBlock(p.streak)}
+      ${badgesBlock(p.badges)}
+      ${friendsBlock(p.friends)}
+    </div>`);
+  wireLeaderboardLinks();
+  $('#b-invite').addEventListener('click', () => copyText(p.inviteUrl, 'Davet linki kopyalandı'));
+}
+
+// ——— Başkasının profili ("Profil 3. Bakış") ———
+const FRIEND_BTN = {
+  none: { icon: () => I.userPlus, title: 'Arkadaş ekle' },
+  outgoing: { icon: () => I.clock, title: 'İstek gönderildi' },
+  friends: { icon: () => I.checks, title: 'Arkadaşsınız' }
+};
+
+async function showUserProfile({ username }) {
+  const tk = activeToken;
+  loading(topbar());
+  if (!state.home) { const h = await api('GET', '/home/summary'); if (h.ok) state.home = h.json.data; }
+  const res = await v2api('GET', `/users/${encodeURIComponent(username)}`);
+  if (stale(tk)) return;
+  if (!guard(res)) return back();
+  const p = res.json.data;
+  const fs = p.friendship;
+
+  // Gelen istekte başlık düğmesi yerine ✕ / ✓ kartı (Figma'daki istek kartı)
+  const action = fs.status === 'incoming'
+    ? `<div class="req-actions">
+         <button class="ic-btn ghost" data-req="reject" title="Reddet">${I.close}</button>
+         <button class="ic-btn" data-req="accept" title="Kabul et">${I.check}</button>
+       </div>`
+    : `<button class="ic-btn" id="b-friend" title="${FRIEND_BTN[fs.status].title}">${FRIEND_BTN[fs.status].icon()}</button>`;
+
+  paint(`<div class="topbar"><button data-back>${I.chevL}<span>Geri</span></button>
+      <button class="tb-more" id="b-more" title="Diğer">${I.dots}</button></div>
+    <div class="pad">
+      ${V2_PILL}
+      <div class="prof-card">
+        <span class="prof-av">${personAvatar(p, 'lg')}</span>
+        <div class="prof-id">
+          <b>${p.isPremium ? `<span class="star">${I.star}</span>` : ''}${esc(fullName(p))}</b>
+          <span class="handle">@${esc(p.username)}</span>
+        </div>
+        ${action}
+      </div>
+      ${fs.status === 'incoming' ? `<p class="tiny" style="margin:-4px 0 10px">${esc(p.name)} sana arkadaşlık isteği gönderdi.</p>` : ''}
+      ${statTiles(p)}
+      ${streakBlock(p.streak)}
+      ${badgesBlock(p.badges)}
+      ${p.friends ? friendsBlock(p.friends) : ''}
+    </div>`);
+  wireLeaderboardLinks();
+
+  const act = async (method, path, body, msg) => {
+    const r = await v2api(method, path, body);
+    if (!guard(r, msg)) return;
+    if (!stale(tk)) showUserProfile({ username });
+  };
+  $$('[data-req]').forEach(b => b.addEventListener('click', () =>
+    act('POST', `/friends/requests/${fs.requestId}/${b.dataset.req}`, undefined,
+      b.dataset.req === 'accept' ? 'Artık arkadaşsınız' : 'İstek reddedildi')));
+  const fb = $('#b-friend');
+  if (fb) fb.addEventListener('click', () => {
+    if (fs.status === 'none') return act('POST', '/friends/requests', { username }, 'Arkadaşlık isteği gönderildi');
+    const [title, label, run] = fs.status === 'outgoing'
+      ? ['İsteği geri çekmek istiyor musun?', 'Geri Çek', () => act('DELETE', `/friends/requests/${fs.requestId}`, undefined, 'İstek geri çekildi')]
+      : [`${p.name} arkadaşlarından çıkarılsın mı?`, 'Arkadaşlıktan Çıkar', () => act('DELETE', `/friends/${encodeURIComponent(username)}`, undefined, 'Arkadaşlıktan çıkarıldı')];
+    sheet(`<div class="grab"></div><h3 class="sheet-title">${esc(title)}</h3>
+      <button class="btn btn-primary" id="sh-yes">${esc(label)}</button>
+      <button class="btn btn-ghost" id="sh-no">Vazgeç</button>`);
+    $('#sh-yes').addEventListener('click', () => { closeSheet(); run(); });
+    $('#sh-no').addEventListener('click', closeSheet);
+  });
+
+  // Engelleme ve şikâyet (Figma'da yok; v2 planında var)
+  $('#b-more').addEventListener('click', () => {
+    sheet(`<div class="grab"></div><h3 class="sheet-title">@${esc(username)}</h3>
+      <button class="btn btn-outline" id="sh-report">Şikâyet Et</button>
+      <button class="btn btn-primary" id="sh-block">Engelle</button>
+      <button class="btn btn-ghost" id="sh-no">Vazgeç</button>`);
+    $('#sh-no').addEventListener('click', closeSheet);
+    $('#sh-report').addEventListener('click', async () => {
+      closeSheet();
+      guard(await v2api('POST', `/users/${encodeURIComponent(username)}/report`, { reason: 'other' }), 'Şikâyetin alındı');
+    });
+    $('#sh-block').addEventListener('click', async () => {
+      closeSheet();
+      if (guard(await v2api('POST', `/users/${encodeURIComponent(username)}/block`), 'Kullanıcı engellendi')) back();
+    });
+  });
+}
+
+// ——— Sıralama ("Genel Sıralama") — yalnızca tüm zamanlar ———
+const LB_TABS = [['top', 'Top 50'], ['around', 'Kişisel'], ['friends', 'Arkadaşlar']];
+const LB_TITLE = { top: 'Genel Sıralama', around: 'Kişisel Sıralama', friends: 'Arkadaş Sıralaması' };
+
+async function showLeaderboard({ scope = 'top' }) {
+  const tk = activeToken;
+  loading(topbar());
+  const res = await v2api('GET', `/leaderboard?scope=${scope}`);
+  if (stale(tk)) return;
+  if (!guard(res)) return back();
+  const d = res.json.data;
+
+  paint(topbar() + `<div class="pad">
+      ${V2_PILL}
+      <h1 class="title-xl" style="margin-top:0">${LB_TITLE[scope]}</h1>
+      <div class="seg">${LB_TABS.map(([k, l]) => `<button data-scope="${k}" class="${k === scope ? 'on' : ''}">${l}</button>`).join('')}</div>
+      <div class="lb-list gap-16">${d.items.map(r => rankRow(r)).join('')}</div>
+      ${scope === 'top' ? `<p class="tiny gap-16" style="text-align:center">Senin sıran #${d.me.rank} · ${d.me.points} puan</p>` : ''}
+    </div>`);
+  $$('[data-scope]').forEach(b => b.addEventListener('click', () => {
+    // Sekme değişimi yığına yeni ekran eklemez: "Geri" profile döner
+    state.stack[state.stack.length - 1] = { name: 'leaderboard', data: { scope: b.dataset.scope } };
+    renderCurrent();
+  }));
+}
+
+// ——— Arkadaş ekleme: kullanıcı adıyla arama + davet linki ———
+async function showUserSearch() {
+  paint(topbar() + `<div class="pad">
+      ${V2_PILL}
+      <h1 class="title-xl" style="margin-top:0">Arkadaş Ekle</h1>
+      <p class="lead">Arkadaşının kullanıcı adını tam olarak yaz.</p>
+      <form id="f-search">
+        <div class="input"><span class="at">@</span><input id="in-search" placeholder="kullaniciadi" autocomplete="off" autocapitalize="none"></div>
+        <button class="btn btn-primary gap-12" type="submit">Ara</button>
+      </form>
+      <div id="search-result" class="gap-16"></div>
+      <div class="invite-card gap-24">
+        <div class="hd">${I.link}<b>Arkadaşını davet et</b></div>
+        <p>Musubi'de olmayan arkadaşına linkini gönder; linkle gelen kişi doğrudan profiline ulaşır.</p>
+        <div class="invite-link" id="invite-url">…</div>
+        <button class="btn btn-outline btn-sm" id="b-copy">Linki Kopyala</button>
+      </div>
+      <p class="tiny gap-16">Örnek veride bulunan kullanıcılar: dost, ahmet, naber, zeynep, havaliadam</p>
+    </div>`);
+  const me = await v2api('GET', '/users/me/profile');
+  if (me.ok) $('#invite-url').textContent = me.json.data.inviteUrl;
+  $('#b-copy').addEventListener('click', () => copyText($('#invite-url').textContent, 'Davet linki kopyalandı'));
+  $('#in-search').focus();
+
+  $('#f-search').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const q = $('#in-search').value.trim();
+    if (!q) return;
+    const res = await v2api('GET', `/users/search?username=${encodeURIComponent(q)}`);
+    if (!guard(res)) return;
+    const u = res.json.data.user;
+    const label = { none: 'Profili Gör', outgoing: 'İstek gönderildi', incoming: 'Sana istek gönderdi', friends: 'Arkadaşsınız', self: 'Bu sensin' };
+    $('#search-result').innerHTML = u
+      ? `<button class="lb-row" data-user="${esc(u.username)}">${personAvatar(u)}
+           <span class="nm">${u.isPremium ? `<span class="star">${I.star}</span>` : ''}${esc(fullName(u))}<small>@${esc(u.username)}</small></span>
+           <span class="pt">${label[u.friendship.status] || ''}</span></button>`
+      : `<div class="empty">${I.search}<div>@${esc(q.replace(/^@/, ''))} adında bir kullanıcı yok.</div></div>`;
+  });
+}
+
+// ——— Gelen arkadaşlık istekleri ("İstekler") ———
+async function showFriendRequests() {
+  const tk = activeToken;
+  loading(topbar());
+  const res = await v2api('GET', '/friends/requests');
+  if (stale(tk)) return;
+  if (!guard(res)) return back();
+  const { items } = res.json.data;
+
+  paint(topbar() + `<div class="pad">
+      ${V2_PILL}
+      <h1 class="title-xl" style="margin-top:0">İstekler</h1>
+      ${items.length ? `<div class="lb-list">${items.map(r => `
+        <div class="lb-row req" data-request="${esc(r.requestId)}">
+          <button class="who" data-user="${esc(r.from.username)}">${personAvatar(r.from)}<span class="nm">${esc(fullName(r.from))}</span></button>
+          <button class="ic-btn ghost" data-act="reject" title="Reddet">${I.close}</button>
+          <button class="ic-btn ok" data-act="accept" title="Kabul et">${I.check}</button>
+        </div>`).join('')}</div>`
+      : `<div class="empty">${I.users}<div>Bekleyen arkadaşlık isteği yok.</div></div>`}
+    </div>`);
+
+  $$('[data-act]').forEach(b => b.addEventListener('click', async () => {
+    const row = b.closest('[data-request]');
+    const r = await v2api('POST', `/friends/requests/${row.dataset.request}/${b.dataset.act}`);
+    if (!guard(r, b.dataset.act === 'accept' ? 'Artık arkadaşsınız' : 'İstek reddedildi')) return;
+    if (!stale(tk)) showFriendRequests();
+  }));
+}
+
+// ——— Ders sonunda sıra atlama ("Tebrikler — 1 sıra yükseldin!") ———
+// Önce eski sıralama çizilir, sonra iki satır yer değiştirir: Figma'daki iki
+// kare (#2 Ahmet / #3 sen → #2 sen / #3 Ahmet) tek bir canlandırmadır.
+function renderRankUp() {
+  const L = state.lesson;
+  const up = L.rankUps[L.rankIdx];
+  const isLast = L.rankIdx === L.rankUps.length - 1;
+  const n = up.previousRank - up.rank;
+  const text = up.scope === 'friends'
+    ? `Arkadaş Sıralamasında ${n} sıra yükseldin!`
+    : `Genel sıralamada ${n} sıra ${n > 1 ? 'birden ' : ''}yükseldin!`;
+  // "Önce" karesi eski sıra VE eski puanla çizilir; yer değiştirince yenileri gelir
+  const meBefore = { ...up.me, rank: up.previousRank, points: up.previousPoints ?? up.me.points };
+  const passedBefore = { ...up.passed, rank: up.rank };
+
+  paint(`<div class="center-scr rankup">
+      ${V2_PILL}
+      <div class="ru-av">${personAvatar(up.me, 'xl')}</div>
+      <h2>Tebrikler</h2>
+      <p>${esc(text)}</p>
+      <div class="ru-list">
+        <div class="ru-slot" id="ru-passed" style="top:0">${rankRow(passedBefore)}</div>
+        <div class="ru-slot" id="ru-me" style="top:62px">${rankRow(meBefore)}</div>
+      </div>
+      <button class="btn btn-primary gap-24" id="b-ru" style="max-width:300px">${isLast ? 'Ana Sayfaya Dön' : 'Devam Et'}</button>
+    </div>`);
+  setTimeout(() => {
+    const me = $('#ru-me'), passed = $('#ru-passed');
+    if (!me || !passed) return;
+    me.style.top = '0'; passed.style.top = '62px';
+    me.innerHTML = rankRow(up.me); passed.innerHTML = rankRow(up.passed);
+  }, 700);
+  $('#b-ru').addEventListener('click', () => {
+    if (isLast) return reset('home');
+    L.rankIdx++; renderRankUp();
+  });
+}
+
 const SHOW = {
   welcome: showWelcome,
   'reg-email': showRegEmail, 'reg-name': showRegName, 'reg-password': showRegPassword,
@@ -2100,7 +2699,11 @@ const SHOW = {
   'settings-password': showSettingsPassword, 'settings-password-new': showSettingsPasswordNew,
   'settings-password-success': showSettingsPasswordSuccess,
   'settings-notifications': showSettingsNotifications,
-  'settings-legal': showSettingsLegal, 'legal-doc': showLegalDoc, 'settings-delete': showSettingsDelete
+  'settings-legal': showSettingsLegal, 'legal-doc': showLegalDoc, 'settings-delete': showSettingsDelete,
+
+  // v2 önizleme (örnek veri)
+  profile: showProfile, 'user-profile': showUserProfile, leaderboard: showLeaderboard,
+  'user-search': showUserSearch, 'friend-requests': showFriendRequests
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -2111,11 +2714,22 @@ function renderDevBar() {
   if (!state.access) { bar.hidden = true; return; }
   bar.hidden = false;
   $('#dev-email').textContent = state.me?.email || state.wizard.email || '(oturum açık)';
+  $('#dev-v2').textContent = `v2 önizleme: ${state.v2 ? 'Açık' : 'Kapalı'}`;
+  $('#dev-v2').classList.toggle('on', state.v2);
 }
 $('#dev-bar').addEventListener('click', async (e) => {
   const btn = e.target.closest('[data-dev]');
   if (!btn) return;
   if (btn.dataset.dev === 'reset') return doLogout();
+  if (btn.dataset.dev === 'v2') {
+    state.v2 = !state.v2;
+    localStorage.setItem('musubi_v2_preview', state.v2 ? '1' : '0');
+    mockDb = null;
+    renderDevBar();
+    // Kapatılırken v2 ekranındaysa anasayfaya dön; açılırken ekranı tazele
+    if (!state.v2 && V2_SCREENS.includes(current().name)) return reset('home');
+    return renderCurrent();
+  }
   if (btn.dataset.dev === 'fresh') {
     setTokens(null, null);
     state.me = null; state.home = null; state.promptedPlacement = false;

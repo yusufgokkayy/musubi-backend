@@ -2009,6 +2009,169 @@ Fotoğrafı kaldırır; yoksa da `200` döner (idempotent).
 
 ---
 
+## v2 TASLAK — profil, arkadaşlık, sıralama, rozetler (HENÜZ KODLANMADI)
+
+> **Durum (14.10.2026):** bu bölüm bir **sözleşme taslağıdır**, uçların hiçbiri
+> sunucuda yok. Simülatör (`/sim`) bu biçimi örnek veriyle taklit eder —
+> geliştirici panelindeki **"v2 önizleme"** anahtarı açıkken. v2 aşamaları (2 puan,
+> 3 arkadaşlık + güvenlik, 4 sıralama, 5 rozet, 6 profil) bu sözleşmeyi uygular;
+> değişen bir şey olursa önce burası güncellenir.
+>
+> **Kararlar (14.10.2026):** sıralama ve puan **yalnızca tüm zamanlar** — haftalık
+> sıralama yok. Profilde seri gün sayısı + **1 haftalık** seri şeridi (anasayfadaki
+> gibi). Davet linki ve kullanıcı adıyla arama var (Figma'da ekranları yok).
+
+### Ortak nesneler
+
+```jsonc
+// UserRow — listelerde (sıralama, istekler, arama) bir kullanıcı satırı
+{
+  "username": "emomu",
+  "name": "Emirhan", "surname": "Soylu",
+  "avatarUrl": "https://…/uploads/avatars/9f86….webp",   // yoksa null → baş harf
+  "isPremium": true,                                     // adın önündeki yıldız
+  "points": 2250                                         // tüm zamanlar puanı
+}
+
+// RankedRow = UserRow + sıra
+{ "rank": 3, "isMe": true, /* …UserRow */ }
+
+// Badge — profildeki "Başarımlar"
+{ "key": "level-N5", "kind": "level",  "value": "N5", "label": "N5 Seviyesi Tamamlandı", "earnedAt": "2026-08-12T…" }
+{ "key": "streak-30", "kind": "streak", "value": 30,  "label": "30 Günlük Seri!",         "earnedAt": "2026-09-30T…" }
+```
+
+`streak.week` anasayfadakiyle **aynı biçimdir** (Pzt → Paz, 7 öğe; `studied`,
+`isToday`, `isFuture`) — çizim kuralı için bkz. `GET /home/summary`.
+
+Rozet türleri (`kind`): `level` (N5…N1 tamamlandı), `streak` (7/30/60/100/365
+gün), `words` (100/500/1000/2500/5816 kelime), `memory` (Hafıza'da Ezber kutusu),
+`perfect` (hatasız ders), `social` (ilk arkadaş, davetle gelen arkadaş),
+`early` (erken kullanıcı). Haftalık sıralama rozeti **yok** (haftalık sıralama kalktı).
+
+### GET /users/me/profile 🔒✉️
+Kendi profilin ("Profil 1. Bakış").
+```jsonc
+{
+  "success": true,
+  "data": {
+    "username": "emomu", "name": "Emirhan", "surname": "Soylu",
+    "avatarUrl": "https://…", "isPremium": true,
+    "points": 2250,
+    "globalRank": 3245,                     // "#3245 Genel Sıralama"
+    "streak": { "current": 12, "longest": 72, "week": [ /* 7 gün */ ] },
+    "badges": [ /* Badge[] — en yeni önce */ ],
+    "friends": {
+      "count": 5,                           // "5 Arkadaş"
+      "ranking": [ /* RankedRow[] — sen dahil ilk 4; "Daha Fazla Göster" → GET /leaderboard?scope=friends */ ]
+    },
+    "inviteUrl": "https://musubi.alpsoysoft.com/u/emomu"   // "Davet Et" — paylaşılacak link
+  }
+}
+```
+
+### GET /users/:username 🔒✉️
+Başkasının profili ("Profil 3. Bakış"). `/users/me/profile` ile aynı alanlar,
+`inviteUrl` hariç, ayrıca:
+```jsonc
+{
+  "friendship": {
+    "status": "none",          // none | outgoing | incoming | friends
+    "requestId": null          // outgoing/incoming iken isteğin kimliği
+  },
+  "friends": null              // YALNIZCA arkadaşsanız dolu (onun arkadaş sıralaması)
+}
+```
+| `status` | Başlıktaki düğme | Dokununca |
+|---|---|---|
+| `none` | kişi + ekle ikonu | `POST /friends/requests` |
+| `outgoing` | saat ikonu (bekliyor) | sorulur → `DELETE /friends/requests/:id` (geri çek) |
+| `incoming` | ✕ / ✓ kartı | `…/reject` / `…/accept` |
+| `friends` | çift tik ikonu | sorulur → `DELETE /friends/:username` (arkadaşlıktan çıkar) |
+
+Hatalar: `404 "Kullanıcı bulunamadı"` (engellenmiş ya da engelleyen kullanıcı da
+`404` görür — engel bilgisi sızdırılmaz).
+
+### GET /users/search?username=emomu 🔒✉️
+Kullanıcı adıyla **tam eşleşme** araması (baştaki `@` ve büyük harf normalize
+edilir). Kısmi eşleşme ve isimle arama **bilerek yok**: kullanıcı listesinin
+kazınmasını zorlaştırır, arkadaşını ekleyen kişi adı zaten biliyordur.
+```jsonc
+// 200 — bulunduysa
+{ "success": true, "data": { "user": { /* UserRow */, "friendship": { "status": "none", "requestId": null } } } }
+// 200 — bulunamadıysa (hata DEĞİL)
+{ "success": true, "data": { "user": null } }
+```
+Sınır: dakikada 30 istek.
+
+### Arkadaşlık 🔒✉️
+| Uç | Ne yapar | Yanıt `data` |
+|---|---|---|
+| `POST /friends/requests` `{ "username": "dost" }` | İstek gönderir. Karşı taraf sana zaten istek gönderdiyse **doğrudan arkadaş olursunuz** | `{ "status": "outgoing", "requestId": "…" }` veya `{ "status": "friends" }` |
+| `GET /friends/requests` | Gelen istekler ("İstekler" ekranı, bildirimlerdeki "3 Arkadaşlık İsteği" satırı) | `{ "total": 3, "items": [{ "requestId", "from": UserRow, "createdAt" }] }` |
+| `POST /friends/requests/:id/accept` | Kabul | `{ "status": "friends" }` |
+| `POST /friends/requests/:id/reject` | Ret (karşı tarafa bildirim gitmez) | `{ "status": "none" }` |
+| `DELETE /friends/requests/:id` | Gönderdiğin isteği geri çek | `{ "status": "none" }` |
+| `DELETE /friends/:username` | Arkadaşlıktan çıkar | `{ "status": "none" }` |
+
+Kabul edilen istek gönderene bildirim (`friend_accepted`) olarak gider; gelen
+istek `friend_request` bildirimi üretir.
+
+### Engelleme ve şikâyet 🔒✉️
+| Uç | Ne yapar |
+|---|---|
+| `POST /users/:username/block` | Engeller: arkadaşlık ve bekleyen istekler silinir, iki taraf birbirini profilde/aramada/sıralamada göremez |
+| `DELETE /users/:username/block` | Engeli kaldırır |
+| `POST /users/:username/report` `{ "reason": "spam" }` | Şikâyet (`spam` · `inappropriate_name` · `inappropriate_photo` · `other`) |
+
+### GET /leaderboard?scope=top 🔒✉️
+"Genel Sıralama" ekranı. **Tüm zamanlar puanı** — dönem seçici yok.
+| `scope` | Sekme | İçerik |
+|---|---|---|
+| `top` | Top 50 | İlk 50 |
+| `around` | Kişisel | Sen ve üstünde/altında 4'er kişi |
+| `friends` | Arkadaşlar | Sen + arkadaşların |
+```jsonc
+{
+  "success": true,
+  "data": {
+    "scope": "around",
+    "me": { "rank": 3245, "points": 2250 },
+    "items": [ /* RankedRow[] — isMe: true olan satır vurgulanır */ ]
+  }
+}
+```
+Sıra kuralı: puan çoktan aza; eşit puanda o puana **önce ulaşan** önde (her
+kullanıcının tekil bir sırası olur). Puanı 0 olan kullanıcı sıralamada görünmez.
+
+### Ders sonunda sıra atlama — `PUT /sessions/complete` › `rankUps`
+Bitiş yanıtına eklenir; sıra değişmediyse boş dizi.
+```jsonc
+"rankUps": [
+  {
+    "scope": "friends",                 // friends | global
+    "previousRank": 3,
+    "rank": 2,
+    "previousPoints": 2150,             // dersten önceki puanın — "önce" karesi için
+    "passed": { /* RankedRow — geçtiğin kişi, YENİ sırasıyla (#3) */ },
+    "me":     { /* RankedRow — sen, yeni sıranla (#2) */ }
+  }
+]
+```
+Ekran iki karelik bir canlandırmadır (Figma'daki iki kare): önce geçtiğin kişi
+üstte, sen `previousRank` ve `previousPoints` ile altta; sonra yer değiştirirsiniz
+ve yeni sıra/puan görünür. Her öğe bir "Tebrikler — Arkadaş Sıralamasında 1 sıra yükseldin!" ekranıdır
+(`global` için "Genel sıralamada 10 sıra birden yükseldin!"). Sıra: önce
+`friends`, sonra `global`. Ekranlar seri ekranından SONRA gösterilir.
+
+### Diğer eklemeler
+- `GET /home/summary` › `pendingFriendRequests` (gelen istek sayısı) — zilin
+  noktası bildirim **veya** istek varken yanar.
+- Davet linki `https://musubi.alpsoysoft.com/u/<username>`: uygulama kuruluysa
+  profili açar (App Links), değilse mağaza bağlantılı bir web sayfasına iner.
+
+---
+
 ## Görsel yükleme — `/uploads` (yalnızca admin)
 
 Anasayfanın üstündeki hikâye kartlarının (ve ileride kelime görsellerinin) görselleri buradan yüklenir. Mobil uygulamanın **yükleme** uçlarını çağırması gerekmez — normal kullanıcı `403` alır; uygulama yalnızca dönen `url`'i gösterir.
