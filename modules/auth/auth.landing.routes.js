@@ -23,6 +23,7 @@ const { generalLimiter } = require('../../middlewares/rateLimiter');
 const { t, langFromRequest, maskEmail } = require('../../utils/i18n');
 const { RULE_PATTERNS } = require('../../utils/password.util');
 const { esc, sendPage, BRAND_BAR } = require('../../utils/webPage');
+const { appOpenConfig, inlineJson, APP_OPEN_JS } = require('../../utils/appOpen');
 
 const router = express.Router();
 router.use(generalLimiter);
@@ -98,6 +99,8 @@ input:focus{outline:none;border-color:var(--accent)}
   border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;
 }
 @keyframes spin{to{transform:rotate(360deg)}}
+.again{margin-top:18px;font-size:13.5px;line-height:1.5;color:var(--muted)}
+.again a{color:var(--accent);font-weight:600;text-underline-offset:3px}
 `;
 
 /* ------------------------------------------------------------------ kabuk */
@@ -120,6 +123,23 @@ const invalidLinkPage = (req, res, lang) => {
   <p class="lead">${esc(s.invalidText)}</p>`
     });
 };
+
+/* ------------------------------------------------- uygulamaya dönüş */
+// İşlem web'de bitince sayfa kendiliğinden uygulamayı açar, yoksa mağazaya
+// gider (bkz. utils/appOpen.js). Yönlendirme tarayıcıda engellenirse kullanıcı
+// ortada kalmasın diye küçük bir yedek bağlantı görünür. Masaüstünde açılacak
+// uygulama yok: yönlendirme olmaz, telefona dönmesi söylenir.
+const againLink = (s) =>
+    `<p class="again hidden" id="again">${esc(s.appNotOpened)} <a href="#" id="again-link">${esc(s.openApp)}</a></p>`;
+
+const returnScript = (req, lang) => `${APP_OPEN_JS}
+var C=${inlineJson(appOpenConfig(req, lang))};
+function goToApp(appText,deskText){
+  var lead=document.getElementById('lead');
+  if(openApp(C)){lead.textContent=appText;document.getElementById('again').classList.remove('hidden');}
+  else{lead.textContent=deskText;}
+}
+document.getElementById('again-link').addEventListener('click',function(e){e.preventDefault();openApp(C);});`;
 
 /* --------------------------------------------------------------- sayfalar */
 router.get('/verify-email/:token', async (req, res, next) => {
@@ -144,13 +164,14 @@ router.get('/verify-email/:token', async (req, res, next) => {
   <div class="stack">
     <button class="btn" id="verify-btn">${esc(s.verifyBtn)}</button>
   </div>
-  <div id="msg"></div>`,
-            script: `
+  <div id="msg"></div>
+  ${againLink(s)}`,
+            script: `${returnScript(req, lang)}
 var btn=document.getElementById('verify-btn'),msg=document.getElementById('msg');
 var L=${JSON.stringify({
                 busy: s.verifyBtnBusy, label: s.verifyBtn, err: s.verifyErr, net: s.netErr,
-                okTitle: s.verifyOkHeading, okText: s.verifyOkText, ok: ICON.check,
-                invalid: s.invalidText
+                okTitle: s.verifyOkHeading, okText: s.verifyOkText, okApp: s.verifyOkApp,
+                ok: ICON.check, invalid: s.invalidText
             })};
 // Link sayfa açıkken geçersizleşebilir (süre doldu, yenisi istendi). API
 // mesajı yalnız Türkçe; sayfanın kendi dilindeki metin koddan seçilir.
@@ -168,12 +189,12 @@ btn.addEventListener('click',function(){
        document.getElementById('icon').className='halo ok';
        document.getElementById('icon').innerHTML=L.ok;
        document.getElementById('title').textContent=L.okTitle;
-       document.getElementById('lead').textContent=L.okText;
        document.getElementById('chip').classList.add('hidden');
        btn.parentNode.classList.add('hidden');
        document.querySelector('.card').classList.remove('fade');
        void document.querySelector('.card').offsetWidth;
        document.querySelector('.card').classList.add('fade');
+       goToApp(L.okApp,L.okText);
      } else { fail(apiError(j)); }
    });})
    .catch(function(){fail(L.net);});
@@ -221,8 +242,9 @@ router.get('/reset-password/:token', async (req, res, next) => {
     </div>
     <button class="btn" type="submit" id="submit-btn">${esc(s.resetSubmit)}</button>
   </form>
-  <div id="msg"></div>`,
-            script: `
+  <div id="msg"></div>
+  ${againLink(s)}`,
+            script: `${returnScript(req, lang)}
 var f=document.getElementById('reset-form'),msg=document.getElementById('msg');
 var p1=document.getElementById('p1'),p2=document.getElementById('p2');
 var meter=document.getElementById('meter').children,hint=document.getElementById('hint');
@@ -232,8 +254,8 @@ var L=${JSON.stringify({
                 busy: s.resetSubmitBusy, label: s.resetSubmit, err: s.resetErr, net: s.netErr,
                 mismatch: s.mismatch, strength: s.strength,
                 rules: [s.ruleLength, s.ruleUpperDigit, s.ruleSpecial],
-                okTitle: s.resetOkHeading, okText: s.resetOkText, ok: ICON.check,
-                eye: ICON.eye, eyeOff: ICON.eyeOff, invalid: s.invalidText
+                okTitle: s.resetOkHeading, okText: s.resetOkText, okApp: s.resetOkApp,
+                ok: ICON.check, eye: ICON.eye, eyeOff: ICON.eyeOff, invalid: s.invalidText
             })};
 // Kural desenleri sunucudaki utils/password.util.js'ten gelir — gösterge ile
 // sunucu doğrulaması asla ayrışmaz
@@ -279,11 +301,11 @@ f.addEventListener('submit',function(e){
        document.getElementById('icon').className='halo ok';
        document.getElementById('icon').innerHTML=L.ok;
        document.getElementById('title').textContent=L.okTitle;
-       document.getElementById('lead').textContent=L.okText;
        document.getElementById('chip').classList.add('hidden');
        f.classList.add('hidden');
        var c=document.querySelector('.card');
        c.classList.remove('fade'); void c.offsetWidth; c.classList.add('fade');
+       goToApp(L.okApp,L.okText);
      } else {
        sb.disabled=false; sb.innerHTML=''; sb.textContent=L.label;
        msg.className='msg err';

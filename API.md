@@ -571,14 +571,40 @@ bir alttaki bölüm):
 Sayfalar yan etkisizdir (mail istemcilerinin link tarayıcıları GET'i takip
 edebilir); geçersiz/süresi dolmuş tokende hata ekranı basar.
 
+**İşlem bitince uygulamaya dönüş (27.10.2026):** doğrulama ya da şifre
+değişikliği başarılı olunca sayfa **kendiliğinden** uygulamayı açar — buton yok
+(`utils/appOpen.js`):
+
+| Cihaz | Ne olur |
+| --- | --- |
+| Android | `intent://open#Intent;scheme=musubi;package=com.alpsoy.musubi;S.browser_fallback_url=…;end` — uygulama kuruluysa açılır, değilse yedek adrese gidilir |
+| iPhone/iPad | `musubi://open` denenir; 1,5 sn sonra sayfa hâlâ önplandaysa App Store'a / yedek adrese gidilir |
+| Masaüstü | Yönlendirme yok; "telefonundaki uygulamaya dön" yazar |
+
+Tarayıcı yönlendirmeyi engellerse diye başarı metninin altında küçük bir
+"Uygulama açılmadı mı? Aç" bağlantısı görünür. `musubi://open` **token
+taşımaz** — token taşıyan özel şemaya itirazımız (aşağıda) bunu kapsamaz.
+
+**Mağaza linkleri:** `PLAY_STORE_URL` ve `APP_STORE_URL`. Uygulama mağazada
+değilken boştur; o sürede yedek adres **`/indir`** sayfasıdır ("çok yakında").
+Girilince kod değişmeden doğrudan mağazaya gidilir ve `/indir`'de mağaza
+butonları belirir.
+
+- `GET /` ve `GET /indir` — tanıtım/indirme sayfası (production'da ana adres
+  budur; geliştirme ortamında `/` simülatördür).
+
 Uygulama akışı: register sonrası istemci "e-postanı doğrula" bekleme ekranı
-gösterir; kullanıcı webde doğrulayıp uygulamaya dönünce istemci `GET /auth/me`'yi
-yeniden dener (403 → 200'e döner) — register'da verilen token çifti bu yüzden
-vardır. Yeni bağlantı için `POST /auth/resend-verification-email`.
+gösterir; kullanıcı webde doğrulayınca sayfa uygulamayı açar, istemci
+`GET /auth/verification-status` ile durumu sorar (`isEmailVerified: true` →
+içeri) — register'da verilen token çifti bu yüzden vardır. Şifre sıfırlama
+sonrası ayrıca doğrulama **gerekmez**: sıfırlama linkine tıklamak adres
+sahipliğini kanıtlar ve hesap doğrulanmış sayılır. Yeni bağlantı için `POST /auth/resend-verification-email`.
 
 ### Deep link — Universal Links / App Links
-Mail linkleri `https://` **kalır**; custom scheme (`musubi://`) bilerek yoktur,
-çünkü aynı şemayı kaydeden başka bir uygulama linki kapıp token'ı çalabilir.
+Mail linkleri `https://` **kalır**; token taşıyan custom scheme
+(`musubi://verify-email/<token>` gibi) bilerek yoktur, çünkü aynı şemayı
+kaydeden başka bir uygulama linki kapıp token'ı çalabilir. (Tek istisna
+yukarıdaki tokensız `musubi://open`: yalnızca uygulamayı açar.)
 Aynı link:
 
 - **uygulama kuruluysa** → uygulamada açılır (uygulama kendi ekranını gösterip
