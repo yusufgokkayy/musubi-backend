@@ -373,7 +373,8 @@ function showRegEmail() {
   $('#f-action').addEventListener('click', async () => {
     const email = input.value.trim();
     const fail = (msg, html) => { wrap.classList.add('bad'); if (html) err.innerHTML = html; else err.textContent = msg; };
-    if (!/^[\w.-]+@([\w-]+\.)+[\w-]{2,}$/.test(email)) return fail('E-posta formatınız yanlış');
+    // Sunucudaki utils/email.util.js desenin kopyası ("ad+etiket@..." geçerli)
+    if (!/^[\w.+-]+@([\w-]+\.)+[\w-]{2,}$/.test(email.toLowerCase())) return fail('E-posta formatınız yanlış');
     const res = await api('POST', '/auth/check-email', { email }, { auth: false });
     if (!res.ok) return fail(res.json.message || 'Bir şeyler ters gitti');
     if (!res.json.available) {

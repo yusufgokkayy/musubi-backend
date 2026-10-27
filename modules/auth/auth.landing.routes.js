@@ -84,7 +84,8 @@ input:focus{outline:none;border-color:var(--accent)}
   border-radius:9px;
 }
 .eye svg{width:20px;height:20px}
-/* güç göstergesi — uygulamadaki 4 çubukla aynı */
+/* güç göstergesi — tasarımdaki sıra: alan, kural mesajı, 4 çubuk, etiket */
+.pw{display:flex;flex-direction:column;gap:6px}
 .meter{display:flex;gap:6px;margin-top:2px}
 .meter i{flex:1;height:5px;border-radius:99px;background:var(--line);transition:background .2s ease}
 .hint{font-size:12.5px;line-height:1.5;text-align:left;color:var(--muted);min-height:17px}
@@ -148,8 +149,12 @@ router.get('/verify-email/:token', async (req, res, next) => {
 var btn=document.getElementById('verify-btn'),msg=document.getElementById('msg');
 var L=${JSON.stringify({
                 busy: s.verifyBtnBusy, label: s.verifyBtn, err: s.verifyErr, net: s.netErr,
-                okTitle: s.verifyOkHeading, okText: s.verifyOkText, ok: ICON.check
+                okTitle: s.verifyOkHeading, okText: s.verifyOkText, ok: ICON.check,
+                invalid: s.invalidText
             })};
+// Link sayfa açıkken geçersizleşebilir (süre doldu, yenisi istendi). API
+// mesajı yalnız Türkçe; sayfanın kendi dilindeki metin koddan seçilir.
+function apiError(j){return j.code==='LINK_INVALID'?L.invalid:(j.message||L.err);}
 function fail(m){btn.disabled=false;btn.innerHTML='';btn.textContent=L.label;
   msg.className='msg err';msg.textContent=m;}
 btn.addEventListener('click',function(){
@@ -169,7 +174,7 @@ btn.addEventListener('click',function(){
        document.querySelector('.card').classList.remove('fade');
        void document.querySelector('.card').offsetWidth;
        document.querySelector('.card').classList.add('fade');
-     } else { fail(j.message||L.err); }
+     } else { fail(apiError(j)); }
    });})
    .catch(function(){fail(L.net);});
 });`
@@ -197,16 +202,17 @@ router.get('/reset-password/:token', async (req, res, next) => {
   <p class="lead" id="lead">${esc(s.resetLead)}</p>
   <div class="mail-chip" id="chip">${esc(maskEmail(email))}</div>
   <form id="reset-form" class="stack">
-    <div>
+    <div class="pw">
       <div class="field">
         <span class="lead-ico">${ICON.key}</span>
         <input type="password" name="p1" id="p1" placeholder="${esc(s.resetPlaceholder)}"
                autocomplete="new-password" required>
         <button type="button" class="eye" id="eye1" aria-label="${esc(s.showPassword)}">${ICON.eye}</button>
       </div>
+      <div class="hint" id="hint"></div>
       <div class="meter" id="meter"><i></i><i></i><i></i><i></i></div>
+      <div class="hint" id="level"></div>
     </div>
-    <div class="hint" id="hint"></div>
     <div class="field">
       <span class="lead-ico">${ICON.key}</span>
       <input type="password" name="p2" id="p2" placeholder="${esc(s.resetPlaceholder2)}"
@@ -220,36 +226,37 @@ router.get('/reset-password/:token', async (req, res, next) => {
 var f=document.getElementById('reset-form'),msg=document.getElementById('msg');
 var p1=document.getElementById('p1'),p2=document.getElementById('p2');
 var meter=document.getElementById('meter').children,hint=document.getElementById('hint');
+var levelEl=document.getElementById('level');
 var sb=document.getElementById('submit-btn');
 var L=${JSON.stringify({
                 busy: s.resetSubmitBusy, label: s.resetSubmit, err: s.resetErr, net: s.netErr,
                 mismatch: s.mismatch, strength: s.strength,
-                rules: [s.ruleLength, s.ruleUpperDigit, s.ruleUpperDigit, s.ruleSpecial],
+                rules: [s.ruleLength, s.ruleUpperDigit, s.ruleSpecial],
                 okTitle: s.resetOkHeading, okText: s.resetOkText, ok: ICON.check,
-                eye: ICON.eye, eyeOff: ICON.eyeOff
+                eye: ICON.eye, eyeOff: ICON.eyeOff, invalid: s.invalidText
             })};
 // Kural desenleri sunucudaki utils/password.util.js'ten gelir — gösterge ile
 // sunucu doğrulaması asla ayrışmaz
 var SPECS=${JSON.stringify(RULE_PATTERNS)};
 var COLORS=['var(--brand)','var(--warn)','var(--mid)','var(--ok)'];
 
-function passed(v){
-  var n=0;
-  for(var i=0;i<SPECS.length;i++){
-    var ok=SPECS[i].minLength!==undefined
-      ? v.length>=SPECS[i].minLength
-      : new RegExp(SPECS[i].source,SPECS[i].flags||'').test(v);
-    if(!ok) return {count:n,firstFail:i};
-    n++;
-  }
-  return {count:n,firstFail:-1};
+function ok(i,v){var s=SPECS[i];
+  return s.minLength!==undefined ? v.length>=s.minLength : new RegExp(s.source,s.flags||'').test(v);}
+// Tasarımın 4 basamağı (Kötü/Orta/İyi/Çok iyi). Sunucuda büyük harf ve rakam
+// iki ayrı kural ama tasarım onları tek basamak sayar, mesajları da ortak.
+// Çok kısa şifre de bir çubuk yakar: boş gösterge "hiç yazmadın" gibi okunuyordu.
+function grade(v){
+  if(!ok(0,v)) return {n:1,rule:0};
+  if(!ok(1,v)||!ok(2,v)) return {n:2,rule:1};
+  if(!ok(3,v)) return {n:3,rule:2};
+  return {n:4,rule:-1};
 }
 function draw(){
-  var v=p1.value,r=passed(v);
-  for(var i=0;i<4;i++) meter[i].style.background = i<r.count ? COLORS[r.count-1] : 'var(--line)';
-  hint.className='hint'+(v?' s'+r.count:'');
-  hint.textContent = !v ? '' : (r.firstFail>=0 ? L.rules[r.firstFail] : L.strength[3]);
-  sb.disabled = !(r.count===4 && p2.value && p1.value===p2.value);
+  var v=p1.value,g=v?grade(v):{n:0,rule:-1},cls='hint'+(g.n?' s'+g.n:'');
+  for(var i=0;i<4;i++) meter[i].style.background = i<g.n ? COLORS[g.n-1] : 'var(--line)';
+  hint.className=cls; hint.textContent = g.rule>=0 ? L.rules[g.rule] : '';
+  levelEl.className=cls; levelEl.textContent = g.n ? L.strength[g.n-1] : '';
+  sb.disabled = !(g.n===4 && p2.value && p1.value===p2.value);
 }
 p1.addEventListener('input',draw); p2.addEventListener('input',draw); draw();
 
@@ -279,7 +286,8 @@ f.addEventListener('submit',function(e){
        c.classList.remove('fade'); void c.offsetWidth; c.classList.add('fade');
      } else {
        sb.disabled=false; sb.innerHTML=''; sb.textContent=L.label;
-       msg.className='msg err'; msg.textContent=j.message||L.err;
+       msg.className='msg err';
+       msg.textContent = j.code==='LINK_INVALID' ? L.invalid : (j.message||L.err);
      }
    });})
    .catch(function(){sb.disabled=false;sb.innerHTML='';sb.textContent=L.label;

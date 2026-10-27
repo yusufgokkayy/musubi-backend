@@ -59,10 +59,11 @@ const STRINGS = {
         mismatch: 'Şifreler eşleşmiyor.',
         showPassword: 'Şifreyi göster',
 
-        // Şifre kuralları (password.util.js ile aynı sıra)
-        ruleLength: 'Şifren çok kısa (en az 8 karakter olmalı).',
-        ruleUpperDigit: 'Şifrende en az bir büyük harf, bir rakam ve bir özel karakter olmalı.',
-        ruleSpecial: 'Şifreni daha sağlam yapmak için bir özel karakter kullan.',
+        // Şifre kuralları — tasarımdaki ("Yeni Şifre Oluştur") metinler, API'nin
+        // döndürdüğü password.util.js mesajlarıyla birebir aynı
+        ruleLength: 'Şifreniz çok kısa (en az 8 karakter olmalı).',
+        ruleUpperDigit: 'Şifrenizde en az bir büyük harf, bir rakam ve bir özel karakter olmalı.',
+        ruleSpecial: 'Şifrenizi daha sağlam yapmak için bir özel karakter kullanın.',
         strength: ['Kötü', 'Orta', 'İyi', 'Çok iyi'],
 
         // Sayfa: geçersiz link

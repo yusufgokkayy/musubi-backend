@@ -385,6 +385,8 @@ describe('Auth', () => {
         });
         assert.equal(besinci.status, 429);
         assert.match(besinci.json.message, /hatalı giriş/);
+        // Kilidin kalan süresi istemciye söylenir (geri sayım için)
+        assert.ok(besinci.json.details?.retryAfterSeconds > 0 && besinci.json.details.retryAfterSeconds <= 60);
 
         // Kilitliyken DOĞRU şifre de geçmemeli — yoksa kilit anlamsız olurdu
         const dogruSifre = await api('POST', '/auth/login', {
@@ -636,6 +638,8 @@ describe('Auth', () => {
         // dolunca çalışır (mobilde bu buton geri sayım göstermeli)
         const erken = await api('POST', '/auth/resend-verification-email', { body: { email } });
         assert.equal(erken.status, 429, 'kayıttan hemen sonra tekrar gönderim engellenmeli');
+        const kalan = erken.json.details?.retryAfterSeconds;
+        assert.ok(kalan > 0 && kalan <= 60, '"Tekrar Gönder (54)" geri sayımı sunucudan gelmeli');
 
         await expireMailCooldown(email);
         const ilk = await api('POST', '/auth/resend-verification-email', { body: { email } });
@@ -4755,5 +4759,207 @@ describe('Güvenlik regresyonları (26.09.2026 incelemesi)', () => {
             global.fetch = realFetch;
             for (const k of Object.keys(env)) { if (eski[k] === undefined) delete process.env[k]; else process.env[k] = eski[k]; }
         }
+    });
+});
+
+describe('Hata kodları (27.10.2026)', () => {
+    // Mobil, 401'i "oturum düştü" sayıp girişteki "şifre yanlış"ı yutuyordu;
+    // kod, durum kodundan bağımsız olarak hatanın ne olduğunu söyler
+    const jwt = require('jsonwebtoken');
+
+    it('login: her hata durumu kendi kodunu taşır', async () => {
+        await createVerifiedUser('kod-login@test.com');
+
+        const yanlis = await api('POST', '/auth/login', {
+            body: { email: 'kod-login@test.com', password: 'Yanlis123!' }
+        });
+        assert.equal(yanlis.status, 401, 'durum kodu değişmedi');
+        assert.equal(yanlis.json.code, 'INVALID_PASSWORD');
+        assert.match(yanlis.json.message, /Şifreniz yanlış/);
+
+        const yok = await api('POST', '/auth/login', {
+            body: { email: 'kod-yok@test.com', password: 'Testsifre123!' }
+        });
+        assert.equal(yok.status, 404);
+        assert.equal(yok.json.code, 'ACCOUNT_NOT_FOUND');
+
+        await User.create({
+            name: 'Sosyal', email: 'kod-google@test.com',
+            provider: 'google', providerId: 'g-kod-1', isEmailVerified: true
+        });
+        const sosyal = await api('POST', '/auth/login', {
+            body: { email: 'kod-google@test.com', password: 'Testsifre123!' }
+        });
+        assert.equal(sosyal.status, 400);
+        assert.equal(sosyal.json.code, 'SOCIAL_ACCOUNT');
+        assert.equal(sosyal.json.details.provider, 'google');
+    });
+
+    it('login: kilit 429 + LOGIN_LOCKED, kilitliyken de aynı kod', async () => {
+        await createVerifiedUser('kod-kilit@test.com');
+        const dene = () => api('POST', '/auth/login', {
+            body: { email: 'kod-kilit@test.com', password: 'Yanlis123!' }
+        });
+        for (let i = 0; i < 4; i++) assert.equal((await dene()).json.code, 'INVALID_PASSWORD');
+
+        const besinci = await dene();
+        assert.equal(besinci.status, 429);
+        assert.equal(besinci.json.code, 'LOGIN_LOCKED');
+        assert.ok(besinci.json.details.retryAfterSeconds > 0);
+
+        const kilitliyken = await dene();
+        assert.equal(kilitliyken.json.code, 'LOGIN_LOCKED');
+    });
+
+    it('oturum: erişim token\'ı TOKEN_EXPIRED / TOKEN_INVALID, yenileme token\'ı REFRESH_INVALID', async () => {
+        const user = await createVerifiedUser('kod-oturum@test.com');
+
+        const suresiDolmus = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: -10 });
+        const expired = await api('GET', '/auth/me', { token: suresiDolmus });
+        assert.equal(expired.status, 401);
+        assert.equal(expired.json.code, 'TOKEN_EXPIRED');
+        assert.equal(expired.json.message, 'Token expired', 'mesaj bilerek değişmedi');
+
+        const bozuk = await api('GET', '/auth/me', { token: 'bozuk.token.degeri' });
+        assert.equal(bozuk.json.code, 'TOKEN_INVALID');
+        const yok = await api('GET', '/auth/me');
+        assert.equal(yok.json.code, 'TOKEN_INVALID');
+
+        // Asıl hata: süresi dolmuş YENİLEME token'ı eskiden erişim token'ıyla
+        // aynı cevabı alıyordu ("yenile" → yenileme döngüsü)
+        const eskiRefresh = jwt.sign({ id: user._id }, process.env.JWT_REFRESH_SECRET, { expiresIn: -10 });
+        const refresh = await api('POST', '/auth/refresh', { body: { refreshToken: eskiRefresh } });
+        assert.equal(refresh.status, 401);
+        assert.equal(refresh.json.code, 'REFRESH_INVALID');
+
+        const oturumsuz = jwt.sign({ id: user._id, jti: 'kayitsiz' }, process.env.JWT_REFRESH_SECRET, { expiresIn: '1h' });
+        assert.equal((await api('POST', '/auth/refresh', { body: { refreshToken: oturumsuz } })).json.code, 'REFRESH_INVALID');
+        assert.equal((await api('POST', '/auth/refresh', { body: {} })).json.code, 'REFRESH_INVALID');
+    });
+
+    it('doğrulanmamış hesap: giriş açılır, ✉️ uçları EMAIL_NOT_VERIFIED döner', async () => {
+        await createVerifiedUser('kod-dogrulanmamis@test.com', { isEmailVerified: false });
+        const tokens = await login('kod-dogrulanmamis@test.com');
+        assert.equal(tokens.isEmailVerified, false);
+
+        const home = await api('GET', '/home/summary', { token: tokens.accessToken });
+        assert.equal(home.status, 403);
+        assert.equal(home.json.code, 'EMAIL_NOT_VERIFIED');
+    });
+
+    it('şifre isteyen diğer uçlar yanlış şifrede INVALID_PASSWORD döner', async () => {
+        await createVerifiedUser('kod-sifre@test.com');
+        const { accessToken: token } = await login('kod-sifre@test.com');
+
+        const verify = await api('POST', '/auth/verify-password', { token, body: { password: 'Yanlis123!' } });
+        assert.equal(verify.json.code, 'INVALID_PASSWORD');
+
+        const change = await api('PUT', '/auth/change-password', {
+            token, body: { oldPassword: 'Yanlis123!', newPassword: 'Yenisifre123!' }
+        });
+        assert.equal(change.status, 401);
+        assert.equal(change.json.code, 'INVALID_PASSWORD');
+        assert.match(change.json.message, /Şifreniz yanlış/, 'İngilizce "Old password is incorrect" kalmadı');
+
+        const ayni = await api('PUT', '/auth/change-password', {
+            token, body: { oldPassword: 'Testsifre123!', newPassword: 'Testsifre123!' }
+        });
+        assert.equal(ayni.json.code, 'SAME_PASSWORD');
+
+        const sil = await api('DELETE', '/auth/delete-account', { token, body: { password: 'Yanlis123!' } });
+        assert.equal(sil.json.code, 'INVALID_PASSWORD');
+        assert.ok(await User.exists({ email: 'kod-sifre@test.com' }), 'yanlış şifreyle hesap silinmedi');
+    });
+
+    it('e-posta: "+" içeren adres geçerli, biçim hatası tasarımdaki metin + EMAIL_INVALID', async () => {
+        const arti = await api('POST', '/auth/check-email', { body: { email: ' Emir+Musubi@Gmail.com ' } });
+        assert.equal(arti.status, 200);
+        assert.equal(arti.json.available, true);
+
+        const bozuk = await api('POST', '/auth/check-email', { body: { email: 'emir.soylu' } });
+        assert.equal(bozuk.status, 400);
+        assert.equal(bozuk.json.code, 'EMAIL_INVALID');
+        assert.equal(bozuk.json.message, 'E-posta formatınız yanlış');
+
+        const kayit = await api('POST', '/auth/register', {
+            body: { name: 'Emir', surname: 'Soylu', email: 'emir+musubi@gmail.com', password: 'Testsifre123!' }
+        });
+        assert.equal(kayit.status, 201, '"+" içeren adresle kayıt açılır');
+        assert.ok(await User.exists({ email: 'emir+musubi@gmail.com' }));
+
+        // Kayıt e-posta biçimini şemaya bırakıyor; şema hatası da aynı kodu taşır
+        const semadan = await api('POST', '/auth/register', {
+            body: { name: 'A', surname: 'B', email: 'bicimsiz-adres', password: 'Testsifre123!' }
+        });
+        assert.equal(semadan.status, 400);
+        assert.equal(semadan.json.code, 'EMAIL_INVALID');
+        assert.equal(semadan.json.message, 'E-posta formatınız yanlış');
+
+        await User.init(); // unique index hazır olsun
+        const tekrar = await api('POST', '/auth/register', {
+            body: { name: 'Emir', surname: 'Soylu', email: 'emir+musubi@gmail.com', password: 'Testsifre123!' }
+        });
+        assert.equal(tekrar.status, 400);
+        assert.equal(tekrar.json.code, 'EMAIL_TAKEN');
+        assert.equal(tekrar.json.message, 'Bu e-posta adresi zaten kullanımda');
+
+        const zayif = await api('POST', '/auth/register', {
+            body: { name: 'A', surname: 'B', email: 'kod-zayif@test.com', password: 'zayif' }
+        });
+        assert.equal(zayif.json.code, 'WEAK_PASSWORD');
+
+        const adsiz = await api('POST', '/auth/register', {
+            body: { surname: 'B', email: 'kod-adsiz@test.com', password: 'Testsifre123!' }
+        });
+        assert.equal(adsiz.status, 400);
+        assert.match(adsiz.json.message, /Adınızı girin/, 'şema mesajları Türkçe');
+    });
+
+    it('linkler: geçersiz doğrulama/sıfırlama token\'ı LINK_INVALID + Türkçe mesaj', async () => {
+        const verify = await api('POST', '/auth/verify-email', { body: { token: 'a'.repeat(40) } });
+        assert.equal(verify.status, 400);
+        assert.equal(verify.json.code, 'LINK_INVALID');
+        assert.match(verify.json.message, /süresi dolmuş/);
+
+        const reset = await api('POST', '/auth/reset-password', {
+            body: { token: 'b'.repeat(40), password: 'Yenisifre123!' }
+        });
+        assert.equal(reset.json.code, 'LINK_INVALID');
+    });
+
+    it('mail: doğrulanmış hesaba tekrar gönder ALREADY_VERIFIED, sık istek MAIL_RATE_LIMITED', async () => {
+        await createVerifiedUser('kod-mail@test.com');
+        const resend = await api('POST', '/auth/resend-verification-email', { body: { email: 'kod-mail@test.com' } });
+        assert.equal(resend.status, 400);
+        assert.equal(resend.json.code, 'ALREADY_VERIFIED');
+
+        assert.equal((await api('POST', '/auth/forgot-password', { body: { email: 'kod-mail@test.com' } })).status, 200);
+        const ikinci = await api('POST', '/auth/forgot-password', { body: { email: 'kod-mail@test.com' } });
+        assert.equal(ikinci.status, 429);
+        assert.equal(ikinci.json.code, 'MAIL_RATE_LIMITED');
+        assert.ok(ikinci.json.details.retryAfterSeconds > 0);
+
+        const yok = await api('POST', '/auth/forgot-password', { body: { email: 'kod-mail-yok@test.com' } });
+        assert.equal(yok.json.code, 'ACCOUNT_NOT_FOUND');
+    });
+
+    it('kodu olmayan hata eskisi gibi { success, message } döner', async () => {
+        await createVerifiedUser('kod-yok-alan@test.com');
+        const { accessToken: token } = await login('kod-yok-alan@test.com');
+        const res = await api('GET', '/words/search', { token });
+        assert.equal(res.status, 400);
+        assert.equal(res.json.code, undefined);
+        assert.ok(res.json.message);
+    });
+
+    it('sıfırlama sayfası: tasarımdaki 4 basamaklı gösterge ve "siz" dilindeki kural metinleri', async () => {
+        await createVerifiedUser('kod-sayfa@test.com');
+        await api('POST', '/auth/forgot-password', { body: { email: 'kod-sayfa@test.com' } });
+        const res = await fetch(BASE.replace(/\/api$/, '') + '/reset-password/' + lastResetToken());
+        const html = await res.text();
+        assert.equal(res.status, 200);
+        assert.match(html, /id="level"/, 'çubukların altında etiket satırı var');
+        assert.match(html, /Şifreniz çok kısa \(en az 8 karakter olmalı\)\./);
+        assert.match(html, /LINK_INVALID/, 'süresi dolan linkte sayfa kendi metnini gösterir');
     });
 });

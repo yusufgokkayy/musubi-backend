@@ -13,6 +13,7 @@
 // Amaç saldırganı imkânsıza zorlamak değil, deneme hızını kaba kuvvetin
 // işe yaramayacağı kadar düşürmek.
 const AppError = require('./AppError');
+const ERR = require('./errorCodes');
 
 // Bu süre içinde biriken hatalar sayılır; son hatadan bu kadar sonra
 // sayaç sıfırdan başlar
@@ -43,7 +44,7 @@ const assertLoginAllowed = (user) => {
     const err = new AppError(
         'Çok fazla hatalı giriş denemesi yapıldı, lütfen biraz bekleyip tekrar deneyin',
         429
-    );
+    ).withCode(ERR.LOGIN_LOCKED);
     err.retryAfterSeconds = Math.ceil(remainingMs / 1000);
     throw err;
 };

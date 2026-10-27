@@ -10,6 +10,15 @@ class AppError extends Error {
         this.isOperational = true;
         Error.captureStackTrace(this, this.constructor);
     }
+
+    // Makine-okur hata kodu (bkz. utils/errorCodes.js); yanıtta `code` olarak
+    // döner. Zincirlenir: throw new AppError('...', 401).withCode(ERR.X)
+    // Alan adı bilerek `code` DEĞİL: Mongo (11000) ve multer ('LIMIT_FILE_SIZE')
+    // kendi err.code'larını taşıyor ve errorHandler onlara bakıyor.
+    withCode(code) {
+        this.errorCode = code;
+        return this;
+    }
 }
 
 module.exports = AppError;

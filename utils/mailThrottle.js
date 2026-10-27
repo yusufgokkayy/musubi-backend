@@ -9,6 +9,7 @@
 // Enumeration politikası bilinçli olarak "dürüst cevap" yönünde belirlendi
 // (bilinmeyen adres 404); bu kısıt o kararın karşılığıdır.
 const AppError = require('./AppError');
+const ERR = require('./errorCodes');
 
 const COOLDOWN_MS = 60 * 1000;   // iki mail arası en az 1 dakika
 const DAILY_LIMIT = 5;           // aynı adrese günde en fazla 5 mail
@@ -32,7 +33,7 @@ const assertMailAllowed = (user, kind) => {
             const err = new AppError(
                 'Çok sık istek gönderdiniz, lütfen biraz bekleyin',
                 429
-            );
+            ).withCode(ERR.MAIL_RATE_LIMITED);
             err.retryAfterSeconds = Math.ceil((COOLDOWN_MS - waited) / 1000);
             throw err;
         }
@@ -44,7 +45,7 @@ const assertMailAllowed = (user, kind) => {
         const err = new AppError(
             'Bu adrese bugün çok fazla mail gönderildi, yarın tekrar deneyin',
             429
-        );
+        ).withCode(ERR.MAIL_RATE_LIMITED);
         err.retryAfterSeconds = Math.ceil(
             (DAY_MS - (now - new Date(s.dayStart).getTime())) / 1000
         );
