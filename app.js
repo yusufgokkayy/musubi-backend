@@ -168,6 +168,11 @@ const legal = require('./modules/legal/legal.routes');
 app.use(legal.pages);
 app.use('/api/legal', legal.api);
 
+// Ana sayfa (/) ve /indir: tanıtım + mağaza linklerinin yer tutucusu.
+// Doğrulama/sıfırlama sonrası uygulama kurulu değilse kullanıcı buraya gelir.
+// Dev'de "/" yukarıdaki public/ statiğine (simülatör) düşer, bu router'a gelmez.
+app.use(require('./modules/download/download.routes'));
+
 // auth BİLEREK korumasız mount edilir: register/login/refresh/forgot gibi
 // uçların açık olması gerekir, koruma o router'da rota rota uygulanır.
 app.use('/api/auth', require('./modules/auth/auth.routes'));

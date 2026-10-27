@@ -1082,7 +1082,9 @@ describe('E-posta akışları', () => {
         const page = await pageGet(`/verify-email/${token}`);
         assert.equal(page.status, 200);
         assert.ok(page.text.includes('verify-btn'), 'doğrulama butonu olmalı');
-        assert.ok(!page.text.includes('musubi://'), 'ürün kararı: deep link YOK, doğrulama webde biter');
+        // Özel şema yalnızca TOKENSIZ "uygulamayı aç" linki olabilir (27.10.2026):
+        // token taşıyan şemayı başka bir uygulama kapabilirdi
+        assert.ok(!/musubi:\/\/(?!open["'])/.test(page.text), 'şema yalnızca musubi://open olabilir, doğrulama linki token taşımaz');
 
         // Sayfayı açmak (scanner prefetch senaryosu) doğrulamaz
         const user = await User.findOne({ email: 'landing-verify@test.com' });
@@ -1143,7 +1145,9 @@ describe('E-posta akışları', () => {
         const resetToken = lastResetToken();
         const page = await pageGet(`/reset-password/${resetToken}`);
         assert.equal(page.status, 200);
-        assert.ok(!page.text.includes('musubi://'), 'ürün kararı: deep link YOK, sıfırlama webde biter');
+        // Özel şema yalnızca TOKENSIZ "uygulamayı aç" linki olabilir (27.10.2026):
+        // token taşıyan şemayı başka bir uygulama kapabilirdi
+        assert.ok(!/musubi:\/\/(?!open["'])/.test(page.text), 'şema yalnızca musubi://open olabilir, sıfırlama linki token taşımaz');
         assert.ok(page.text.includes('id="reset-form"'), 'şifre formu doğrudan görünmeli (uygulama tasarımıyla aynı)');
         assert.ok(page.text.includes('id="p1"') && page.text.includes('id="p2"'), 'şifre ve tekrar alanları olmalı');
         assert.ok(page.text.includes('id="meter"'), 'güç göstergesi olmalı');
@@ -5847,5 +5851,76 @@ describe('Hata kodları (27.10.2026)', () => {
         assert.match(html, /id="level"/, 'çubukların altında etiket satırı var');
         assert.match(html, /Şifreniz çok kısa \(en az 8 karakter olmalı\)\./);
         assert.match(html, /LINK_INVALID/, 'süresi dolan linkte sayfa kendi metnini gösterir');
+    });
+});
+
+describe('Uygulamaya dönüş ve /indir (27.10.2026)', () => {
+    // Doğrulama/sıfırlama web'de bitince sayfa kendiliğinden uygulamayı açar,
+    // uygulama yoksa mağazaya gider; mağaza linkleri yokken yer tutucu /indir
+    const ROOT = () => BASE.replace(/\/api$/, '');
+    const page = async (path) => {
+        const res = await fetch(ROOT() + path);
+        return { status: res.status, html: await res.text() };
+    };
+    const withEnv = async (env, fn) => {
+        const eski = Object.fromEntries(Object.keys(env).map(k => [k, process.env[k]]));
+        Object.assign(process.env, env);
+        try { return await fn(); }
+        finally { for (const k of Object.keys(env)) { if (eski[k] === undefined) delete process.env[k]; else process.env[k] = eski[k]; } }
+    };
+    const dogrulamaLinki = async (email) => {
+        await createVerifiedUser(email, { isEmailVerified: false });
+        assert.equal((await api('POST', '/auth/resend-verification-email', { body: { email } })).status, 200);
+        return '/verify-email/' + lastVerificationToken();
+    };
+
+    it('doğrulama sayfası başarıda uygulamayı açar; mağaza linki yokken yedek adres /indir', async () => {
+        const { status, html } = await page(await dogrulamaLinki('donus-dogrulama@test.com'));
+        assert.equal(status, 200);
+        assert.match(html, /musubi:\/\/open/, 'iOS için tokensız şema');
+        assert.match(html, /intent:\/\/open#Intent;scheme=musubi;package=com\.alpsoy\.musubi;/);
+        assert.match(html, /S\.browser_fallback_url=http%3A%2F%2F127\.0\.0\.1%3A\d+%2Findir%3Flang%3Dtr/,
+            'Android uygulama yoksa yer tutucuya gider');
+        assert.match(html, /goToApp\(L\.okApp,L\.okText\)/, 'başarıdan hemen sonra yönlendirir, buton yok');
+        assert.match(html, /id="again-link"/, 'engellenirse yedek bağlantı');
+        assert.doesNotMatch(html, /verify-email\/[a-f0-9]{40}[^"]*musubi:/, 'şemada token yok');
+    });
+
+    it('mağaza linkleri girilince yönlendirme doğrudan mağazaya gider', async () => {
+        const link = await dogrulamaLinki('donus-magaza@test.com');
+        await withEnv({
+            PLAY_STORE_URL: 'https://play.google.com/store/apps/details?id=com.alpsoy.musubi',
+            APP_STORE_URL: 'https://apps.apple.com/app/id123'
+        }, async () => {
+            const { html } = await page(link);
+            assert.match(html, /S\.browser_fallback_url=https%3A%2F%2Fplay\.google\.com/);
+            assert.match(html, /"iosStore":"https:\/\/apps\.apple\.com\/app\/id123"/);
+            assert.doesNotMatch(html, /%2Findir/);
+        });
+    });
+
+    it('sıfırlama sayfası da başarıda uygulamaya yönlendirir', async () => {
+        await createVerifiedUser('donus-sifirlama@test.com');
+        await api('POST', '/auth/forgot-password', { body: { email: 'donus-sifirlama@test.com' } });
+        const { html } = await page('/reset-password/' + lastResetToken());
+        assert.match(html, /goToApp\(L\.okApp,L\.okText\)/);
+        assert.match(html, /Şifren güncellendi\. Uygulama açılıyor/);
+    });
+
+    it('/indir ve ana sayfa: linkler yokken "çok yakında", girilince mağaza butonları', async () => {
+        for (const path of ['/indir', '/']) {
+            const { status, html } = await page(path);
+            assert.equal(status, 200, `${path} açılır`);
+            assert.match(html, /Çok yakında App Store ve Google Play/);
+            assert.match(html, /href="\/legal\/privacy\?lang=tr"/);
+        }
+        assert.match((await page('/indir?lang=en')).html, /Coming soon to the App Store/);
+
+        await withEnv({ PLAY_STORE_URL: 'https://play.google.com/store/apps/details?id=com.alpsoy.musubi' }, async () => {
+            const { html } = await page('/indir');
+            assert.match(html, /href="https:\/\/play\.google\.com\/store\/apps\/details\?id=com\.alpsoy\.musubi"/);
+            assert.match(html, /Google Play&#39;den indir|Google Play'den indir/);
+            assert.doesNotMatch(html, /Çok yakında/);
+        });
     });
 });
