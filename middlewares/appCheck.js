@@ -1,4 +1,5 @@
 const AppError = require('../utils/AppError');
+const ERR = require('../utils/errorCodes');
 const { getAppCheck } = require('../config/firebase');
 
 // Firebase App Check — isteğin GERÇEK Musubi uygulamasından geldiğini doğrular.
@@ -18,21 +19,23 @@ const requireAppCheck = async (req, res, next) => {
     if (process.env.APP_CHECK_ENFORCE !== 'true') return next();
 
     const token = req.get('x-firebase-appcheck');
-    if (!token) return next(new AppError('Uygulama doğrulaması eksik', 401));
+    // 401'ler giriş/kayıt uçlarında döner: kod olmadan istemcinin oturum
+    // yenileme mantığı bunları "token'ın süresi doldu" sanabilirdi
+    if (!token) return next(new AppError('Uygulama doğrulaması eksik', 401).withCode(ERR.APP_CHECK_FAILED));
 
     const appCheck = getAppCheck();
     if (!appCheck) {
         // Zorlama açık ama Firebase başlatılamamış: kapıyı açık bırakmak
         // korumayı sessizce kapatmak olurdu — kapalı tarafta kal
         console.error('[appcheck] APP_CHECK_ENFORCE=true ama Firebase başlatılamadı');
-        return next(new AppError('Uygulama doğrulaması şu an yapılamıyor', 503));
+        return next(new AppError('Uygulama doğrulaması şu an yapılamıyor', 503).withCode(ERR.APP_CHECK_FAILED));
     }
 
     try {
         await appCheck.verifyToken(token);
         next();
     } catch {
-        next(new AppError('Uygulama doğrulaması geçersiz', 401));
+        next(new AppError('Uygulama doğrulaması geçersiz', 401).withCode(ERR.APP_CHECK_FAILED));
     }
 };
 

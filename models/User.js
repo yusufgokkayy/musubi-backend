@@ -1,20 +1,23 @@
 const mongoose = require('mongoose');
 const bcrypt = require('bcrypt');
 const { firstPasswordViolation } = require('../utils/password.util');
+const { EMAIL_RE, EMAIL_FORMAT_MESSAGE } = require('../utils/email.util');
 
+// Şema mesajları istemciye olduğu gibi gider (errorHandler › ValidationError),
+// bu yüzden Türkçe ve ekranda gösterilebilir olmalı
 const UserSchema = new mongoose.Schema({
     name: {
         // trim: yalnız boşluktan oluşan isim `required`'ı geçip ekranda
         // "Merhaba " diye görünürdü; trim sonrası boş kalınca required yakalar
         type: String,
-        required: [true, 'Please provide a name'],
+        required: [true, 'Adınızı girin'],
         trim: true,
         maxlength: [50, 'İsim en fazla 50 karakter olabilir']
     },
     surname: {
         type: String,
         // Apple ilk girişte bile soyadı göndermeyebilir; sosyal hesapta zorunlu değil
-        required: [function () { return this.provider === 'local'; }, 'Please provide a surname'],
+        required: [function () { return this.provider === 'local'; }, 'Soyadınızı girin'],
         default: '',
         trim: true,
         maxlength: [50, 'Soyisim en fazla 50 karakter olabilir']
@@ -26,18 +29,18 @@ const UserSchema = new mongoose.Schema({
         // yapamaz. Mongoose bu setter'ları sorgu filtrelerine de uygular,
         // yani findOne/exists de normalize edilmiş değerle arar (ölçüldü).
         type: String,
-        required: [true, 'Please provide an email'],
+        required: [true, 'E-posta adresinizi girin'],
         unique: true,
         lowercase: true,
         trim: true,
-        match: [/^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$/, 'Please provide a valid email']
+        match: [EMAIL_RE, EMAIL_FORMAT_MESSAGE]
     },
     password: {
         type: String,
         minlength: [8, 'Şifreniz çok kısa (en az 8 karakter olmalı)'],
         // Sosyal girişle açılan hesapların şifresi yoktur; sonradan
         // forgot-password ile şifre belirlerse hibrit hesaba dönüşür
-        required: [function () { return this.provider === 'local'; }, 'Please provide a password'],
+        required: [function () { return this.provider === 'local'; }, 'Şifre zorunludur'],
         select: false,
         // Şifre kurallarının veri katmanı yedeği. Asıl uygulama servis
         // katmanındadır (ordered mesaj + güç göstergesi için); bu validator

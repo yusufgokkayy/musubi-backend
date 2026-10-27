@@ -6,11 +6,49 @@ Mobil entegrasyon için tam sözleşme. Tüm yollar `/api` önekiyle başlar, t�
 
 **Bekleme süresi:** Giriş kilidi ve mail kısıtı `429`'larında `details.retryAfterSeconds` (kaç saniye sonra tekrar denenebileceği) ve standart `Retry-After` başlığı döner — "Tekrar Gönder (54)" gibi geri sayımlar bununla kurulur.
 
-**Zarf:** Her başarılı yanıt `{ "success": true, ... }`, her hata `{ "success": false, "message": "..." }` biçimindedir. Bazı hatalar ayrıca `details` nesnesi taşır — istemcinin üzerine iş yapabileceği makine-okur veri (örn. `POST /quiz/start` cooldown'ında `nextAttemptAllowedAt`). `details` isteğe bağlıdır, yokluğunda hata biçimi değişmez.
+**Zarf:** Her başarılı yanıt `{ "success": true, ... }`, her hata `{ "success": false, "message": "..." }` biçimindedir. Giriş, kayıt ve oturum hataları ayrıca makine-okur bir `code` taşır (aşağıda "Hata kodları"). Bazı hatalar ayrıca `details` nesnesi taşır — istemcinin üzerine iş yapabileceği makine-okur veri (örn. `POST /quiz/start` cooldown'ında `nextAttemptAllowedAt`). `code` ve `details` isteğe bağlıdır, yokluklarında hata biçimi değişmez.
 
-**Kimlik doğrulama:** 🔒 işaretli endpoint'ler `Authorization: Bearer <accessToken>` başlığı ister. ✉️ işaretli olanlar ayrıca doğrulanmış e-posta gerektirir (aksi halde `403 "Please verify your email first"`). Access token ~15 dk geçerlidir; `401 "Token expired"` alınca `/auth/refresh` çağrılır, o da 401 dönerse login ekranına dönülür.
+**Kimlik doğrulama:** 🔒 işaretli endpoint'ler `Authorization: Bearer <accessToken>` başlığı ister. ✉️ işaretli olanlar ayrıca doğrulanmış e-posta gerektirir (aksi halde `403` + `code: "EMAIL_NOT_VERIFIED"`). Access token ~15 dk geçerlidir; **yalnızca `code: "TOKEN_EXPIRED"`** alınca `/auth/refresh` çağrılır, refresh `REFRESH_INVALID` dönerse login ekranına dönülür. Her 401'de refresh denenmemeli: yanlış şifre de 401'dir (`INVALID_PASSWORD`).
 
-**Ortak hata kodları:** `400` geçersiz istek, `401` kimlik hatası, `403` yetki/doğrulama/cooldown, `404` bulunamadı, `429` rate limit (`message` alanı Türkçe açıklama içerir).
+**Ortak durum kodları:** `400` geçersiz istek, `401` kimlik hatası, `403` yetki/doğrulama/cooldown, `404` bulunamadı, `429` rate limit (`message` alanı Türkçe açıklama içerir).
+
+### Hata kodları
+
+Kapsam: giriş, kayıt ve oturum. İstemci hatayı **mesaj metnine bakarak değil `code`'a bakarak** ayırt etmeli — mesajlar değişebilir, kodlar değişmez. Kodu olmayan hata eskisi gibi yalnızca `message` taşır.
+
+```jsonc
+// Örnek: girişte yanlış şifre
+{ "success": false, "message": "Şifreniz yanlış. Lütfen tekrar deneyin.", "code": "INVALID_PASSWORD" }
+```
+
+| `code` | Durum | Nerede | İstemci ne yapmalı |
+|---|---|---|---|
+| `TOKEN_EXPIRED` | 401 | 🔒 uçlar | `/auth/refresh` ile yenile, isteği tekrarla |
+| `TOKEN_INVALID` | 401 | 🔒 uçlar (token yok/bozuk, kullanıcı silinmiş) | Oturumu kapat, giriş ekranı |
+| `REFRESH_INVALID` | 401 | `refresh`, `logout` | Giriş ekranı — **refresh'i tekrar deneme** |
+| `EMAIL_NOT_VERIFIED` | 403 | ✉️ uçlar | "E-postanı Doğrula" ekranı |
+| `APP_CHECK_FAILED` | 401 / 503 | açık auth uçları | Mesajı göster |
+| `INVALID_PASSWORD` | 401 | `login`, `verify-password`, `change-password`, `delete-account`, `update-info` (e-posta değişimi) | Mesajı göster; girişte "Şifremi Unuttum"u göster |
+| `REAUTH_FAILED` | 401 | `delete-account`, `update-info` (sosyal hesap, idToken başka hesaba ait) | Mesajı göster |
+| `SOCIAL_TOKEN_INVALID` | 401 | `social`, sosyal hesapta yeniden kimlik doğrulama | Sağlayıcı girişini yeniden başlat |
+| `SOCIAL_ACCOUNT` | 400 | `login`, `verify-password`, `change-password` | `details.provider` (`google`/`apple`) butonunu vurgula |
+| `ACCOUNT_NOT_FOUND` | 404 | `login`, `forgot-password`, `resend-verification-email` | "Kayıt ol" öner |
+| `LOGIN_LOCKED` | 429 | `login` | `details.retryAfterSeconds` kadar geri sayım |
+| `MAIL_RATE_LIMITED` | 429 | mail gönderen uçlar | `details.retryAfterSeconds` kadar geri sayım |
+| `LINK_INVALID` | 400 | `verify-email`, `reset-password` | "Bağlantı geçersiz", yeni link iste |
+| `ALREADY_VERIFIED` | 400 | `resend-verification-email` | Girişe yönlendir |
+| `EMAIL_INVALID` | 400 | `check-email`, `register`, `update-info` | Mesajı e-posta alanında göster |
+| `EMAIL_TAKEN` | 400 / 409 | `register`, `update-info`, `verify-email` | Mesajı göster |
+| `WEAK_PASSWORD` | 400 | `register`, `reset-password`, `change-password` | Mesajı şifre alanında göster |
+| `SAME_PASSWORD` | 400 | `reset-password`, `change-password` | Mesajı göster |
+
+> Neden var: 401 hem "oturumun süresi doldu" hem "şifre yanlış" anlamına
+> geliyordu; her 401'de refresh deneyen istemci girişteki yanlış şifre
+> cevabını yutuyor, kullanıcı ekranda hiçbir şey görmüyordu (27.10.2026).
+> Ayrıca süresi dolmuş **refresh** token'ı erişim token'ıyla aynı
+> `401 "Token expired"` cevabını alıyordu; artık `REFRESH_INVALID` döner.
+> Mesajlar bilerek değiştirilmedi (`"Token expired"`, `"Please verify your
+> email first"`), ayrım yalnızca koddadır.
 
 ---
 
@@ -51,7 +89,7 @@ Onboarding'in "E-posta ile Devam Et" adımı: ad-soyad/şifre ekranlarına geçm
 // 200
 { "success": true, "available": true }   // false ise adres kayıtlı → giriş ekranına yönlendir
 ```
-Hata: `400 "Geçerli bir e-posta adresi girin"` (boş veya bozuk biçim).
+Hata: `400 "E-posta formatınız yanlış"` · `EMAIL_INVALID` (boş veya bozuk biçim). Adres kontrol edilmeden önce kırpılır ve küçük harfe çevrilir; `+` içeren adresler (`ad+etiket@gmail.com`) geçerlidir.
 
 ### POST /auth/social
 Google/Apple ile giriş. Client, sağlayıcı SDK'sından aldığı `idToken`'ı gönderir; backend imzayı sağlayıcının anahtarlarıyla doğrular. Hesap yoksa oluşturulur, aynı e-postayla local hesap varsa sosyal hesaba bağlanır. Bağlanan local hesap **doğrulanmışsa** şifresi korunur (hibrit hesap); **doğrulanmamışsa** şifresi silinir, tüm oturumları kapatılır ve ad sağlayıcıdan alınır — o hesabı adresin sahibi değil, adresi ele geçirmek isteyen biri açmış olabilir (ön-kayıt koruması). Sosyal hesapların e-postası doğrulanmış sayılır — doğrulama maili akışı çalışmaz.
@@ -122,7 +160,7 @@ Bildirimi" ve "Günlük Kelime Hedefi" ekranlarının seçimleri de buraya gelir
   "data": { "id": "665f1a...", "name": "Yusuf" }
 }
 ```
-Hatalar: `400 "email already in use"`, `400` validasyon (şifre kuralları, geçersiz e-posta, geçersiz `reminderTime`, 50 karakteri aşan ad/soyad), `500 "Email gönderilemedi, tekrar deneyin"` (kayıt geri alınır).
+Hatalar: `400 "Bu e-posta adresi zaten kullanımda"` · `EMAIL_TAKEN`, `400` validasyon (şifre kuralları `WEAK_PASSWORD`, geçersiz e-posta `EMAIL_INVALID`, geçersiz `reminderTime`, 50 karakteri aşan ad/soyad), `500 "Email gönderilemedi, tekrar deneyin"` (kayıt geri alınır).
 
 **Doğrulama token'ı yanıtta DÖNMEZ** — hiçbir ortamda. Eskiden `NODE_ENV !== 'production'` koşuluyla dönüyordu; bu fail-open bir kontroldü (değişken boş kalırsa token açığa çıkardı). Token yalnızca e-postadaki linkte bulunur. Aynısı `forgot-password`'ün `resetToken`'ı için de geçerlidir.
 
@@ -167,10 +205,10 @@ Migration veya test amacıyla zayıf şifreli bir kayıt yazmak gerekiyorsa
 }
 ```
 Hatalar (dördü ayrı durumdur, mesajlar ekranda gösterilebilir):
-- `404 "Bu e-postayla kayıtlı bir hesap yok"` — client "kayıt ol" önerebilir
-- `400 "Bu hesap Google/Apple girişiyle açılmış; ... ile giriş yap"` — sosyal butonları vurgula
-- `401 "Şifreniz yanlış. Lütfen tekrar deneyin."`
-- `429 "Çok fazla hatalı giriş denemesi yapıldı..."` — hesap geçici kilitli (aşağıda)
+- `404 "Bu e-postayla kayıtlı bir hesap yok"` · `ACCOUNT_NOT_FOUND` — client "kayıt ol" önerebilir
+- `400 "Bu hesap Google/Apple girişiyle açılmış; ... ile giriş yap"` · `SOCIAL_ACCOUNT` + `details.provider` — sosyal butonu vurgula
+- `401 "Şifreniz yanlış. Lütfen tekrar deneyin."` · `INVALID_PASSWORD` — **oturum yenileme mantığına sokma**, mesajı göster
+- `429 "Çok fazla hatalı giriş denemesi yapıldı..."` · `LOGIN_LOCKED` — hesap geçici kilitli (aşağıda)
 
 #### Hesap bazlı giriş kilidi
 IP limitine ek olarak **hesap başına** hatalı deneme sayılır: çok sayıda IP'ye
@@ -317,7 +355,7 @@ hesap doğrulanmış kalır ve giriş eski adresle sürer (yanıtta `email` eski
 (`currentPassword`) istenir; şifresiz sosyal hesap sağlayıcıdan aldığı taze
 `idToken`'ı gönderir. Değişim maili adres bazlı mail kısıtına tabidir.
 
-Hatalar: `401 "Şifreniz yanlış..."` / `401 "Kimlik doğrulanamadı"` (e-posta değişiminde yeniden doğrulama), `400 "Geçerli bir e-posta adresi girin"`, `429` mail kısıtı, `400 "Bu e-posta adresi zaten kullanımda"`, `400` enum validasyonu (geçersiz theme/fontSize), `500 "Doğrulama maili gönderilemedi, e-posta değiştirilmedi"`. `isPremium` bu endpoint'ten **değiştirilemez** (gönderilirse yok sayılır). `password` da **değiştirilemez** — gönderilirse `400 "Şifre bu uçtan değiştirilemez..."`: şifre değişiminin tek kapısı `change-password` (eski şifre doğrulamalı) ve `reset-password` (mail token'lı); ikisi de oturum rotasyonu yapar. `activeLevel` de **değiştirilemez** (yok sayılır): seçilen seviyenin açık olması gerekir, o kontrol `PUT /progress/active-level`'dadır.
+Hatalar: `401 "Şifreniz yanlış..."` · `INVALID_PASSWORD` / `401 "Kimlik doğrulanamadı"` · `REAUTH_FAILED` (e-posta değişiminde yeniden doğrulama), `400 "E-posta formatınız yanlış"` · `EMAIL_INVALID`, `429` mail kısıtı, `400 "Bu e-posta adresi zaten kullanımda"` · `EMAIL_TAKEN`, `400` enum validasyonu (geçersiz theme/fontSize), `500 "Doğrulama maili gönderilemedi, e-posta değiştirilmedi"`. `isPremium` bu endpoint'ten **değiştirilemez** (gönderilirse yok sayılır). `password` da **değiştirilemez** — gönderilirse `400 "Şifre bu uçtan değiştirilemez..."`: şifre değişiminin tek kapısı `change-password` (eski şifre doğrulamalı) ve `reset-password` (mail token'lı); ikisi de oturum rotasyonu yapar. `activeLevel` de **değiştirilemez** (yok sayılır): seçilen seviyenin açık olması gerekir, o kontrol `PUT /progress/active-level`'dadır.
 
 ### POST /auth/verify-password 🔒✉️
 Ayarlardaki adım adım şifre değiştirme akışının ilk ekranı ("Şifre Girin" alt sayfası): mevcut şifre doğrulanmadan yeni şifre ekranına geçilmez.
@@ -342,7 +380,7 @@ Hatalar: `401 "Şifreniz yanlış. Lütfen tekrar deneyin."` (ekrandaki hata met
   "data": { "accessToken": "eyJ...", "refreshToken": "eyJ..." }
 }
 ```
-Hatalar: `401 "Old password is incorrect"`, `400 "Yeni şifre eski şifrenle aynı olamaz"`.
+Hatalar: `401 "Şifreniz yanlış. Lütfen tekrar deneyin."` · `INVALID_PASSWORD`, `400 "Yeni şifre eski şifrenle aynı olamaz"` · `SAME_PASSWORD`.
 
 ### GET /auth/verification-status 🔒
 "E-postanı Doğrula" bekleme ekranının sorduğu durum ucu. ✉️ **YOK** — tam da
@@ -499,7 +537,7 @@ adres sahipliğini kanıtlar.
 // deviceName gönderilmediyse (web landing sayfası) oturum açılmaz: data boş döner
 { "success": true, "data": {} }
 ```
-Hatalar: `400 "Invalid or expired token"` (link 1 saat geçerli), `400 "Yeni şifre
+Hatalar: `400 "Bağlantının süresi dolmuş ya da geçersiz."` · `LINK_INVALID` (link 1 saat geçerli), `400 "Yeni şifre
 eski şifrenle aynı olamaz"` (aynı-şifre 400'ü token'ı TÜKETMEZ; kullanıcı aynı
 linkle farklı şifre deneyebilir).
 
@@ -514,7 +552,7 @@ linkle farklı şifre deneyebilir).
 // deviceName gönderilmediyse (web landing sayfası) yalnızca doğrulama yapılır
 { "success": true, "data": {} }
 ```
-Hata: `400 "Invalid or expired token"` (link 24 saat geçerli), `409 "Bu e-posta adresi artık başka bir hesapta kullanılıyor"` (e-posta değişimi onayı: talep ile onay arasında adresi başka hesap aldıysa — bekleyen değişim iptal edilir, eski adres geçerli kalır).
+Hata: `400 "Bağlantının süresi dolmuş ya da geçersiz."` · `LINK_INVALID` (link 24 saat geçerli), `409 "Bu e-posta adresi artık başka bir hesapta kullanılıyor"` · `EMAIL_TAKEN` (e-posta değişimi onayı: talep ile onay arasında adresi başka hesap aldıysa — bekleyen değişim iptal edilir, eski adres geçerli kalır).
 
 ### GET /auth/verify-email/:token
 POST varyantının eski GET biçimi (geriye uyumluluk). `User-Agent` cihaz adı sayılır,

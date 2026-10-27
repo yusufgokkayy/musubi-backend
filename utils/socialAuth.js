@@ -4,6 +4,7 @@
 const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const AppError = require('./AppError');
+const ERR = require('./errorCodes');
 
 const PROVIDERS = {
     google: {
@@ -32,7 +33,7 @@ const getPublicKey = async (provider, kid, forceRefresh = false) => {
     const jwk = jwksCache[provider].keys.find(k => k.kid === kid);
     // Anahtar rotasyonu: kid cache'te yoksa bir kez taze JWKS ile dene
     if (!jwk && !forceRefresh) return getPublicKey(provider, kid, true);
-    if (!jwk) throw new AppError('Geçersiz sosyal giriş tokenı', 401);
+    if (!jwk) throw new AppError('Geçersiz sosyal giriş tokenı', 401).withCode(ERR.SOCIAL_TOKEN_INVALID);
 
     return crypto.createPublicKey({ key: jwk, format: 'jwk' });
 };
@@ -49,7 +50,7 @@ const verifySocialToken = async (provider, idToken) => {
         // Test ortamında dış servise gidilmez (sendEmail'in outbox yaklaşımı):
         // imza doğrulanmadan payload decode edilir, testler sahte token üretir
         payload = jwt.decode(idToken);
-        if (!payload) throw new AppError('Geçersiz sosyal giriş tokenı', 401);
+        if (!payload) throw new AppError('Geçersiz sosyal giriş tokenı', 401).withCode(ERR.SOCIAL_TOKEN_INVALID);
     } else {
         const audience = (process.env[conf.audienceEnv] || '')
             .split(',').map(s => s.trim()).filter(Boolean);
@@ -58,7 +59,7 @@ const verifySocialToken = async (provider, idToken) => {
         }
 
         const decoded = jwt.decode(idToken, { complete: true });
-        if (!decoded?.header?.kid) throw new AppError('Geçersiz sosyal giriş tokenı', 401);
+        if (!decoded?.header?.kid) throw new AppError('Geçersiz sosyal giriş tokenı', 401).withCode(ERR.SOCIAL_TOKEN_INVALID);
 
         const key = await getPublicKey(provider, decoded.header.kid);
         try {
@@ -68,7 +69,7 @@ const verifySocialToken = async (provider, idToken) => {
                 audience
             });
         } catch (err) {
-            throw new AppError('Geçersiz sosyal giriş tokenı', 401);
+            throw new AppError('Geçersiz sosyal giriş tokenı', 401).withCode(ERR.SOCIAL_TOKEN_INVALID);
         }
     }
 
