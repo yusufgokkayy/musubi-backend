@@ -3,6 +3,7 @@
 // şifre sıfırlama, şifre değiştirme. Login'de BİLEREK uygulanmaz — kural
 // öncesinde açılmış zayıf şifreli hesaplar aksi halde kilitlenirdi.
 const AppError = require('./AppError');
+const ERR = require('./errorCodes');
 
 const MIN_LENGTH = 8;
 
@@ -46,7 +47,7 @@ const firstPasswordViolation = (password) => {
 // Servis katmanı kapısı: ihlal varsa 400 atar, geçerliyse sessizce döner
 const validatePassword = (password) => {
     const violation = firstPasswordViolation(password);
-    if (violation) throw new AppError(violation, 400);
+    if (violation) throw new AppError(violation, 400).withCode(ERR.WEAK_PASSWORD);
 };
 
 // Güç göstergesi (0-4) — client kendi hesaplasa da, aynı kaynaktan

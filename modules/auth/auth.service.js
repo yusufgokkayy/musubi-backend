@@ -9,6 +9,8 @@ const QuizAttempt = require('../../models/QuizAttempt');
 const DeviceSession = require('../../models/DeviceSession');
 const StoryView = require('../../models/StoryView');
 const AppError = require('../../utils/AppError');
+const ERR = require('../../utils/errorCodes');
+const { EMAIL_RE, EMAIL_FORMAT_MESSAGE, normalizeEmail } = require('../../utils/email.util');
 const sendEmail = require('../../utils/sendEmail');
 const clientUrl = require('../../utils/clientUrl');
 const ctaEmailHtml = require('../../utils/emailTemplate');
@@ -184,25 +186,37 @@ const rotateAllSessions = async (userId, deviceName) => {
 const assertReauth = async (user, { password, idToken } = {}) => {
     if (user.password) {
         if (typeof password !== 'string' || !(await user.comparePassword(password))) {
-            throw new AppError('Şifreniz yanlış. Lütfen tekrar deneyin.', 401);
+            throw new AppError('Şifreniz yanlış. Lütfen tekrar deneyin.', 401).withCode(ERR.INVALID_PASSWORD);
         }
         return;
     }
     const profile = await verifySocialToken(user.provider, idToken);
     if (profile.providerId !== user.providerId) {
-        throw new AppError('Kimlik doğrulanamadı', 401);
+        throw new AppError('Kimlik doğrulanamadı', 401).withCode(ERR.REAUTH_FAILED);
     }
 };
 
-const EMAIL_RE = /^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$/;
+// Şifresiz sosyal hesapta şifre isteyen işlem (giriş, şifre doğrulama/değiştirme).
+// details.provider ile istemci doğru giriş butonunu vurgulayabilir.
+const socialAccountError = (message, provider) =>
+    new AppError(message, 400, { provider }).withCode(ERR.SOCIAL_ACCOUNT);
+
+// Doğrulama ve sıfırlama linkinin geçersiz/süresi dolmuş hâli. Web sayfası bu
+// kodu görünce kendi dilindeki "Bağlantı Geçersiz" metnini gösterir.
+const linkInvalidError = () =>
+    new AppError('Bağlantının süresi dolmuş ya da geçersiz.', 400).withCode(ERR.LINK_INVALID);
+
+const accountNotFoundError = () =>
+    new AppError('Bu e-postayla kayıtlı bir hesap yok', 404).withCode(ERR.ACCOUNT_NOT_FOUND);
 
 const AuthService = {
     // Onboarding e-posta adımı: ad-soyad/şifre ekranlarına geçmeden önce
     // client adresin biçimini ve müsaitliğini burada öğrenir
-    async checkEmail(email) {
-        // User modelindeki e-posta regex'i ile aynı desen
-        if (!email || !/^[\w-\.]+@([\w-]+\.)+[\w-]{2,}$/.test(email)) {
-            throw new AppError('Geçerli bir e-posta adresi girin', 400);
+    async checkEmail(rawEmail) {
+        // Desen, şemanın kaydedeceği değere (kırpılmış, küçük harf) karşı denenir
+        const email = normalizeEmail(rawEmail);
+        if (!EMAIL_RE.test(email)) {
+            throw new AppError(EMAIL_FORMAT_MESSAGE, 400).withCode(ERR.EMAIL_INVALID);
         }
         const exists = await User.exists({ email });
         return { available: !exists };
@@ -290,7 +304,7 @@ const AuthService = {
         // E-posta enumeration koruması BİLEREK yalnızca forgot-password'de:
         // check-email onboarding gereği hesap varlığını zaten söylüyor; login'de
         // netlik UX kazancıdır. Mağaza yayını öncesi yeniden değerlendirilecek.
-        if (!user) throw new AppError('Bu e-postayla kayıtlı bir hesap yok', 404);
+        if (!user) throw accountNotFoundError();
 
         // Kilit kontrolü bcrypt'ten ÖNCE: kilitliyken hash karşılaştırmak hem
         // gereksiz iş hem de saldırgana zaman penceresi verir
@@ -304,7 +318,7 @@ const AuthService = {
                 user.provider === 'google' ? 'Google'
                 : user.provider === 'apple' ? 'Apple'
                 : 'sosyal';
-            throw new AppError(`Bu hesap ${providerName} girişiyle açılmış; ${providerName} ile giriş yap`, 400);
+            throw socialAccountError(`Bu hesap ${providerName} girişiyle açılmış; ${providerName} ile giriş yap`, user.provider);
         }
 
         const isMatch = await user.comparePassword(password);
@@ -315,11 +329,13 @@ const AuthService = {
                 const err = new AppError(
                     'Çok fazla hatalı giriş denemesi yapıldı, lütfen biraz bekleyip tekrar deneyin',
                     429
-                );
+                ).withCode(ERR.LOGIN_LOCKED);
                 err.retryAfterSeconds = Math.ceil((lockedUntil - Date.now()) / 1000);
                 throw err;
             }
-            throw new AppError('Şifreniz yanlış. Lütfen tekrar deneyin.', 401);
+            // 401 + kod: mobilin oturum yenileme mantığı bu 401'i yutuyordu,
+            // kullanıcı yanlış şifrede ekranda hiçbir şey görmüyordu (27.10.2026)
+            throw new AppError('Şifreniz yanlış. Lütfen tekrar deneyin.', 401).withCode(ERR.INVALID_PASSWORD);
         }
 
         // Başarılı giriş sayacı sıfırlar; yazma yalnızca gerçekten
@@ -483,15 +499,26 @@ const AuthService = {
     },
 
     async refresh(refreshToken) {
-        if (!refreshToken) throw new AppError('No refresh token', 401);
+        if (!refreshToken) throw new AppError('No refresh token', 401).withCode(ERR.REFRESH_INVALID);
 
-        const decoded = verifyRefreshToken(refreshToken);
+        // Yenileme token'ının süresi dolunca jwt.verify TokenExpiredError atar;
+        // errorHandler'a düşseydi erişim token'ınınkiyle AYNI cevaba dönüşürdü
+        // (401 "Token expired" / TOKEN_EXPIRED) ve istemci "yenile" deyip
+        // döngüye girebilirdi. Mesajlar bilerek eskisiyle aynı: mevcut istemci
+        // metne bakıyor olabilir — ayrım koddadır.
+        let decoded;
+        try {
+            decoded = verifyRefreshToken(refreshToken);
+        } catch (err) {
+            const message = err.name === 'TokenExpiredError' ? 'Token expired' : 'Invalid token';
+            throw new AppError(message, 401).withCode(ERR.REFRESH_INVALID);
+        }
         const session = await DeviceSession.findOne({
             user: decoded.id,
             tokenHash: hashToken(refreshToken)
         });
 
-        if (!session) throw new AppError('Invalid refresh token', 401);
+        if (!session) throw new AppError('Invalid refresh token', 401).withCode(ERR.REFRESH_INVALID);
 
         session.lastUsedAt = new Date();
         await session.save();
@@ -528,7 +555,7 @@ const AuthService = {
         // Ne geçerli access token ne de refresh token var: kapatılacak oturum
         // belirlenemiyor. Sessizce 200 dönmek kullanıcıda "çıkış yaptım"
         // yanılgısı yaratır, oysa oturum ayakta kalır.
-        throw new AppError('No refresh token', 401);
+        throw new AppError('No refresh token', 401).withCode(ERR.REFRESH_INVALID);
     },
 
     // Cihazın push kaydını düşürür. Ortak kullanılan bir telefonda çıkış yapan
@@ -551,7 +578,7 @@ const AuthService = {
         // söylüyor, dolayısıyla burada gizlemek sıfır güvenlik kazancı
         // sağlarken kullanıcıyı yazım hatasında sessizce bekletiyordu.
         // Sızıntının karşılığı rate limit + adres bazlı mail kısıtıdır.
-        if (!user) throw new AppError('Bu e-postayla kayıtlı bir hesap yok', 404);
+        if (!user) throw accountNotFoundError();
 
         // Doğrulanmamış hesap da sıfırlayabilir — maildeki linke tıklamak
         // zaten adres sahipliğini kanıtlar; 403 dönmek kullanıcıyı çıkmaza sokar.
@@ -582,7 +609,7 @@ const AuthService = {
     },
 
     async resetPassword(resetToken, newPassword, deviceName) {
-        if (!resetToken) throw new AppError('Invalid or expired token', 400);
+        if (!resetToken) throw linkInvalidError();
 
         const hashedToken = crypto
             .createHash('sha256')
@@ -595,14 +622,14 @@ const AuthService = {
             resetPasswordExpire: { $gt: Date.now() }
         }).select('+password');
 
-        if (!user) throw new AppError('Invalid or expired token', 400);
+        if (!user) throw linkInvalidError();
 
         validatePassword(newPassword);
 
         // Sıfırlamada eski şifre yazılmadığı için karşılaştırma hash'e karşı
         // yapılır; şifresiz (sosyal) hesap resetle İLK şifresini belirleyebilir
         if (user.password && await user.comparePassword(newPassword)) {
-            throw new AppError('Yeni şifre eski şifrenle aynı olamaz', 400);
+            throw new AppError('Yeni şifre eski şifrenle aynı olamaz', 400).withCode(ERR.SAME_PASSWORD);
         }
 
         user.password = newPassword;
@@ -650,15 +677,15 @@ const AuthService = {
         // istenir. Aksi halde telefonu eline geçiren kişi adresi kendine çevirip
         // "şifremi unuttum" ile hesabı tamamen devralabilirdi.
         if (updates.email !== undefined && updates.email !== null && updates.email !== '') {
-            const newEmail = String(updates.email).trim().toLowerCase();
+            const newEmail = normalizeEmail(updates.email);
             if (newEmail !== user.email) {
-                if (!EMAIL_RE.test(newEmail)) throw new AppError('Geçerli bir e-posta adresi girin', 400);
+                if (!EMAIL_RE.test(newEmail)) throw new AppError(EMAIL_FORMAT_MESSAGE, 400).withCode(ERR.EMAIL_INVALID);
 
                 const withSecret = await User.findById(userId).select('+password');
                 await assertReauth(withSecret, { password: updates.currentPassword, idToken: updates.idToken });
 
                 const emailTaken = await User.exists({ email: newEmail });
-                if (emailTaken) throw new AppError('Bu e-posta adresi zaten kullanımda', 400);
+                if (emailTaken) throw new AppError('Bu e-posta adresi zaten kullanımda', 400).withCode(ERR.EMAIL_TAKEN);
 
                 // Değişim maili de adres bazlı kısıta tabi: aksi halde her
                 // update-info çağrısı keyfi bir adrese mail göndertebilirdi
@@ -728,7 +755,7 @@ const AuthService = {
     },
 
     async verifyEmail(verificationToken, deviceName) {
-        if (!verificationToken) throw new AppError('Invalid or expired token', 400);
+        if (!verificationToken) throw linkInvalidError();
 
         const hashedToken = crypto
             .createHash('sha256')
@@ -740,7 +767,7 @@ const AuthService = {
             emailVerificationExpire: { $gt: Date.now() }
         });
 
-        if (!user) throw new AppError('Invalid or expired token', 400);
+        if (!user) throw linkInvalidError();
 
         // E-posta değişiminin onayı: bekleyen adres ancak şimdi geçerli olur.
         // Talep ile onay arasında adresi başka bir hesap almış olabilir.
@@ -751,7 +778,7 @@ const AuthService = {
                 user.emailVerificationToken = undefined;
                 user.emailVerificationExpire = undefined;
                 await user.save();
-                throw new AppError('Bu e-posta adresi artık başka bir hesapta kullanılıyor', 409);
+                throw new AppError('Bu e-posta adresi artık başka bir hesapta kullanılıyor', 409).withCode(ERR.EMAIL_TAKEN);
             }
             user.email = user.pendingEmail;
             user.pendingEmail = undefined;
@@ -799,8 +826,10 @@ const AuthService = {
     async resendVerificationEmail(email) {
         const user = await User.findOne({ email });
         // Enumeration politikası her uçta aynı: dürüst cevap (bkz. forgotPassword)
-        if (!user) throw new AppError('Bu e-postayla kayıtlı bir hesap yok', 404);
-        if (user.isEmailVerified) throw new AppError('E-posta zaten doğrulanmış', 400);
+        if (!user) throw accountNotFoundError();
+        // İstemci bu kodla kullanıcıyı doğrudan girişe yönlendirebilir: başka
+        // cihazdan ya da web'den doğrulamış olabilir
+        if (user.isEmailVerified) throw new AppError('E-posta zaten doğrulanmış', 400).withCode(ERR.ALREADY_VERIFIED);
 
         // "Tekrar Gönder" butonu bir kurbanın gelen kutusunu doldurmaya
         // dönüşmesin diye adres bazlı kısıt
@@ -835,11 +864,11 @@ const AuthService = {
         if (!user) throw new AppError('User not found', 404);
 
         if (!user.password) {
-            throw new AppError('Bu hesap sosyal girişle açılmış; şifre belirlemek için şifre sıfırlama akışını kullanın', 400);
+            throw socialAccountError('Bu hesap sosyal girişle açılmış; şifre belirlemek için şifre sıfırlama akışını kullanın', user.provider);
         }
 
         const isMatch = await user.comparePassword(password);
-        if (!isMatch) throw new AppError('Şifreniz yanlış. Lütfen tekrar deneyin.', 401);
+        if (!isMatch) throw new AppError('Şifreniz yanlış. Lütfen tekrar deneyin.', 401).withCode(ERR.INVALID_PASSWORD);
     },
 
     async changePassword(userId, oldPassword, newPassword, deviceName) {
@@ -848,11 +877,13 @@ const AuthService = {
 
         // Sosyal hesabın şifresi yoktur; şifre belirlemek isterse forgot-password akışını kullanır
         if (!user.password) {
-            throw new AppError('Bu hesap sosyal girişle açılmış; şifre belirlemek için şifre sıfırlama akışını kullanın', 400);
+            throw socialAccountError('Bu hesap sosyal girişle açılmış; şifre belirlemek için şifre sıfırlama akışını kullanın', user.provider);
         }
 
+        // verify-password ve login ile aynı mesaj: kullanıcı aynı durumu
+        // ekranda aynı cümleyle görsün
         const isMatch = await user.comparePassword(oldPassword);
-        if (!isMatch) throw new AppError('Old password is incorrect', 401);
+        if (!isMatch) throw new AppError('Şifreniz yanlış. Lütfen tekrar deneyin.', 401).withCode(ERR.INVALID_PASSWORD);
 
         // Kural kontrolü eski şifre doğrulandıktan SONRA: tasarımda "Şifre Girin"
         // ayrı bir adım, o adımın hatası yeni şifre hatasının önüne geçmeli
@@ -861,7 +892,7 @@ const AuthService = {
         // Aynı şifreye "değişim" hem anlamsız hem zararlı: kullanıcı fark etmeden
         // tüm diğer oturumları düşürmüş olurdu (rotateAllSessions)
         if (oldPassword === newPassword) {
-            throw new AppError('Yeni şifre eski şifrenle aynı olamaz', 400);
+            throw new AppError('Yeni şifre eski şifrenle aynı olamaz', 400).withCode(ERR.SAME_PASSWORD);
         }
 
         user.password = newPassword;
