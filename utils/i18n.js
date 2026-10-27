@@ -42,7 +42,9 @@ const STRINGS = {
         verifyBtn: 'E-postamı Doğrula',
         verifyBtnBusy: 'Doğrulanıyor…',
         verifyOkHeading: 'E-postan Doğrulandı',
-        verifyOkText: 'Hesabın hazır. Uygulamaya dönüp kaldığın yerden devam edebilirsin.',
+        // okText masaüstünde (açılacak uygulama yok), okApp telefonda gösterilir
+        verifyOkText: 'Hesabın hazır. Telefonundaki Musubi uygulamasına dönüp devam edebilirsin.',
+        verifyOkApp: 'Hesabın hazır. Uygulama açılıyor…',
         verifyErr: 'Doğrulama başarısız, tekrar dene.',
 
         // Sayfa: şifre sıfırlama
@@ -55,7 +57,21 @@ const STRINGS = {
         resetSubmitBusy: 'Güncelleniyor…',
         resetOkHeading: 'Şifreniz Değiştirildi',
         resetOkText: 'Artık yeni şifrenle uygulamadan giriş yapabilirsin.',
+        resetOkApp: 'Şifren güncellendi. Uygulama açılıyor…',
         resetErr: 'Şifre güncellenemedi, tekrar dene.',
+
+        // Uygulamaya dönüş yönlendirmesi engellenirse görünen yedek bağlantı
+        appNotOpened: 'Uygulama açılmadı mı?',
+        openApp: 'Aç',
+
+        // Sayfa: ana sayfa ve /indir (mağaza linkleri gelene kadar yer tutucu)
+        dlTitle: 'Japonca Kelime Öğren',
+        dlLead: 'Japonca kelimeleri günde birkaç dakikada, unutmadan öğren.',
+        dlSoon: 'Çok yakında App Store ve Google Play\'de',
+        dlPlay: 'Google Play\'den indir',
+        dlAppStore: 'App Store\'dan indir',
+        dlPrivacy: 'Gizlilik Politikası',
+        dlLegal: 'Hukuki Metinler',
         mismatch: 'Şifreler eşleşmiyor.',
         showPassword: 'Şifreyi göster',
 
@@ -116,7 +132,8 @@ const STRINGS = {
         verifyBtn: 'Verify My Email',
         verifyBtnBusy: 'Verifying…',
         verifyOkHeading: 'Email Verified',
-        verifyOkText: 'Your account is ready. Head back to the app and pick up where you left off.',
+        verifyOkText: 'Your account is ready. Head back to the Musubi app on your phone to continue.',
+        verifyOkApp: 'Your account is ready. Opening the app…',
         verifyErr: 'Verification failed, please try again.',
 
         resetPageTitle: 'Set a New Password',
@@ -128,7 +145,19 @@ const STRINGS = {
         resetSubmitBusy: 'Updating…',
         resetOkHeading: 'Password Changed',
         resetOkText: 'You can now sign in from the app with your new password.',
+        resetOkApp: 'Your password has been updated. Opening the app…',
         resetErr: 'Could not update password, please try again.',
+
+        appNotOpened: "App didn't open?",
+        openApp: 'Open',
+
+        dlTitle: 'Learn Japanese Words',
+        dlLead: 'Learn Japanese words in a few minutes a day — and actually remember them.',
+        dlSoon: 'Coming soon to the App Store and Google Play',
+        dlPlay: 'Get it on Google Play',
+        dlAppStore: 'Download on the App Store',
+        dlPrivacy: 'Privacy Policy',
+        dlLegal: 'Legal',
         mismatch: 'Passwords do not match.',
         showPassword: 'Show password',
 
