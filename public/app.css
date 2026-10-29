@@ -18,6 +18,7 @@
   --warn: #E8B93B;
   --warn-ink: #8A6414;
   --warn-soft: #FBF2DE;
+  --mid: #FF7700;             /* şifre gücü "İyi" — web sıfırlama sayfasıyla aynı */
 
   /* Hafıza kutuları — sunucudaki sırayla aynı: new, weak, medium, good, mastered */
   --box-new: #8A8A8A;
@@ -304,6 +305,10 @@ h2.sec:first-child { margin-top: 6px; }
 .input.bad { border-color: var(--brand); background: var(--bg); }
 .input svg { flex: none; width: 20px; height: 20px; fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
 .input.bad svg, .input:focus-within svg { stroke: var(--brand); }
+/* Geçerli şifre / eşleşen tekrar: Figma'da çerçeve, ikon ve yazı yeşil */
+.input.good { border-color: var(--ok); background: var(--bg); }
+.input.good svg { stroke: var(--ok); }
+.input.good input { color: var(--ok); }
 .input input {
   flex: 1; min-width: 0; background: none; border: 0; outline: none;
   font: inherit; font-size: 15.5px; color: var(--ink);
@@ -706,6 +711,44 @@ ruby rt { font-size: .48em; color: var(--muted); font-weight: 400; }
 .center { justify-content: center; }
 .legal { font-size: 12px; line-height: 1.6; color: var(--muted); text-align: center; }
 .legal button { font-size: 12px; }
+.legal .link { color: var(--muted); font-weight: 500; }
+
+/* ─────────────────── Giriş ekranları (Figma v1 › 38:776) ─────────────────── */
+.fieldrow { display: flex; gap: 12px; }
+.fieldrow .input { flex: 1; min-width: 0; }
+.socialrow { display: flex; gap: 10px; margin-top: 10px; }
+.socialrow .btn { flex: 1; margin: 0; }
+.socialrow .btn svg { width: 22px; height: 22px; fill: var(--brand); stroke: none; }
+.socialrow .btn.pulse { background: var(--brand-soft); box-shadow: 0 0 0 3px var(--brand-soft); }
+.loginlinks { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 10px; font-size: 12.5px; color: var(--ink-2); }
+.loginlinks .link { font-size: 12.5px; }
+
+.waitscr { display: flex; flex-direction: column; align-items: center; text-align: center; padding-top: 28px; }
+.waitscr .blob { width: 100px; height: 100px; }
+.waitscr .blob svg { width: 48px; height: 48px; }
+.waitscr h1 { margin: 0 0 6px; font-size: 24px; font-weight: 800; letter-spacing: -.025em; }
+.waitscr > p { margin: 0; font-size: 15px; color: var(--muted); line-height: 1.5; }
+.waitscr .addr { display: block; margin-top: 4px; font-size: 15px; font-weight: 700; color: var(--ink); }
+.steps { width: 100%; margin-top: 26px; padding: 6px 14px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); text-align: left; }
+.step { display: flex; align-items: center; gap: 12px; padding: 12px 0; font-size: 14px; color: var(--ink-2); }
+.step + .step { border-top: 1px dashed var(--line-2); }
+.step span { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; background: var(--brand-soft); color: var(--brand); font-size: 12.5px; font-weight: 750; }
+.waitscr .resend { margin: 22px 0 0; font-size: 13.5px; color: var(--ink-2); }
+.waitscr .resend .link { font-size: 13.5px; }
+.link:disabled { color: var(--muted); text-decoration: none; cursor: default; }
+/* Simülatöre özel, tasarımın parçası değil: maildeki tokenı yapıştırma yeri */
+.devshort { margin-top: 34px; padding-top: 4px; border-top: 1px dashed var(--line-2); }
+.devshort .tiny { margin: 0 0 10px; }
+
+/* Ortadaki kart modal ("E-postan Doğrulanamadı", "Şifreniz Değiştirildi") */
+.overlay.center { justify-content: center; padding: 0 16px; }
+.dialog { background: var(--bg); border-radius: var(--r-xl); padding: 24px 16px 20px; text-align: center; animation: enter .24s var(--ease); }
+.dialog .blob { margin: 0 auto 16px; width: 100px; height: 100px; }
+.dialog .blob svg { width: 48px; height: 48px; }
+.dialog h3 { margin: 0 0 8px; font-size: 20px; font-weight: 800; letter-spacing: -.02em; }
+.dialog p { margin: 0 0 20px; font-size: 15px; line-height: 1.5; color: var(--muted); }
+.btnrow { display: flex; gap: 10px; }
+.btnrow .btn { flex: 1; margin: 0; padding: 0 8px; white-space: nowrap; }
 .prose h3 { margin: 22px 0 8px; font-size: 16px; font-weight: 750; }
 .prose p { margin: 0 0 12px; font-size: 14px; line-height: 1.65; color: var(--ink-2); }
 
