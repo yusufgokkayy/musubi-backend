@@ -26,8 +26,6 @@ const state = {
   me: null,
   stack: [{ name: 'welcome' }],
   wizard: {},
-  devVerificationToken: localStorage.getItem('musubi_dev_vtoken') || null,
-  devResetToken: localStorage.getItem('musubi_dev_rtoken') || null,
   promptedPlacement: false,
   home: null,
   lesson: null,
@@ -52,7 +50,8 @@ const I = {
   books: '<svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="4.5" height="16" rx="1"/><rect x="10" y="4" width="4.5" height="16" rx="1"/><path d="M17.2 4.7l3.3.9-3.4 14-3.3-.9"/></svg>',
   brain: '<svg viewBox="0 0 24 24"><path d="M12 4.5v15"/><path d="M12 6a3 3 0 0 0-5.6-1.5A2.8 2.8 0 0 0 4 8.6a3 3 0 0 0-.4 5A3 3 0 0 0 5.6 19 3 3 0 0 0 12 18"/><path d="M12 6a3 3 0 0 1 5.6-1.5A2.8 2.8 0 0 1 20 8.6a3 3 0 0 1 .4 5A3 3 0 0 1 18.4 19 3 3 0 0 1 12 18"/></svg>',
   gear: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 14.5a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.1v.3a2 2 0 1 1-4 0v-.2a1.6 1.6 0 0 0-2.8-1.1l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.6 1.6 0 0 0-1.1-2.7h-.3a2 2 0 1 1 0-4h.2a1.6 1.6 0 0 0 1.1-2.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.6 1.6 0 0 0 1.8.3 1.6 1.6 0 0 0 1-1.4v-.3a2 2 0 1 1 4 0v.2a1.6 1.6 0 0 0 2.7 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.6 1.6 0 0 0 1.1 2.7h.3a2 2 0 1 1 0 4h-.2a1.6 1.6 0 0 0-1.4 1"/></svg>',
-  key: '<svg viewBox="0 0 24 24"><circle cx="8" cy="8.5" r="4.5"/><path d="M11.3 11.8 20 20.5"/><path d="M17 17.5l2-2"/></svg>',
+  // Figma'daki lucide "key-round": yuvarlak baş sağ üstte, sap sol alta iner
+  key: '<svg viewBox="0 0 24 24"><path d="M2.6 17.4A2 2 0 0 0 2 18.8V21a1 1 0 0 0 1 1h3a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h1a1 1 0 0 0 1-1v-1a1 1 0 0 1 1-1h.2a2 2 0 0 0 1.4-.6l.8-.8a6.5 6.5 0 1 0-4-4z"/><circle cx="16.5" cy="7.5" r=".6" fill="currentColor"/></svg>',
   bellRing: '<svg viewBox="0 0 24 24"><path d="M17.5 9a5.5 5.5 0 1 0-11 0c0 5.5-1.8 6.5-1.8 6.5h14.6S17.5 14.5 17.5 9"/><path d="M13.5 19a1.8 1.8 0 0 1-3 0"/><path d="M20 3.5A9 9 0 0 1 21.8 7M4 3.5A9 9 0 0 0 2.2 7"/></svg>',
   translate: '<svg viewBox="0 0 24 24"><path d="M2.5 5.5h9"/><path d="M7 3.5v2"/><path d="M9.5 5.5c0 3.5-2.4 6.5-6 8"/><path d="M4 9.5c1.4 2.4 3.6 4 6 4.6"/><path d="M12.5 20.5l4-11 4 11"/><path d="M14 17h5"/></svg>',
   palette: '<svg viewBox="0 0 24 24"><path d="M12 21a9 9 0 1 1 9-9c0 2-1.6 3-3 3h-1.5a2 2 0 0 0-1.4 3.4c.4.5.4 1.3-.2 1.9-.5.5-1.3.7-1.9.7"/><circle cx="7.5" cy="12" r="1.1" fill="currentColor" stroke="none"/><circle cx="9.8" cy="8" r="1.1" fill="currentColor" stroke="none"/><circle cx="14.2" cy="8" r="1.1" fill="currentColor" stroke="none"/></svg>',
@@ -63,6 +62,11 @@ const I = {
   logout: '<svg viewBox="0 0 24 24"><path d="M14 20.5H6a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2h8"/><path d="M15.5 16.5 20 12l-4.5-4.5"/><path d="M20 12H9"/></svg>',
   trash: '<svg viewBox="0 0 24 24"><path d="M4 6.5h16"/><path d="M9 6.5V4.5h6v2"/><path d="M6.5 6.5 7.4 20a1.5 1.5 0 0 0 1.5 1.4h6.2a1.5 1.5 0 0 0 1.5-1.4l.9-13.5"/><path d="M10.5 10.5v7M13.5 10.5v7"/></svg>',
   mail: '<svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>',
+  // Figma › "E-postanı Doğrulayamadın": köşesinde ✗ olan zarf
+  mailX: '<svg viewBox="0 0 24 24"><path d="M21.5 12.5V7.5a2.5 2.5 0 0 0-2.5-2.5H5a2.5 2.5 0 0 0-2.5 2.5v9A2.5 2.5 0 0 0 5 19h8.5"/><path d="m3.5 7 8.5 6 8.5-6"/><path d="m17 16 4 4M21 16l-4 4"/></svg>',
+  // Karşılama ekranındaki sosyal giriş butonları (tek renk, marka kırmızısı)
+  google: '<svg viewBox="0 0 24 24" class="solid"><path d="M21.6 10.2H12v3.9h5.5a5.7 5.7 0 0 1-5.5 4A6.1 6.1 0 1 1 16 7.4l2.8-2.8A10 10 0 1 0 22 12c0-.6-.1-1.2-.4-1.8z"/></svg>',
+  apple: '<svg viewBox="0 0 24 24" class="solid"><path d="M16.4 12.6c0-2.4 2-3.6 2.1-3.6a4.6 4.6 0 0 0-3.6-2c-1.5-.2-3 .9-3.7.9-.8 0-2-.9-3.2-.8A4.8 4.8 0 0 0 4 9.6c-1.7 3-.4 7.4 1.2 9.8.8 1.2 1.8 2.5 3 2.4 1.2 0 1.7-.8 3.1-.8s1.9.8 3.2.8 2.1-1.2 2.9-2.4a10 10 0 0 0 1.3-2.7 4.2 4.2 0 0 1-2.3-4.1zM14 5.4A4.2 4.2 0 0 0 15 2.3a4.4 4.4 0 0 0-2.9 1.5 4.1 4.1 0 0 0-1 3 3.6 3.6 0 0 0 2.9-1.4z"/></svg>',
   lock: '<svg viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg>',
   badgeCheck: '<svg viewBox="0 0 24 24"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg>',
   unlock: '<svg viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 7.5-2"/></svg>',
@@ -120,7 +124,9 @@ async function api(method, path, body, opts = {}) {
     return { ok: false, status: 0, json: { message: 'network error' } };
   }
 
-  if (res.status === 401 && json.message === 'Token expired' && state.refresh && !opts._retried) {
+  // Yenileme YALNIZCA TOKEN_EXPIRED'da: girişteki yanlış şifre de 401'dir
+  // (INVALID_PASSWORD) ve yenileme onu yutarsa ekranda hiçbir şey görünmez
+  if (res.status === 401 && json.code === 'TOKEN_EXPIRED' && state.refresh && !opts._retried) {
     const r = await fetch('/api/auth/refresh', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-Musubi-Client': 'simulator' },
@@ -131,6 +137,7 @@ async function api(method, path, body, opts = {}) {
       setTokens(rj.data.accessToken, state.refresh);
       return api(method, path, body, { ...opts, _retried: true });
     }
+    // REFRESH_INVALID: oturum gerçekten bitti, yenileme tekrar denenmez
     setTokens(null, null);
     reset('welcome');
     toast('Oturum süresi doldu, tekrar giriş yap', 'err');
@@ -305,22 +312,29 @@ function exampleBlock(w) {
     <div class="example">${furigana(w.exampleFurigana, w.example)}${w.exampleTr ? `<p class="tr">${esc(w.exampleTr)}</p>` : ''}</div>`;
 }
 
-function pwScore(pw) {
-  let s = 0;
-  if (pw.length >= 8) s++;
-  if (/[a-zçğıöşü]/.test(pw) && /[A-ZÇĞİÖŞÜ]/.test(pw)) s++;
-  if (/[0-9]/.test(pw)) s++;
-  if (/[^A-Za-z0-9]/.test(pw)) s++;
-  return s;
-}
-function pwBars(score) {
-  const cls = score <= 1 ? 'weak' : score <= 2 ? 'mid' : 'strong';
-  const label = ['Çok zayıf şifre', 'Zayıf şifre', 'Orta şifre', 'İyi şifre', 'Güçlü şifre'][score];
-  return `<div class="strength">${[0, 1, 2, 3].map(i => `<i class="${i < score ? 'on ' + cls : ''}"></i>`).join('')}</div>
-    <div class="strength-label">${label}</div>`;
-}
-function pwField(id, placeholder = 'En az 8 karakter') {
-  return `<div class="input">${I.lock}<input id="${id}" type="password" placeholder="${esc(placeholder)}">
+// ─── Şifre kuralları ─────────────────────────────────────────────
+// Sunucudaki utils/password.util.js'in kopyası: aynı dört kural, aynı sıra,
+// aynı mesajlar. Simülatör kendi kuralını uydurursa ekranda "Çok iyi"
+// görülüp kayıtta WEAK_PASSWORD yenir — mobil belge de bunu şart koşuyor.
+const PW_RULES = [
+  [pw => pw.length >= 8, 'Şifreniz çok kısa (en az 8 karakter olmalı).'],
+  [pw => /[A-ZÇĞİÖŞÜ]/.test(pw), 'Şifrenizde en az bir büyük harf, bir rakam ve bir özel karakter olmalı.'],
+  [pw => /\d/.test(pw), 'Şifrenizde en az bir büyük harf, bir rakam ve bir özel karakter olmalı.'],
+  [pw => /[^\p{L}\p{N}\s]/u.test(pw), 'Şifrenizi daha sağlam yapmak için bir özel karakter kullanın.']
+];
+// Göstergenin etiketleri ve renkleri tasarımdaki ve web sıfırlama sayfasındakiyle aynı
+const PW_LEVELS = [null, ['Kötü', 'var(--brand)'], ['Orta', 'var(--warn)'], ['İyi', 'var(--mid)'], ['Çok iyi', 'var(--ok)']];
+// Tasarımın 4 basamağı (web sıfırlama sayfasındaki grade() ile aynı): kısa →
+// Kötü, büyük harf ya da rakam eksik → Orta, yalnız özel karakter eksik → İyi.
+// Geçen kural sayılsaydı "abc" boş gösterge çizerdi; tasarımda tek kırmızı çubuk var.
+const pwScore = (pw) => {
+  const ok = PW_RULES.map(([test]) => test(pw));
+  return !ok[0] ? 1 : !(ok[1] && ok[2]) ? 2 : !ok[3] ? 3 : 4;
+};
+const pwViolation = (pw) => PW_RULES.find(([test]) => !test(pw))?.[1] || null;
+
+function pwField(id, placeholder = 'Şifreniz') {
+  return `<div class="input" id="w-${id}">${I.key}<input id="${id}" type="password" placeholder="${esc(placeholder)}" autocomplete="new-password">
     <button type="button" class="eye" data-eye="${id}">${I.eye}</button></div>`;
 }
 function wireEyes() {
@@ -330,13 +344,56 @@ function wireEyes() {
     b.innerHTML = inp.type === 'password' ? I.eye : I.eyeOff;
   }));
 }
-function wireStrength(inputId, boxId) {
-  const inp = $('#' + inputId), box = $('#' + boxId);
-  box.innerHTML = pwBars(0);
-  inp.addEventListener('input', () => { box.innerHTML = pwBars(pwScore(inp.value)); });
+
+// "Yeni Şifre Oluştur" bloğu — kayıt, sıfırlama ve Ayarlar'da aynı.
+// Tasarımdaki hâller: boşken yalnız iki alan; yazınca ilk ihlal edilen
+// kuralın mesajı alanın altında kırmızı + 4 çubuk ve etiket; 4/4 olunca
+// çerçeve yeşil; tekrar alanı eşleşmezse "Şifreler eşleşmiyor."
+function pwPair() {
+  return `${pwField('in-pw')}
+    <div class="errline" id="err-pw"></div>
+    <div id="pwbox" hidden><div class="strength" id="pw-bars"><i></i><i></i><i></i><i></i></div><div class="strength-label" id="pw-level"></div></div>
+    <div class="gap-12">${pwField('in-pw2', 'Şifreni tekrar gir')}</div>
+    <div class="errline" id="err-pw2"></div>`;
+}
+// Geçerlilik değişince onChange(valid) çağrılır; ekran butonunu ona bağlar.
+// Döndürdüğü fonksiyon sunucudan gelen şifre hatasını aynı alana yazar.
+function wirePwPair(onChange) {
+  const p1 = $('#in-pw'), p2 = $('#in-pw2');
+  const w1 = $('#w-in-pw'), w2 = $('#w-in-pw2');
+  const update = () => {
+    const a = p1.value, b = p2.value, score = pwScore(a), strong = score === 4;
+    $('#pwbox').hidden = !a;
+    $$('#pw-bars i').forEach((bar, i) => { bar.style.background = i < score ? PW_LEVELS[score][1] : ''; });
+    $('#pw-level').textContent = score ? PW_LEVELS[score][0] : '';
+    $('#pw-level').style.color = score ? PW_LEVELS[score][1] : '';
+    $('#err-pw').textContent = a && !strong ? pwViolation(a) : '';
+    w1.classList.toggle('bad', !!a && !strong);
+    w1.classList.toggle('good', strong);
+    const mismatch = !!b && a !== b;
+    $('#err-pw2').textContent = mismatch ? 'Şifreler eşleşmiyor.' : '';
+    w2.classList.toggle('bad', mismatch);
+    w2.classList.toggle('good', !!b && a === b && strong);
+    onChange(strong && a === b);
+  };
+  p1.addEventListener('input', update); p2.addEventListener('input', update);
+  update();
+  return (message) => { w1.classList.remove('good'); w1.classList.add('bad'); $('#err-pw').textContent = message; };
 }
 
-// Genel durum ekranı (Hesabınız Oluşturuldu, Şifreniz Değiştirildi, …)
+// Ortadaki kart modal (Figma: "E-postan Doğrulanamadı", "Şifreniz Değiştirildi").
+// Alttan açılan sheet'ten ayrı: tasarımda bu ikisi ekranın ortasında durur.
+function dialog({ icon, title, body, buttons, dismissable = true }) {
+  $('#sheet-slot').innerHTML = `<div class="overlay center" ${dismissable ? 'data-overlay' : ''}><div class="dialog">
+      <div class="blob">${icon}</div>
+      <h3>${esc(title)}</h3>
+      <p>${esc(body)}</p>
+      <div class="btnrow">${buttons.map((b, i) => `<button class="btn ${b.outline ? 'btn-outline' : 'btn-primary'}" data-dlg="${i}">${esc(b.label)}</button>`).join('')}</div>
+    </div></div>`;
+  buttons.forEach((b, i) => $(`[data-dlg="${i}"]`).addEventListener('click', b.onClick));
+}
+
+// Genel durum ekranı (ders sonu, Ayarlar'da şifre değişti …)
 function statusScreen({ icon = I.checkCircle, tone = '', title, body, primary, secondary }) {
   paint(`<div class="center-scr">
       <div class="blob ${tone}">${icon}</div>
@@ -348,6 +405,27 @@ function statusScreen({ icon = I.checkCircle, tone = '', title, body, primary, s
   $('#s-primary').addEventListener('click', primary.onClick);
   if (secondary) $('#s-secondary').addEventListener('click', secondary.onClick);
 }
+
+// ─── Bekleme süreleri ─────────────────────────────────────────────
+// Mail kısıtı (60 sn / günde 5) ve giriş kilidi sunucuda; kalan süreyi
+// sunucu details.retryAfterSeconds ile söyler. Sayaç ona kurulur, tahmin edilmez.
+const cooldowns = {};
+const startCooldown = (key, seconds) => { cooldowns[key] = Date.now() + seconds * 1000; };
+const cooldownLeft = (key) => Math.max(0, Math.ceil(((cooldowns[key] || 0) - Date.now()) / 1000));
+// Butonun metnine "(54)" ekler ve süre bitene kadar pasif tutar. Ekran
+// değişince (activeToken) durur.
+function tickCooldown(el, key, label, extraDisabled = () => false) {
+  const tk = activeToken;
+  const draw = () => {
+    if (stale(tk) || !el.isConnected) return;
+    const s = cooldownLeft(key);
+    el.disabled = s > 0 || extraDisabled();
+    el.textContent = s > 0 ? `${label} (${s})` : label;
+    if (s > 0) setTimeout(draw, 1000);
+  };
+  draw();
+}
+const retryAfter = (res) => res.json.details?.retryAfterSeconds || 60;
 
 const debounce = (fn, ms) => { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; };
 
@@ -366,10 +444,17 @@ const deviceTimezone = () => {
   try { return Intl.DateTimeFormat().resolvedOptions().timeZone || undefined; } catch { return undefined; }
 };
 
+const EMAIL_RE = /^[\w.+-]+@([\w-]+\.)+[\w-]{2,}$/;   // utils/email.util.js'in kopyası
+const normEmail = (v) => v.trim().toLowerCase();
+
 // ═══════════════════════════════════════════════════════════════
-// AUTH
+// AUTH — Figma › Versiyon 1.x.x › Giriş Ekranları (38:776)
+// Hatalar metne değil `code`'a göre ayrılır (Backend Docs › Auth §7):
+// simülatör, mobilin yapması gerekeni gösteren örnek olsun.
 // ═══════════════════════════════════════════════════════════════
-function showWelcome() {
+const PROVIDER_NAME = { google: 'Google', apple: 'Apple' };
+
+function showWelcome(data = {}) {
   paint(`<div class="pad" style="display:flex;flex-direction:column">
       <div style="flex:1;display:grid;place-items:center;padding:28px 0">
         <img src="/assets/musubi-logo.png" alt="Musubi" style="width:172px;height:172px">
@@ -378,6 +463,10 @@ function showWelcome() {
       <p class="lead">Hesabını kurmaya devam etmek için lütfen tercih ettiğin yöntemi seç.</p>
       <button class="btn btn-primary" id="b-register">Kayıt Ol</button>
       <button class="btn btn-outline" id="b-login">Giriş Yap</button>
+      <div class="socialrow">
+        <button class="btn btn-outline ${data.provider === 'google' ? 'pulse' : ''}" data-social="google" aria-label="Google ile devam et">${I.google}</button>
+        <button class="btn btn-outline ${data.provider === 'apple' ? 'pulse' : ''}" data-social="apple" aria-label="Apple ile devam et">${I.apple}</button>
+      </div>
       <p class="legal gap-24">Yeni bir hesap oluşturuyorsanız
         <button class="link" data-legal="terms">Kullanıcı Sözleşmesi</button>,
         <button class="link" data-legal="kvkk">KVKK Aydınlatma &amp; Açık Rıza Metni</button> ve
@@ -385,10 +474,15 @@ function showWelcome() {
     </div>`);
   $('#b-register').addEventListener('click', () => { state.wizard = {}; go('reg-email'); });
   $('#b-login').addEventListener('click', () => go('login'));
+  // Google/Apple girişi sağlayıcının SDK'sından idToken ister; tarayıcıdaki
+  // simülatörde bu yok. Buton tasarımdaki yerinde durur, akış telefonda denenir.
+  $$('[data-social]').forEach(b => b.addEventListener('click', () =>
+    toast(`${PROVIDER_NAME[b.dataset.social]} ile giriş simülatörde yok — telefondaki uygulamada dene`, 'err')));
   $$('[data-legal]').forEach(b => b.addEventListener('click', () => go('legal-doc', { key: b.dataset.legal })));
 }
 
-// Form iskeleti: başlık + alanlar üstte, birincil buton EKRANIN ALTINDA sabit
+// Form iskeleti: başlık + alanlar üstte, birincil buton EKRANIN ALTINDA sabit.
+// Buton tasarımdaki gibi form geçerli olana kadar pasif (soluk) durur.
 function formScreen({ title, lead, body, action, backLabel = 'Geri' }) {
   paint(topbar(backLabel) + `
     <div class="pad">
@@ -398,28 +492,36 @@ function formScreen({ title, lead, body, action, backLabel = 'Geri' }) {
     </div>
     <div class="footer"><button class="btn btn-primary" id="f-action">${esc(action)}</button></div>`);
 }
+const setAction = (enabled) => { const b = $('#f-action'); if (b) b.disabled = !enabled; };
+
+// Alan hatası: çerçeve kırmızı + altında mesaj (tasarımdaki hata hâlleri)
+function fieldError(wrap, line, html) {
+  wrap.classList.add('bad');
+  line.innerHTML = html;
+}
+function clearFieldError(wrap, line) { wrap.classList.remove('bad'); line.innerHTML = ''; }
 
 function showRegEmail() {
   formScreen({
     title: 'E-posta ile Devam Et',
     lead: 'Lütfen bir sonraki adıma geçmek için e-postanızı giriniz.',
     action: 'Devam Et',
-    body: `<div class="input" id="w-email">${I.mail}<input id="in-email" type="email" placeholder="ornek@ornek.com" value="${esc(state.wizard.email || '')}"></div>
+    body: `<div class="input" id="w-email">${I.mail}<input id="in-email" type="email" placeholder="ornek@ornek.com" autocapitalize="none" value="${esc(state.wizard.email || '')}"></div>
            <div class="errline" id="err"></div>`
   });
   const input = $('#in-email'), err = $('#err'), wrap = $('#w-email');
-  input.addEventListener('input', () => { wrap.classList.remove('bad'); err.textContent = ''; });
+  const sync = () => setAction(!!input.value.trim() && !wrap.classList.contains('bad'));
+  input.addEventListener('input', () => { clearFieldError(wrap, err); sync(); });
+  sync();
   $('#f-action').addEventListener('click', async () => {
-    const email = input.value.trim();
-    const fail = (msg, html) => { wrap.classList.add('bad'); if (html) err.innerHTML = html; else err.textContent = msg; };
-    // Sunucudaki utils/email.util.js desenin kopyası ("ad+etiket@..." geçerli)
-    if (!/^[\w.+-]+@([\w-]+\.)+[\w-]{2,}$/.test(email.toLowerCase())) return fail('E-posta formatınız yanlış');
+    const email = normEmail(input.value);
+    if (!EMAIL_RE.test(email)) { fieldError(wrap, err, 'E-posta formatınız yanlış'); return sync(); }
     const res = await api('POST', '/auth/check-email', { email }, { auth: false });
-    if (!res.ok) return fail(res.json.message || 'Bir şeyler ters gitti');
+    if (!res.ok) { fieldError(wrap, err, esc(res.json.message || 'Bir şeyler ters gitti')); return sync(); }
     if (!res.json.available) {
-      fail(null, 'Bu e-posta ile zaten hesap açılmış. Lütfen <button class="link" id="to-login">giriş yapın</button>.');
+      fieldError(wrap, err, 'Bu e-posta ile zaten hesap açılmış. Lütfen <button class="link" id="to-login">giriş yapın</button>.');
       $('#to-login').addEventListener('click', () => { state.wizard.email = email; go('login'); });
-      return;
+      return sync();
     }
     state.wizard.email = email;
     go('reg-name');
@@ -655,26 +757,13 @@ function showProfileEdit() {
 }
 
 function showRegPassword() {
-  formScreen({
-    title: 'Yeni Şifre Oluştur',
-    lead: 'Lütfen şifreni gir ve doğrula.',
-    action: 'Devam Et',
-    body: `<div class="field"><label>Şifre</label>${pwField('in-pw')}</div>
-           <div id="pwbox"></div>
-           <div class="field gap-12"><label>Şifre (tekrar)</label>${pwField('in-pw2', 'Şifreni tekrar gir')}</div>
-           <div class="errline" id="err"></div>`
-  });
-  wireEyes(); wireStrength('in-pw', 'pwbox');
+  formScreen({ title: 'Yeni Şifre Oluştur', lead: 'Lütfen şifreni gir ve doğrula.', action: 'Devam Et', body: pwPair() });
+  wireEyes();
   // Sonraki iki onboarding adımından geri dönülebildiği için şifre kaybolmasın
-  if (state.wizard.password) {
-    $('#in-pw').value = $('#in-pw2').value = state.wizard.password;
-    $('#pwbox').innerHTML = pwBars(pwScore(state.wizard.password));
-  }
+  if (state.wizard.password) $('#in-pw').value = $('#in-pw2').value = state.wizard.password;
+  wirePwPair(setAction);
   $('#f-action').addEventListener('click', () => {
-    const p1 = $('#in-pw').value, p2 = $('#in-pw2').value, err = $('#err');
-    if (p1.length < 8) { err.textContent = 'Şifre en az 8 karakter olmalı'; return; }
-    if (p1 !== p2) { err.textContent = 'Şifreler eşleşmiyor'; return; }
-    state.wizard.password = p1;
+    state.wizard.password = $('#in-pw').value;
     go('reg-reminder');
   });
 }
@@ -768,171 +857,237 @@ function showRegGoal() {
       timezone: deviceTimezone()
     }, { auth: false });
     btn.disabled = false;
-    // Kayıt artık bu ekranda bittiği için e-posta/şifre hataları da burada
-    // görünür; kullanıcı geri gidip ilgili adımı düzeltebilir
-    if (!res.ok) { err.textContent = res.json.message || 'Kayıt başarısız'; return; }
-    setTokens(res.json.accessToken, res.json.refreshToken);
-    if (res.json.verificationToken) {
-      state.devVerificationToken = res.json.verificationToken;
-      localStorage.setItem('musubi_dev_vtoken', res.json.verificationToken);
+    if (!res.ok) {
+      // Kayıt bu ekranda bittiği için önceki adımların hataları da burada
+      // görünür; kullanıcı geri gidip ilgili adımı düzeltebilir
+      err.innerHTML = esc(res.json.message || 'Kayıt başarısız') +
+        (res.json.code === 'EMAIL_TAKEN' ? ' <button class="link" id="to-login">Giriş yap</button>' : '');
+      if (res.json.code === 'EMAIL_TAKEN') $('#to-login').addEventListener('click', () => reset('login'));
+      return;
     }
+    // Kayıtta verilen token'lar saklanır: doğrulama bitince yeniden giriş
+    // istenmez, "Doğruladım" butonu bu token'la durumu sorar
+    setTokens(res.json.accessToken, res.json.refreshToken);
     w.password = null;
-    reset('reg-success');
+    // Kayıt maili de 60 sn sayacına girer; Tekrar Gönder pasif başlar
+    startCooldown('verify:' + w.email, 60);
+    reset('verify-nudge', { email: w.email });
   });
 }
 
-const clearVToken = () => { state.devVerificationToken = null; localStorage.removeItem('musubi_dev_vtoken'); };
-
-function showRegSuccess() {
-  statusScreen({
-    title: 'Hesabın Oluşturuldu',
-    body: 'Devam etmeden önce e-postana gönderdiğimiz bağlantıyla hesabını doğrulaman gerekiyor.',
-    primary: { label: 'Doğrulama Ekranına Git', onClick: () => reset('verify-nudge') }
-  });
-}
-
-function showVerifyOk() {
-  statusScreen({
-    icon: I.mail, tone: 'ok', title: 'E-postan Doğrulandı',
-    body: 'Harika! Artık öğrenmeye başlayabilirsin.',
-    primary: { label: 'Devam Et', onClick: () => enterApp() }
-  });
-}
-
-function showVerifyFail() {
-  statusScreen({
-    icon: I.xCircle, title: 'E-postan Doğrulanamadı',
-    body: 'Bağlantının süresi dolmuş olabilir. Doğrulama e-postasını tekrar gönderelim.',
-    primary: {
-      label: 'Tekrar Gönder',
-      onClick: async () => {
-        const email = state.wizard.email || state.me?.email;
-        if (!email) return toast('E-posta adresi bulunamadı, girişten devam et', 'err');
-        guard(await api('POST', '/auth/resend-verification-email', { email }, { auth: false }), 'Doğrulama e-postası tekrar gönderildi');
-      }
-    },
-    secondary: { label: 'Geri', onClick: back }
-  });
-}
-
-// Doğrulanmamış hesapta backend TÜM ana uçları kapatıyor (isEmailVerified) —
-// burası süslü bir banner değil, gerçek bir kapı.
+// ─── E-postanı Doğrula / Doğrulayamadın / şifre sıfırlama beklemesi ───
+// Üçü tasarımda aynı düzen: zarf, başlık, adres, iki adımlı kart, altta
+// "… gelmedi mi? Tekrar Gönder". mode: 'verify' | 'fail' | 'reset'.
 //
-// Doğrulama akışı WEB'DE tamamlanır (ürün kararı: deep link yok): kullanıcı
-// e-postadaki linke tıklar, /verify-email/:token sayfası işi bitirir. Uygulama
-// yalnızca "doğruladım" diyebilir ve /auth/me ile teyit eder. Token kutusu
-// yalnızca simülatör kolaylığı — gerçek istemcide böyle bir alan olmayacak.
-function showVerifyNudge() {
-  paint(`<div class="pad">
-      <div class="blob" style="margin:24px auto 20px">${I.mail}</div>
-      <h1 class="title-xl" style="text-align:center">E-postanı Doğrula</h1>
-      <p class="lead" style="text-align:center">Sana bir doğrulama bağlantısı gönderdik. Bağlantıya tıkladıktan sonra aşağıdaki butonla devam edebilirsin.</p>
-      <button class="btn btn-primary" id="b-recheck">Doğruladım, Devam Et</button>
-      <button class="btn btn-outline" id="b-resend">Bağlantıyı Tekrar Gönder</button>
-      <div class="grouplabel">Simülatör kısayolu</div>
-      <div class="input">${I.key}<input id="vtoken" placeholder="Doğrulama tokenını yapıştır" value="${esc(state.devVerificationToken || '')}"></div>
-      <button class="btn btn-ghost gap-8" id="b-verify">Tokenla Doğrula</button>
-      <button class="btn btn-ghost" id="b-logout">Çıkış Yap</button>
-    </div>`);
-  $('#b-recheck').addEventListener('click', async () => {
-    const res = await api('GET', '/auth/me');
-    if (res.status === 403) return toast('Hesap hâlâ doğrulanmamış görünüyor', 'err');
-    if (!res.ok) return toast(res.json.message || 'Kontrol edilemedi', 'err');
-    state.me = res.json.data;
-    go('verify-ok');
+// Doğrulama mail linkiyle olur. Uygulama kuruluysa link uygulamada açılır
+// (App Links); değilse web'de biter ve sayfa uygulamayı açar. Simülatör linki
+// yakalayamadığı için en altta küçük bir kısayol var: maildeki token
+// yapıştırılır, uygulamanın linkle yapacağı istek aynen atılır.
+const WAIT_COPY = {
+  verify: { icon: I.mail, title: 'E-postanı Doğrula', text: 'Sana bir doğrulama bağlantısı gönderdik.', step2: 'Bağlantıya tıkla mailini doğrula!' },
+  fail: { icon: I.mailX, title: 'E-postanı Doğrulayamadın', text: 'Tekrar sana bir doğrulama bağlantısı gönderdik.', step2: 'Bağlantıya tıkla mailini doğrula!' },
+  // Tasarımdaki bekleme ekranı (82:1386) "doğrulama bağlantısı" diyor; giden
+  // mail sıfırlama maili olduğu için metin ona göre (tasarımcı notunda var)
+  reset: { icon: I.mail, title: 'E-postanı Kontrol Et', text: 'Sana bir şifre sıfırlama bağlantısı gönderdik.', step2: 'Bağlantıya tıkla, yeni şifreni belirle!' }
+};
+
+async function showVerifyNudge(data = {}) {
+  const mode = data.mode || 'verify', c = WAIT_COPY[mode];
+  const tk = activeToken;
+  let email = data.email || state.wizard.email || state.me?.email;
+  // Uygulama yeniden açıldığında e-posta elde olmayabilir: oturum varsa sor
+  if (!email && mode !== 'reset' && state.access) {
+    const st = await api('GET', '/auth/verification-status');
+    if (stale(tk)) return;
+    if (st.ok) email = st.json.data.email;
+  }
+  const kind = mode === 'reset' ? 'reset' : 'verify';
+  const cdKey = `${kind}:${email}`;
+
+  paint((mode === 'verify' && !data.back ? '' : topbar()) + `<div class="pad">
+      <div class="waitscr">
+        <div class="blob">${c.icon}</div>
+        <h1>${esc(c.title)}</h1>
+        <p>${esc(c.text)}</p>
+        ${email ? `<b class="addr">${esc(email)}</b>` : ''}
+        <div class="steps">
+          <div class="step"><span>1</span>Mail kutunu aç, gönderdiğimiz maili bul</div>
+          <div class="step"><span>2</span>${esc(c.step2)}</div>
+        </div>
+        <p class="resend">${mode === 'reset' ? 'Sıfırlama maili' : 'Doğrulama maili'} gelmedi mi? <button class="link" id="b-resend">Tekrar Gönder</button></p>
+      </div>
+      <div class="devshort">
+        <div class="grouplabel">Simülatör kısayolu</div>
+        <p class="tiny">Simülatör maildeki linki yakalayamaz. Linkin sonundaki 40 karakteri yapıştır.</p>
+        <div class="input">${I.key}<input id="dev-token" placeholder="Maildeki token" autocapitalize="none"></div>
+        <button class="btn btn-ghost" id="b-devtoken">${mode === 'reset' ? 'Yeni şifre ekranını aç' : 'Linke tıklamış gibi doğrula'}</button>
+      </div>
+    </div>
+    ${mode === 'reset' ? '' : `<div class="footer"><button class="btn btn-primary" id="f-action">Doğruladım, Devam Et</button></div>`}`);
+
+  const resend = $('#b-resend');
+  tickCooldown(resend, cdKey, 'Tekrar Gönder', () => !email);
+  resend.addEventListener('click', async () => {
+    const res = mode === 'reset'
+      ? await api('POST', '/auth/forgot-password', { email }, { auth: false })
+      : await api('POST', '/auth/resend-verification-email', { email }, { auth: false });
+    const code = res.json.code;
+    if (res.ok) { startCooldown(cdKey, 60); toast('Mail tekrar gönderildi', 'ok'); }
+    else if (code === 'MAIL_RATE_LIMITED') { startCooldown(cdKey, retryAfter(res)); toast(res.json.message, 'err'); }
+    // Web'den doğrulanmış olabilir: içeri al (oturum yoksa giriş ekranı)
+    else if (code === 'ALREADY_VERIFIED') { toast('E-postan zaten doğrulanmış', 'ok'); return state.access ? enterApp() : reset('login'); }
+    else toast(res.json.message || 'Gönderilemedi', 'err');
+    tickCooldown(resend, cdKey, 'Tekrar Gönder', () => !email);
   });
-  $('#b-verify').addEventListener('click', async () => {
-    const token = $('#vtoken').value.trim();
-    if (!token) return toast('Token gerekli', 'err');
-    const res = await api('GET', '/auth/verify-email/' + token, undefined, { auth: false });
-    if (!res.ok) return go('verify-fail');
-    if (res.json.data?.accessToken) setTokens(res.json.data.accessToken, res.json.data.refreshToken);
-    clearVToken();
+
+  const action = $('#f-action');
+  if (action) action.addEventListener('click', async () => {
+    // /auth/me değil: doğrulanmamış hesaba 403 döner ve başka 403'lerden
+    // ayrılamaz. verification-status iki durumda da 200 döner.
+    const res = await api('GET', '/auth/verification-status');
+    if (!res.ok) return toast(res.json.message || 'Kontrol edilemedi', 'err');
+    if (!res.json.data.isEmailVerified) return toast('Doğrulama henüz tamamlanmamış görünüyor', 'err');
+    enterApp();
+  });
+
+  $('#b-devtoken').addEventListener('click', async () => {
+    const token = $('#dev-token').value.trim();
+    if (!/^[a-f0-9]{40}$/.test(token)) return toast('Token 40 karakterlik bir hex dizisi olmalı', 'err');
+    if (mode === 'reset') return go('forgot-newpass', { token });
+    // Uygulamanın App Links ile açılan linkte yaptığı istek: deviceName
+    // gönderildiği için oturum açılır
+    const res = await api('POST', '/auth/verify-email', { token, deviceName: 'web-simülatör' }, { auth: false });
+    if (res.json.code === 'LINK_INVALID') return toast('Bağlantının süresi dolmuş ya da geçersiz — Tekrar Gönder ile yenisini iste', 'err');
+    if (!res.ok) return toast(res.json.message || 'Doğrulanamadı', 'err');
+    setTokens(res.json.data.accessToken, res.json.data.refreshToken);
     toast('E-posta doğrulandı', 'ok');
     enterApp();
   });
-  $('#b-resend').addEventListener('click', async () => {
-    const email = state.wizard.email || prompt('Kayıtlı e-posta adresin:');
-    if (!email) return;
-    guard(await api('POST', '/auth/resend-verification-email', { email }, { auth: false }), 'Doğrulama e-postası gönderildi');
-  });
-  $('#b-logout').addEventListener('click', doLogout);
 }
 
 function showLogin() {
   formScreen({
     title: 'Giriş Yap',
-    lead: 'Hesabına giriş yaparak kaldığın yerden devam et.',
+    lead: 'Lütfen e-postanızı ve şifrenizi girerek hesabınıza giriş yapınız.',
     action: 'Giriş Yap',
-    body: `<div class="field"><label>E-posta</label><div class="input">${I.mail}<input id="in-email" type="email" placeholder="ornek@ornek.com" value="${esc(state.wizard.email || '')}"></div></div>
-           <div class="field"><label>Şifre</label>${pwField('in-pw', 'Şifren')}</div>
-           <div class="errline" id="err"></div>
-           <div class="row center gap-8"><button class="link" id="b-forgot">Şifremi Unuttum</button></div>`
+    body: `<div class="input" id="w-email">${I.mail}<input id="in-email" type="email" placeholder="E-posta" autocapitalize="none" value="${esc(state.wizard.email || '')}"></div>
+           <div class="errline" id="err-email"></div>
+           <div class="gap-12">${pwField('in-pw', 'Şifreniz')}</div>
+           <div class="errline" id="err-pw"></div>
+           <div class="loginlinks">
+             <span>Hesabınız yok mu? <button class="link" id="b-register">Kayıt Ol</button></span>
+             <button class="link" id="b-forgot" hidden>Şifremi Unuttum</button>
+           </div>`
   });
   wireEyes();
-  $('#b-forgot').addEventListener('click', () => go('forgot-email'));
-  $('#f-action').addEventListener('click', async () => {
-    const email = $('#in-email').value.trim(), password = $('#in-pw').value;
-    const res = await api('POST', '/auth/login', { email, password, deviceName: 'web-simülatör' }, { auth: false });
-    if (!res.ok) { $('#err').textContent = res.json.message || 'Giriş başarısız'; return; }
-    setTokens(res.json.accessToken, res.json.refreshToken);
-    state.wizard.email = email;
-    if (!res.json.isEmailVerified) return reset('verify-nudge');
-    enterApp();
-  });
-}
+  const email = $('#in-email'), pw = $('#in-pw');
+  const wE = $('#w-email'), wP = $('#w-in-pw'), eE = $('#err-email'), eP = $('#err-pw');
+  const btn = $('#f-action');
+  const filled = () => !!email.value.trim() && !!pw.value;
+  // Hesap kilitliyken sayaç biter bitmez buton yeniden açılır
+  const lockKey = () => 'login:' + normEmail(email.value);
+  const sync = () => tickCooldown(btn, lockKey(), 'Giriş Yap', () => !filled());
+  email.addEventListener('input', () => { clearFieldError(wE, eE); sync(); });
+  pw.addEventListener('input', () => { clearFieldError(wP, eP); sync(); });
+  sync();
 
-function showForgotEmail() {
-  formScreen({
-    title: 'Şifreni mi Unuttun?',
-    lead: 'E-posta adresini gir, sana bir sıfırlama bağlantısı gönderelim.',
-    action: 'Sıfırlama Bağlantısı Gönder',
-    body: `<div class="input">${I.mail}<input id="in-email" type="email" placeholder="ornek@ornek.com"></div><div class="errline" id="err"></div>`
-  });
-  $('#f-action').addEventListener('click', async () => {
-    const email = $('#in-email').value.trim();
-    if (!email) { $('#err').textContent = 'E-posta adresini gir'; return; }
-    const res = await api('POST', '/auth/forgot-password', { email }, { auth: false });
-    if (!guard(res, 'Bağlantı gönderildi (hesap varsa)')) return;
-    if (res.json.resetToken) {
-      state.devResetToken = res.json.resetToken;
-      localStorage.setItem('musubi_dev_rtoken', res.json.resetToken);
+  $('#b-register').addEventListener('click', () => { state.wizard = { email: normEmail(email.value) || undefined }; reset('welcome'); go('reg-email'); });
+  $('#b-forgot').addEventListener('click', () => go('forgot-email', { email: normEmail(email.value) }));
+
+  btn.addEventListener('click', async () => {
+    const addr = normEmail(email.value);
+    const res = await api('POST', '/auth/login', { email: addr, password: pw.value, deviceName: 'web-simülatör' }, { auth: false });
+    const code = res.json.code;
+    if (!res.ok) {
+      if (code === 'ACCOUNT_NOT_FOUND') fieldError(wE, eE, esc(res.json.message));
+      // Yanlış şifre 401'dir ama oturum yenileme ONU YUTMAZ (api() yalnız
+      // TOKEN_EXPIRED'da yeniler). "Şifremi Unuttum" bu durumda görünür.
+      else if (code === 'INVALID_PASSWORD') { fieldError(wP, eP, esc(res.json.message)); $('#b-forgot').hidden = false; }
+      else if (code === 'LOGIN_LOCKED') { startCooldown(lockKey(), retryAfter(res)); fieldError(wP, eP, esc(res.json.message)); $('#b-forgot').hidden = false; }
+      else if (code === 'SOCIAL_ACCOUNT') {
+        const provider = res.json.details?.provider;
+        fieldError(wE, eE, `${esc(res.json.message)}. <button class="link" id="to-social">${esc(PROVIDER_NAME[provider] || 'Sosyal')} ile devam et</button>`);
+        $('#to-social').addEventListener('click', () => reset('welcome', { provider }));
+      }
+      else toast(res.json.message || 'Giriş başarısız', 'err');
+      return sync();
     }
-    go('forgot-newpass');
+    setTokens(res.json.accessToken, res.json.refreshToken);
+    state.wizard.email = addr;
+    if (res.json.isEmailVerified) return enterApp();
+
+    // Figma › "E-postan Doğrulanamadı" modalı (147:668)
+    dialog({
+      icon: I.mail, title: 'E-postan Doğrulanamadı',
+      body: 'Lütfen tekrar e-posta kutunuzu kontrol ediniz veya tekrar deneyiniz.',
+      buttons: [
+        { label: 'Geri', outline: true, onClick: () => { closeSheet(); setTokens(null, null); } },
+        { label: 'Tekrar Gönder', onClick: async () => {
+            closeSheet();
+            const r = await api('POST', '/auth/resend-verification-email', { email: addr }, { auth: false });
+            if (r.ok) startCooldown('verify:' + addr, 60);
+            else if (r.json.code === 'MAIL_RATE_LIMITED') startCooldown('verify:' + addr, retryAfter(r));
+            else if (r.json.code === 'ALREADY_VERIFIED') return enterApp();
+            else toast(r.json.message || 'Gönderilemedi', 'err');
+            go('verify-nudge', { mode: 'fail', email: addr, back: true });
+          } }
+      ]
+    });
   });
 }
 
-function showForgotNewPass() {
+function showForgotEmail(data = {}) {
   formScreen({
-    title: 'Yeni Şifre Oluştur',
-    lead: 'Lütfen şifreni gir ve doğrula.',
-    action: 'Şifreyi Güncelle',
-    body: `<div class="field"><label>Sıfırlama tokenı (dev)</label><div class="input">${I.key}<input id="rtoken" value="${esc(state.devResetToken || '')}"></div></div>
-           <div class="field"><label>Şifre</label>${pwField('in-pw')}</div>
-           <div id="pwbox"></div>
-           <div class="field gap-12"><label>Şifre (tekrar)</label>${pwField('in-pw2', 'Şifreni tekrar gir')}</div>
+    title: 'Şifremi Unuttum',
+    lead: 'Lütfen bir sonraki adıma geçmek için e-postanızı giriniz.',
+    action: 'Devam Et',
+    body: `<div class="input" id="w-email">${I.mail}<input id="in-email" type="email" placeholder="ornek@ornek.com" autocapitalize="none" value="${esc(data.email || '')}"></div>
            <div class="errline" id="err"></div>`
   });
-  wireEyes(); wireStrength('in-pw', 'pwbox');
-  $('#f-action').addEventListener('click', async () => {
-    const token = $('#rtoken').value.trim(), p1 = $('#in-pw').value, p2 = $('#in-pw2').value, err = $('#err');
-    if (!token) { err.textContent = 'Sıfırlama tokenı gerekli'; return; }
-    if (p1.length < 8) { err.textContent = 'Şifre en az 8 karakter olmalı'; return; }
-    if (p1 !== p2) { err.textContent = 'Şifreler eşleşmiyor'; return; }
-    // deviceName BİLEREK gönderilmiyor: backend bu akışta oturum açmaz,
-    // kullanıcı yeni şifresiyle tekrar giriş yapar — gerçek davranış budur.
-    const res = await api('POST', '/auth/reset-password', { token, password: p1 }, { auth: false });
-    if (!res.ok) { err.textContent = res.json.message || 'Şifre sıfırlanamadı'; return; }
-    localStorage.removeItem('musubi_dev_rtoken'); state.devResetToken = null;
-    reset('reset-success');
+  const input = $('#in-email'), wrap = $('#w-email'), err = $('#err'), btn = $('#f-action');
+  const key = () => 'reset:' + normEmail(input.value);
+  const sync = () => tickCooldown(btn, key(), 'Devam Et', () => !input.value.trim());
+  input.addEventListener('input', () => { clearFieldError(wrap, err); sync(); });
+  sync();
+  btn.addEventListener('click', async () => {
+    const email = normEmail(input.value);
+    if (!EMAIL_RE.test(email)) { fieldError(wrap, err, 'E-posta formatınız yanlış'); return; }
+    const res = await api('POST', '/auth/forgot-password', { email }, { auth: false });
+    const code = res.json.code;
+    if (code === 'ACCOUNT_NOT_FOUND' || code === 'EMAIL_INVALID') return fieldError(wrap, err, esc(res.json.message));
+    if (code === 'MAIL_RATE_LIMITED') { startCooldown(key(), retryAfter(res)); fieldError(wrap, err, esc(res.json.message)); return sync(); }
+    if (!res.ok) return toast(res.json.message || 'Gönderilemedi', 'err');
+    startCooldown(key(), 60);
+    go('verify-nudge', { mode: 'reset', email });
   });
 }
 
-function showResetSuccess() {
-  statusScreen({
-    title: 'Şifren Değiştirildi',
-    body: 'İşlemin başarıyla tamamlandı. Yeni şifrenle giriş yapabilirsin.',
-    primary: { label: 'Giriş Yap', onClick: () => reset('login') }
+// Maildeki sıfırlama linkiyle açılan ekran. Uygulamada token linkten gelir;
+// simülatörde bekleme ekranındaki kısayoldan.
+function showForgotNewPass(data = {}) {
+  formScreen({ title: 'Yeni Şifre Oluştur', lead: 'Lütfen şifreni gir ve doğrula.', action: 'Devam Et',
+    body: pwPair() + `<div class="errline" id="err"></div>` });
+  wireEyes();
+  const showPwError = wirePwPair(setAction);
+  $('#f-action').addEventListener('click', async () => {
+    // deviceName BİLEREK yok: tasarımda sıfırlamadan sonra "Şifreniz
+    // Değiştirildi" → Giriş Yap var; deviceName gönderilse oturum açılırdı
+    const res = await api('POST', '/auth/reset-password', { token: data.token, password: $('#in-pw').value }, { auth: false });
+    const code = res.json.code;
+    if (code === 'WEAK_PASSWORD' || code === 'SAME_PASSWORD') return showPwError(res.json.message);
+    if (code === 'LINK_INVALID') {
+      $('#err').innerHTML = `${esc(res.json.message)} <button class="link" id="b-newlink">Yeni bağlantı iste</button>`;
+      return $('#b-newlink').addEventListener('click', () => reset('forgot-email'));
+    }
+    if (!res.ok) return toast(res.json.message || 'Şifre sıfırlanamadı', 'err');
+    // Sıfırlama tüm oturumları kapatır; elde kalan token'lar artık geçersiz
+    setTokens(null, null);
+    // Figma › "Şifreniz Değiştirildi" modalı (936:2112)
+    dialog({
+      icon: I.key, title: 'Şifreniz Değiştirildi', dismissable: false,
+      body: 'Şifreniz başarıyla değiştirildi. Artık yeni şifreniz ile hesabınıza giriş yapabilirsiniz.',
+      buttons: [{ label: 'Giriş Yap', onClick: () => { closeSheet(); reset('login'); } }]
+    });
   });
 }
 
@@ -947,19 +1102,22 @@ async function doLogout() {
 // ═══════════════════════════════════════════════════════════════
 // Önyükleme
 // ═══════════════════════════════════════════════════════════════
+// Kayıtlı token varsa anasayfadan ÖNCE doğrulama durumu sorulur. Telefonda
+// görülen hata buydu: kayıttan sonra doğrulamadan çıkıp uygulama açılınca
+// token'la anasayfaya giriliyor, her istek 403 alıyordu (Auth belgesi §4).
 async function boot() {
   applyPrefs();
   if (!state.access) return reset('welcome');
-  const res = await api('GET', '/auth/me');
-  if (res.status === 403) return reset('verify-nudge');
+  const res = await api('GET', '/auth/verification-status');
   if (!res.ok) { setTokens(null, null); return reset('welcome'); }
-  state.me = res.json.data;
+  if (!res.json.data.isEmailVerified) return reset('verify-nudge', { email: res.json.data.email });
   await enterApp();
 }
 
 async function enterApp() {
+  closeSheet();
   const res = await api('GET', '/auth/me');
-  if (res.status === 403) return reset('verify-nudge');
+  if (res.json.code === 'EMAIL_NOT_VERIFIED') return reset('verify-nudge');
   if (!res.ok) return reset('welcome');
   state.me = res.json.data;
   applyPrefs();
@@ -2040,20 +2198,16 @@ function showSettingsPassword() {
 function showSettingsPasswordNew() {
   formScreen({
     title: 'Yeni Şifre Oluştur', lead: 'Lütfen şifreni gir ve doğrula.', action: 'Şifreyi Değiştir',
-    body: `<div class="field"><label>Şifre</label>${pwField('in-pw')}</div>
-           <div id="pwbox"></div>
-           <div class="field gap-12"><label>Şifre (tekrar)</label>${pwField('in-pw2', 'Şifreni tekrar gir')}</div>
-           <div class="errline" id="err"></div>`
+    body: pwPair()
   });
-  wireEyes(); wireStrength('in-pw', 'pwbox');
+  wireEyes();
+  const showPwError = wirePwPair(setAction);
   $('#f-action').addEventListener('click', async () => {
-    const p1 = $('#in-pw').value, p2 = $('#in-pw2').value, err = $('#err');
-    if (p1.length < 8) { err.textContent = 'Şifre en az 8 karakter olmalı'; return; }
-    if (p1 !== p2) { err.textContent = 'Şifreler eşleşmiyor'; return; }
     const res = await api('PUT', '/auth/change-password', {
-      oldPassword: state.verifiedPassword, newPassword: p1, deviceName: 'web-simülatör'
+      oldPassword: state.verifiedPassword, newPassword: $('#in-pw').value, deviceName: 'web-simülatör'
     });
-    if (!res.ok) { err.textContent = res.json.message || 'Şifre değiştirilemedi'; return; }
+    if (['WEAK_PASSWORD', 'SAME_PASSWORD'].includes(res.json.code)) return showPwError(res.json.message);
+    if (!res.ok) return toast(res.json.message || 'Şifre değiştirilemedi', 'err');
     // Değişiklik TÜM oturumları kapatır; bu cihaz için taze token çifti döner
     setTokens(res.json.data.accessToken, res.json.data.refreshToken);
     state.verifiedPassword = null;
@@ -2761,10 +2915,9 @@ function renderRankUp() {
 const SHOW = {
   welcome: showWelcome,
   'reg-email': showRegEmail, 'reg-name': showRegName, 'reg-password': showRegPassword,
-  'reg-reminder': showRegReminder, 'reg-goal': showRegGoal, 'reg-success': showRegSuccess,
+  'reg-reminder': showRegReminder, 'reg-goal': showRegGoal, 'verify-nudge': showVerifyNudge,
   'profile-setup': showProfileSetup, 'profile-edit': showProfileEdit,
-  'verify-ok': showVerifyOk, 'verify-fail': showVerifyFail, 'verify-nudge': showVerifyNudge,
-  login: showLogin, 'forgot-email': showForgotEmail, 'forgot-newpass': showForgotNewPass, 'reset-success': showResetSuccess,
+  login: showLogin, 'forgot-email': showForgotEmail, 'forgot-newpass': showForgotNewPass,
 
   home: showHome, notifications: showNotifications, mistakes: showMistakes,
   lesson: renderLesson,

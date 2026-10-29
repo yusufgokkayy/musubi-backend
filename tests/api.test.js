@@ -4592,6 +4592,30 @@ describe('Mobil simülatör (canlıda /sim)', () => {
         assert.equal(tags, fetches, 'etiketsiz bir /api fetch çağrısı var');
     });
 
+    // Simülatör mobil için örnek: Emirhan'a anlatılan kuralların aynısını
+    // uygulamalı (Backend Docs › Auth §6, §7). Eski hâli yenilemeyi metne
+    // bakarak yapıyor, kayıtta artık gelmeyen token alanlarını okuyor ve
+    // şifre gücünü sunucudan farklı hesaplıyordu.
+    it('simülatörün giriş ekranları sunucunun sözleşmesine uyar (30.10.2026)', async () => {
+        const client = await fs.readFile(path.join(__dirname, '..', 'public', 'app.js'), 'utf8');
+
+        assert.match(client, /json\.code === 'TOKEN_EXPIRED'/, 'yenileme yalnız TOKEN_EXPIRED kodunda');
+        assert.doesNotMatch(client, /message === 'Token expired'/, 'mesaj metnine bakılmaz');
+        assert.doesNotMatch(client, /verificationToken|resetToken/, 'yanıttan kaldırılan token alanları okunmaz');
+        assert.doesNotMatch(client, /hesap varsa/, 'Şifremi Unuttum hesap yoksa 404 gösterir');
+        assert.match(client, /'\/auth\/verification-status'/, 'açılış ve "Doğruladım" doğrulama durumunu sorar');
+
+        // Şifre kuralları sunucudakiyle birebir: aynı sıra, aynı mesaj
+        const { firstPasswordViolation } = require('../utils/password.util');
+        const block = client.match(/const PW_RULES = (\[[\s\S]*?\n\]);/);
+        assert.ok(block, 'PW_RULES bulunamadı');
+        const rules = new Function(`return ${block[1]}`)();
+        for (const pw of ['abc', 'abcdefgh', 'abcdefgh1', 'ABCDEFGH!', 'Abcdefgh1', 'Çabcdefg1', 'Abcdefgh1!', 'Abcdefg1 x']) {
+            const clientViolation = rules.find(([test]) => !test(pw))?.[1] ?? null;
+            assert.equal(clientViolation, firstPasswordViolation(pw), `"${pw}" için mesaj farklı`);
+        }
+    });
+
     it('istemci etiketi hiçbir kapı açmaz — yetki değil, etikettir', async () => {
         const res = await fetch(BASE + '/auth/me', {
             headers: { 'X-Musubi-Client': 'simulator' }
