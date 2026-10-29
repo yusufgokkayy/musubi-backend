@@ -46,6 +46,13 @@ connectDatabase().then(async () => {
     } catch (err) {
         console.error('[seed] kelime sayımı yapılamadı:', err.message);
     }
+    // Bildirim saklama süresi kodda değiştiyse veritabanındaki TTL indeksini güncelle
+    try {
+        const Notification = require('./models/Notification');
+        if (await Notification.syncTtl()) console.log('[db] bildirim TTL indeksi koddaki süreye güncellendi');
+    } catch (err) {
+        console.error('[db] bildirim TTL indeksi güncellenemedi:', err.message);
+    }
 });
 
 require('./config/firebase');
