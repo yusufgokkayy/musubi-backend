@@ -49,18 +49,21 @@ const DARK = {
 const COLOR_CLASS = { [INK]: 'm-ink', [TEXT]: 'm-text', [MUTED]: 'm-muted' };
 
 const darkRules = (pre) => `
-${pre}.m-bg{background:${DARK.bg} !important;}
+${pre}.m-bg{background-color:${DARK.bg} !important;}
 ${pre}.m-ink{color:${DARK.ink} !important;}
 ${pre}.m-text{color:${DARK.text} !important;}
 ${pre}.m-muted{color:${DARK.muted} !important;}
 ${pre}.m-line{border-color:${DARK.line} !important;}
-${pre}.m-btn{background:${DARK.brand} !important;}
+${pre}.m-btn{background-color:${DARK.brand} !important;}
 ${pre}.m-link{color:${DARK.brand} !important;}`;
 
+// Outlook işaretini kimi sürümde öğenin kendisine, kimi sürümde atasına
+// koyar; ikisi de yakalanır.
+const OUTLOOK_MARKS = ['[data-ogsc] ', '[data-ogsb] ', '[data-ogsc]', '[data-ogsb]'];
+
 const darkStyle = `<style>
-:root{color-scheme:light dark;supported-color-schemes:light dark;}
 @media (prefers-color-scheme: dark){${darkRules('')}
-}${darkRules('[data-ogsc] ')}${darkRules('[data-ogsb] ')}
+}${OUTLOOK_MARKS.map(darkRules).join('')}
 </style>`;
 const FONT = "-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Helvetica,Arial,sans-serif";
 

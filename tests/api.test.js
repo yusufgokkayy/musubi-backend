@@ -5059,8 +5059,8 @@ describe('Mail tasarımı (29.10.2026)', () => {
         // Cihaz karanlık temadaysa uygulamanın karanlık renkleri (Apple Mail,
         // Outlook); inline stiller açık tema olarak kalır
         assert.match(mail.html, /<meta name="color-scheme" content="light dark">/);
-        assert.match(mail.html, /@media \(prefers-color-scheme: dark\)\{[^}]*\.m-bg\{background:#13141a !important;\}/);
-        assert.match(mail.html, /\[data-ogsb\] \.m-bg\{background:#13141a/, 'Outlook.com karartması');
+        assert.match(mail.html, /@media \(prefers-color-scheme: dark\)\{[^}]*\.m-bg\{background-color:#13141a !important;\}/);
+        assert.match(mail.html, /\[data-ogsb\] \.m-bg\{background-color:#13141a/, 'Outlook.com karartması');
         assert.match(mail.html, /<td class="m-btn"[^>]*background:#bc002d/, 'açık temada buton rengi inline');
         assert.doesNotMatch(mail.html, /ALPSOY|Kelime Ezberlemenin/, 'eski kırmızı bant ve büyük harfli unvan yok');
     });
