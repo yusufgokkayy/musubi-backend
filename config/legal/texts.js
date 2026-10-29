@@ -16,7 +16,10 @@
 // "çok çirkin duruyor"). Harf büyüklüğü unvanı değiştirmez; metnin anlamı aynı
 // kaldığı için sürüm yükseltilmedi, kullanıcılardan yeniden rıza istenmez.
 const COMPANY = 'Alpsoy Yazılım Arge Mühendislik Limited Şirketi';
-const SUPPORT_EMAIL = 'destek@musubi.app';
+// Destek adresi (Yusuf, 29.10.2026). Eski destek@musubi.app hiç çalışmadı:
+// musubi.app alan adı bizim değil. Henüz yayımlanmamış uygulamada adresin
+// düzeltilmesi metnin anlamını değiştirmediği için sürüm yükseltilmedi.
+const SUPPORT_EMAIL = 'destek@alpsoysoft.com';
 
 // Metinlerin dili Türkçedir. İngilizce sürümü YOKTUR ve makine çevirisi
 // yapılmaz — bağlayıcı bir sözleşmenin çevirisi hukuki inceleme ister.
