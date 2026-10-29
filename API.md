@@ -1478,7 +1478,7 @@ bakabilir.
 |---|---|
 | Seviye kartı (N5 · Başlangıç · "%65 / %75") | `GET /memory` |
 | Renk şeridi + beş kutu + "Bu hafta +23 …" çipi | `GET /memory` |
-| "Zayıf Kutusundakiler" listesi ve "Tümünü Gör" | `GET /memory/words?box=weak` |
+| "Zayıf Seviye Kelimeler" listesi ve "Tümünü Gör" | `GET /memory/words?box=weak` |
 | Kelimeye dokununca açılan detay | `GET /words/:id` |
 
 **Kutu ↔ `masteryLevel` eşlemesi** (sunucuda tutulur, istemci kendi sözlüğünü
@@ -1488,13 +1488,19 @@ taşımaz — yanıttaki `masteryLevels` alanı bunu zaten söyler):
 |---|---|---|---|
 | Yeni | `new` | UserWord kaydı **hiç yok** | ✗ |
 | Zayıf | `weak` | masteryLevel 1–2 | ✗ |
-| Orta | `medium` | masteryLevel 3 | ✓ |
+| Orta | `medium` | masteryLevel 3 | ✗ |
 | İyi | `good` | masteryLevel 4 | ✓ |
 | Ezber | `mastered` | masteryLevel 5 | ✓ |
 
 Beş kutunun toplamı **seviyenin tüm core kelimelerine eşittir** (`totalWords`).
-Kilide sayılan üç kutunun oranı da `GET /progress`'teki `completionRate` ile
-aynı sayıdır — ikisi de aynı eşiği (`masteryLevel >= 3`) kullanır, ayrışamaz.
+Kilide sayılan iki kutunun (İyi + Ezber) oranı da `GET /progress`'teki
+`completionRate` ile aynı sayıdır — ikisi de aynı eşiği (`masteryLevel >= 4`)
+kullanır, ayrışamaz. Orta = iki gün üst üste doğru (yalnızca ertesi gün
+hatırlanmış); İyi = 6 günlük aradan sonra da doğru. Eşik 30.10.2026'ya kadar 3'tü.
+
+**Dil:** kutu adları (`label`), seviye adları ve `unlockHint` kullanıcının
+`preferences.language` değerine göre Türkçe ya da İngilizce döner
+(Yeni/Zayıf/Orta/İyi/Ezber ↔ New/Weak/Medium/Good/Mastered).
 
 "Şimdilik Geç" ile ertelenen kelimenin kaydı **açılmıştır** (masteryLevel 1),
 yani Yeni'de değil **Zayıf**'ta görünür.
@@ -1510,14 +1516,15 @@ yani Yeni'de değil **Zayıf**'ta görünür.
     "isActiveLevel": true,        // ?jlptLevel ile başka seviyeye bakılıyorsa false
     "totalWords": 380,
     "completionThreshold": 75,
-    "completionRate": 65,         // çubuktaki "%65 / %75"in payı
-    "remainingPercent": 10,       // "N4'e geçmene %10 kaldı"
+    "completionRate": 53,         // çubuktaki "%53 / %75"in payı: (106+95)/380
+    "remainingPercent": 22,       // "N4'e geçmene %22 kaldı"
     "nextLevel": { "jlptLevel": "N4", "label": "Temel", "isUnlocked": false },
-    "unlockHint": "Orta, İyi ve Ezber kutularının toplamı %75'i geçince N4 açılır.",
+    "unlockHint": "İyi ve Ezber kutularının toplamı %75'i geçince N4 açılır.",
+                                  // en: "N4 unlocks once the Good and Mastered boxes together pass 75%."
     "boxes": [
       { "key": "new",      "label": "Yeni",  "count": 76,  "masteryLevels": [],     "countsTowardUnlock": false },
       { "key": "weak",     "label": "Zayıf", "count": 57,  "masteryLevels": [1,2],  "countsTowardUnlock": false },
-      { "key": "medium",   "label": "Orta",  "count": 46,  "masteryLevels": [3],    "countsTowardUnlock": true },
+      { "key": "medium",   "label": "Orta",  "count": 46,  "masteryLevels": [3],    "countsTowardUnlock": false },
       { "key": "good",     "label": "İyi",   "count": 106, "masteryLevels": [4],    "countsTowardUnlock": true },
       { "key": "mastered", "label": "Ezber", "count": 95,  "masteryLevels": [5],    "countsTowardUnlock": true }
     ],
@@ -1528,18 +1535,21 @@ yani Yeni'de değil **Zayıf**'ta görünür.
 ```
 Hata: `400 "Invalid level"`.
 
-`weeklyImproved` = bu hafta masteryLevel'ı **2'den 3'e geçen** (yani kilide
+`weeklyImproved` = bu hafta masteryLevel'ı **3'ten 4'e geçen** (yani kilide
 sayılan bölgeye giren) kelime sayısı. Kurallar:
 - Hafta sınırı anasayfadaki seri şeridiyle **aynıdır** (Pzt→Paz, kullanıcının
   saat diliminde).
-- Bölge içindeki yükselişler (3→4→5) sayıyı **artırmaz** — kelime bölgeye ilk
+- Bölge içindeki yükseliş (4→5) sayıyı **artırmaz** — kelime bölgeye ilk
   girdiği hafta bir kez sayılır.
 - Kelime bölgenin altına düşerse (yanlış cevap ya da mastery decay) izi silinir,
   geri tırmandığında yeniden sayılır.
 - **`null` dönebilir:** bu veri geriye dönük üretilemediği için (özellik
   öncesindeki yükselişler hiçbir yere yazılmadı) izleme başlangıcından önceki
   haftalarda alan `null`'dır. **`null` ise çip hiç çizilmemelidir** — "+0"
-  göstermek yanlış olur.
+  göstermek yanlış olur. Eşik 30.10.2026'da 4'e çekildiği için izleme o gün
+  yeniden başladı: 26.10–01.11 haftası `null` döner (`MEMORY_TRACKING_SINCE`).
+- `0` gerçek bir sayıdır (bu hafta İyi'ye geçen yok). Simülatör 0'da da çipi
+  gizler; tasarımda bu durum yok.
 
 `nextLevel` N1'de `null`'dır (`remainingPercent` de öyle). Sonraki seviyenin
 kilidi zaten açıksa `isUnlocked: true`, `remainingPercent: 0` ve `unlockHint`
@@ -1547,7 +1557,7 @@ kilidi zaten açıksa `isUnlocked: true`, `remainingPercent: 0` ve `unlockHint`
 `PUT /progress/active-level` akışıdır, bu uç **hiçbir şey değiştirmez**.
 
 ### GET /memory/words?box=weak&page=1&limit=20 🔒✉️
-"Zayıf Kutusundakiler" listesi ve "Tümünü Gör". `box` zorunludur; `jlptLevel`,
+"Zayıf Seviye Kelimeler" listesi ve "Tümünü Gör". `box` zorunludur; `jlptLevel`,
 `page`, `limit` opsiyonel (`limit` en fazla 100).
 ```jsonc
 // 200
@@ -1555,7 +1565,7 @@ kilidi zaten açıksa `isUnlocked: true`, `remainingPercent: 0` ve `unlockHint`
   "success": true,
   "data": {
     "box": "weak",
-    "label": "Zayıf",             // "Zayıf Kutusundakiler" başlığı
+    "label": "Zayıf",             // "Zayıf Seviye Kelimeler" başlığı
     "jlptLevel": "N5",
     "items": [
       {

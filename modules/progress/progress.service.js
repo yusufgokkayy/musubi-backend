@@ -10,11 +10,17 @@ const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
 // client bu sayıyı GET /progress yanıtındaki completionThreshold'dan okur
 const COMPLETION_THRESHOLD = 75;
 
-// Bir kelimenin "öğrenildi" sayıldığı en düşük mastery seviyesi (2 başarılı
-// tekrar). Hem seviye kilidinin oranını hem Hafıza ekranındaki Orta/İyi/Ezber
-// kutularını bu sabit tanımlar — ikisi ayrışırsa kullanıcı "%65" yazan bir
-// çubuğun altında toplamı %65 tutmayan kutular görür.
-const MASTERY_COUNTED_MIN = 3;
+// Bir kelimenin "öğrenildi" sayıldığı en düşük mastery seviyesi: 4 = 6 günlük
+// aradan sonra gelen 3. doğru cevap (İyi kutusu). 30.10.2026'ya kadar 3'tü
+// (iki gün üst üste doğru, yani yalnızca ertesi gün hatırlama); Figma'daki
+// "İyi ve Ezber kutularının toplamı %75'i geçince" cümlesiyle 4'e çekildi.
+// Simülasyonda seviye geçişini yalnızca ~1–1,5 hafta geciktiriyor — darboğaz
+// tekrar merdiveni değil yeni kelime temposu.
+// Hem seviye kilidinin oranını hem Hafıza ekranındaki İyi/Ezber kutularını bu
+// sabit tanımlar — ikisi ayrışırsa kullanıcı "%65" yazan bir çubuğun altında
+// toplamı %65 tutmayan kutular görür. Değiştirilirse kayıtlı oranları
+// syncCompletionRates açılışta yeniden hesaplar.
+const MASTERY_COUNTED_MIN = 4;
 
 // "Öğrenme Seviyen" ekranındaki satır başlıkları (N5 • Başlangıç). Sunucuda
 // tutulur ki seviye adı tek yerden gelsin; istemci kendi sözlüğünü taşımasın.
@@ -25,6 +31,15 @@ const LEVEL_LABELS = {
     N2: 'İleri',
     N1: 'Uzman'
 };
+
+// Hafıza kartı ve anasayfadaki "Kilit Açıldı" kartı adı kullanıcının dilinde
+// (preferences.language) döndürür; diğer ekranlar şimdilik LEVEL_LABELS'ı okur.
+const LEVEL_LABELS_I18N = {
+    tr: LEVEL_LABELS,
+    en: { N5: 'Beginner', N4: 'Elementary', N3: 'Intermediate', N2: 'Advanced', N1: 'Expert' }
+};
+const levelLabel = (jlptLevel, lang) =>
+    (LEVEL_LABELS_I18N[lang] || LEVEL_LABELS)[jlptLevel];
 
 // Seviye adının tamlayan eki, okunuşuna göre: N5 "beş" → N5'in, N4 "dört" →
 // N4'ün, N3 "üç" → N3'ün, N2 "iki" → N2'nin, N1 "bir" → N1'in.
@@ -61,6 +76,7 @@ const ProgressService = {
     // Hazır" bandı) — iki yerde iki sözlük tutulmasın.
     LEVELS,
     LEVEL_LABELS,
+    levelLabel,
     // Hafıza modülü bu iki eşiği yeniden tanımlamaz, buradan okur
     COMPLETION_THRESHOLD,
     MASTERY_COUNTED_MIN,
@@ -173,8 +189,8 @@ const ProgressService = {
         const totalWords = await Word.countDocuments({ jlptLevel, isCore: true });
         if (totalWords === 0) return 0;
 
-        // masteryLevel >= 3 (2 başarılı tekrar) "sayılır" — 'learned' (21 gün) beklenirse
-        // çalışkan bir kullanıcı bile seviyeyi aylarca açamaz
+        // masteryLevel >= 4 (6 gün sonra hatırlanmış) "sayılır" — 'learned' (21 gün)
+        // beklenirse çalışkan bir kullanıcı bile seviyeyi aylarca açamaz
         const learnedWords = await UserWord.countDocuments({
             user: userId,
             masteryLevel: { $gte: MASTERY_COUNTED_MIN },
@@ -194,7 +210,7 @@ const ProgressService = {
         // Tamamlanma oranını güncelle
         await Progress.findOneAndUpdate(
             { user: userId, jlptLevel },
-            { completionRate }
+            { completionRate, rateMasteryMin: MASTERY_COUNTED_MIN }
         );
 
         if (completionRate >= COMPLETION_THRESHOLD) {
@@ -224,6 +240,28 @@ const ProgressService = {
         }
 
         return { unlocked: false };
+    },
+
+    // Açılışta çalışır: kayıtlı completionRate'i eski bir eşikle hesaplanmış
+    // seviye kayıtlarını bugünkü MASTERY_COUNTED_MIN ile yeniden hesaplar.
+    // Oran yalnızca cevap anında tazelendiği için, eşik değişince bu
+    // yapılmazsa Ayarlar'daki "%42 ilerleme" kullanıcı o seviyede bir daha
+    // cevap verene kadar eski sayıda kalırdı. İdempotent: ikinci açılışta
+    // eşleşen kayıt yoktur. Açılmış kilitler KAPATILMAZ.
+    async syncCompletionRates() {
+        const stale = { rateMasteryMin: { $ne: MASTERY_COUNTED_MIN } };
+        const toRecompute = await Progress.find({ ...stale, completionRate: { $gt: 0 } })
+            .select('user jlptLevel');
+        for (const p of toRecompute) {
+            const completionRate = await ProgressService.calculateCompletionRate(p.user, p.jlptLevel);
+            await Progress.updateOne(
+                { _id: p._id },
+                { completionRate, rateMasteryMin: MASTERY_COUNTED_MIN }
+            );
+        }
+        // Oranı 0 olanların sayısı eşikten bağımsızdır, yalnızca işaretlenir
+        await Progress.updateMany(stale, { rateMasteryMin: MASTERY_COUNTED_MIN });
+        return toRecompute.length;
     },
 
     // Seviyeler ekranındaki donut grafik için: bu JLPT seviyesindeki

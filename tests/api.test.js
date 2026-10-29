@@ -3629,10 +3629,9 @@ describe('Çekirdek kelime sayımı (seed teşhisi)', () => {
 describe('Hafıza ekranı', () => {
     let token, userId, n5Words, trackingSinceBackup;
 
-    // Tasarımdaki beş kutunun masteryLevel karşılığı mockup'ın kendi
-    // sayılarından doğrulandı: 76+57+46+106+95 = 380 (seviyenin TÜM kelimeleri)
-    // ve (46+106+95)/380 = %65, karttaki oranla birebir. Yani Orta+İyi+Ezber =
-    // masteryLevel >= 3 = seviye kilidini açan küme.
+    // Tasarımdaki beş kutu seviyenin TÜM kelimelerini böler. Figma'daki cümle
+    // "İyi ve Ezber kutularının toplamı %75'i geçince N4 açılır": İyi+Ezber =
+    // masteryLevel >= 4 = seviye kilidini açan küme (30.10.2026'dan önce 3'tü).
     before(async () => {
         const user = await createVerifiedUser('hafiza@test.com');
         userId = user._id;
@@ -3647,7 +3646,7 @@ describe('Hafıza ekranı', () => {
         // burada da bilelim
         n5Words = await Word.find({ jlptLevel: 'N5', isCore: true }).sort({ frequencyRank: 1, _id: 1 });
 
-        // Zayıf 3 (1,1,2) · Orta 1 · İyi 2 · Ezber 1 → sayılan 4 kelime.
+        // Zayıf 3 (1,1,2) · Orta 1 · İyi 2 · Ezber 1 → sayılan 3 kelime.
         // nextReviewDate GELECEKTE: decay testi bu kayıtlara dokunmasın.
         const mk = (word, masteryLevel) => ({
             user: userId, word: word._id, status: 'learning', masteryLevel,
@@ -3687,14 +3686,15 @@ describe('Hafıza ekranı', () => {
         // %65 / %75 çubuğu: pay yalnızca countsTowardUnlock kutularından gelir
         assert.deepEqual(
             d.boxes.filter(b => b.countsTowardUnlock).map(b => b.key),
-            ['medium', 'good', 'mastered']
+            ['good', 'mastered'],
+            'Orta (6 gün sonra henüz sınanmamış) kilide sayılmaz'
         );
         assert.equal(d.completionThreshold, 75);
-        assert.equal(d.completionRate, Math.round((4 / d.totalWords) * 100));
+        assert.equal(d.completionRate, Math.round((3 / d.totalWords) * 100));
         assert.equal(d.remainingPercent, Math.max(0, 75 - d.completionRate));
 
         assert.deepEqual(d.nextLevel, { jlptLevel: 'N4', label: 'Temel', isUnlocked: false });
-        assert.equal(d.unlockHint, 'Orta, İyi ve Ezber kutularının toplamı %75\'i geçince N4 açılır.');
+        assert.equal(d.unlockHint, 'İyi ve Ezber kutularının toplamı %75\'i geçince N4 açılır.');
         assert.equal(d.defaultBox, 'weak');
     });
 
@@ -3745,65 +3745,161 @@ describe('Hafıza ekranı', () => {
         assert.match(res.json.message, /box:/);
     });
 
-    it('haftalık çip yalnızca sayılan bölgeye YENİ girenleri sayar', async () => {
+    it('haftalık çip yalnızca sayılan bölgeye (İyi+) YENİ girenleri sayar', async () => {
         const before = await api('GET', '/memory', { token });
         assert.equal(before.json.data.weeklyImproved, 0, 'promotedAt yazılmamış kayıtlar sayılmaz');
 
         await StudySessionService.startSession(userId, 'N5');
         // Cevap ucu havuz dışı kelimeyi kabul etmiyor (hile kapısı kapatıldı)
-        await havuzaEkleId(userId, [n5Words[10]._id, n5Words[11]._id, n5Words[12]._id]);
+        await havuzaEkleId(userId, [n5Words[10]._id, n5Words[11]._id, n5Words[12]._id, n5Words[13]._id]);
 
-        // 2 → 3: sayılan bölgeye GİRİŞ, çipe eklenir
-        await UserWord.create({
-            user: userId, word: n5Words[10]._id, status: 'learning',
-            masteryLevel: 2, repetitions: 1, interval: 1, easeFactor: 2.5,
+        const mk = (word, masteryLevel, repetitions, interval) => UserWord.create({
+            user: userId, word: word._id, status: 'learning',
+            masteryLevel, repetitions, interval, easeFactor: 2.5,
             nextReviewDate: new Date(Date.now() - 86400000)
         });
-        const giren = await UserWordService.submitAnswer(userId, n5Words[10]._id, 'correct');
-        assert.equal(giren.masteryLevel, 3);
 
-        // 3 → 4: zaten bölgedeydi, çip ARTMAZ (yoksa her doğru cevap sayardı)
-        await UserWord.create({
-            user: userId, word: n5Words[11]._id, status: 'learning',
-            masteryLevel: 3, repetitions: 2, interval: 6, easeFactor: 2.5,
-            nextReviewDate: new Date(Date.now() - 86400000)
-        });
-        const zaten = await UserWordService.submitAnswer(userId, n5Words[11]._id, 'correct');
-        assert.ok(zaten.masteryLevel >= 4);
+        // 2 → 3: Orta'ya geçiş artık bölgeye giriş DEĞİL, çip artmaz
+        await mk(n5Words[10], 2, 1, 1);
+        const orta = await UserWordService.submitAnswer(userId, n5Words[10]._id, 'correct');
+        assert.equal(orta.masteryLevel, 3);
+
+        // 3 → 4: sayılan bölgeye GİRİŞ, çipe eklenir
+        await mk(n5Words[11], 3, 2, 6);
+        const giren = await UserWordService.submitAnswer(userId, n5Words[11]._id, 'correct');
+        assert.equal(giren.masteryLevel, 4);
+
+        // 4 → 5: zaten bölgedeydi, çip ARTMAZ (yoksa her doğru cevap sayardı)
+        await mk(n5Words[12], 4, 3, 15);
+        const zaten = await UserWordService.submitAnswer(userId, n5Words[12]._id, 'correct');
+        assert.equal(zaten.masteryLevel, 5);
 
         const after = await api('GET', '/memory', { token });
         assert.equal(after.json.data.weeklyImproved, 1);
     });
 
+    it('eski eşikle (Orta) iz almış ama bugün 3\'te duran kelime çipte sayılmaz', async () => {
+        // Eşik 3'ken bölgeye girmiş kelimenin promotedAt'i kalmış olabilir;
+        // kayıt bir sonraki cevaba kadar öyle durur
+        await UserWord.create({
+            user: userId, word: n5Words[14]._id, status: 'learning',
+            masteryLevel: 3, repetitions: 2, interval: 6, easeFactor: 2.5,
+            promotedAt: new Date(),
+            nextReviewDate: new Date(Date.now() + 5 * 86400000)
+        });
+        const res = await api('GET', '/memory', { token });
+        assert.equal(res.json.data.weeklyImproved, 1, 'yalnızca az önce İyi\'ye geçen kelime');
+    });
+
     it('bölgeden düşen kelimenin izi silinir (cevap ve decay yolunda)', async () => {
-        // Cevap yolu: 3 → yanlış → 1. Kelime bugün zaten nihai cevabını aldı,
+        // Cevap yolu: 4 → yanlış → 1. Kelime bugün zaten nihai cevabını aldı,
         // aynı gün ikinci cevap NÖTRDÜR — dünkü cevap gibi davransın diye
         // lastReviewDate geriye çekiliyor.
         await UserWord.updateOne(
-            { user: userId, word: n5Words[10]._id },
+            { user: userId, word: n5Words[11]._id },
             { lastReviewDate: new Date(Date.now() - 2 * 86400000) }
         );
-        await UserWordService.submitAnswer(userId, n5Words[10]._id, 'wrong');
+        await UserWordService.submitAnswer(userId, n5Words[11]._id, 'wrong');
 
-        const dusenCevap = await UserWord.findOne({ user: userId, word: n5Words[10]._id });
+        const dusenCevap = await UserWord.findOne({ user: userId, word: n5Words[11]._id });
         assert.equal(dusenCevap.masteryLevel, 1);
         assert.equal(dusenCevap.promotedAt, null, 'yanlış cevap kelimeyi bölgeden çıkardı');
 
         const sonra = await api('GET', '/memory', { token });
         assert.equal(sonra.json.data.weeklyImproved, 0, 'düşen kelime çipte sayılmaz');
 
-        // Decay yolu: bölgedeyken uzun süre dokunulmayan kelime 3'ün altına düşer
+        // Decay yolu: bölgedeyken uzun süre dokunulmayan kelime 4'ün altına düşer
         await UserWord.create({
-            user: userId, word: n5Words[12]._id, status: 'learning',
-            masteryLevel: 3, repetitions: 2, interval: 6, easeFactor: 2.5,
+            user: userId, word: n5Words[15]._id, status: 'learning',
+            masteryLevel: 4, repetitions: 3, interval: 15, easeFactor: 2.5,
             promotedAt: new Date(),
-            nextReviewDate: new Date(Date.now() - 30 * 86400000) // ratio 5 → hedef 1
+            nextReviewDate: new Date(Date.now() - 60 * 86400000) // ratio 4 → 4-3 = 1
         });
         await UserWordService.applyMasteryDecay();
 
-        const dusen = await UserWord.findOne({ user: userId, word: n5Words[12]._id });
-        assert.equal(dusen.masteryLevel, 1);
+        const dusen = await UserWord.findOne({ user: userId, word: n5Words[15]._id });
+        assert.ok(dusen.masteryLevel < 4);
         assert.equal(dusen.promotedAt, null, 'bölgeden çıkan kelime çipten de düşmeli');
+    });
+
+    it('İngilizce kullanıcıya kutu adları, seviye adı ve kilit cümlesi İngilizce döner', async () => {
+        await User.updateOne({ _id: userId }, { 'preferences.language': 'en' });
+        try {
+            const res = await api('GET', '/memory', { token });
+            const d = res.json.data;
+            assert.equal(d.label, 'Beginner');
+            assert.deepEqual(d.nextLevel, { jlptLevel: 'N4', label: 'Elementary', isUnlocked: false });
+            assert.deepEqual(d.boxes.map(b => b.label), ['New', 'Weak', 'Medium', 'Good', 'Mastered']);
+            assert.equal(d.unlockHint, 'N4 unlocks once the Good and Mastered boxes together pass 75%.');
+
+            const list = await api('GET', '/memory/words?box=weak', { token });
+            assert.equal(list.json.data.label, 'Weak');
+        } finally {
+            await User.updateOne({ _id: userId }, { 'preferences.language': 'tr' });
+        }
+    });
+});
+
+describe('Seviye kilidi eşiği: İyi + Ezber (masteryLevel >= 4)', () => {
+    it('Orta\'daki kelimeler kilidi açmaz, İyi\'ye geçince açılır', async () => {
+        const user = await createVerifiedUser('esik4@test.com', { activeLevel: 'N2' });
+        await Progress.updateOne({ user: user._id, jlptLevel: 'N2' }, { isUnlocked: true });
+        let n2 = await Word.find({ jlptLevel: 'N2', isCore: true }).distinct('_id');
+        if (n2.length === 0) {
+            const docs = await Word.insertMany([1, 2, 3, 4].map(i => ({
+                kanji: `閾${i}`, romaji: `esik${i}`, meaning: 'threshold', type: 'isim',
+                jlptLevel: 'N2', isCore: true, frequencyRank: 9000 + i
+            })));
+            n2 = docs.map(d => d._id);
+        }
+        await UserWord.insertMany(n2.map(word => ({
+            user: user._id, word, status: 'learning', masteryLevel: 3,
+            repetitions: 2, interval: 6, easeFactor: 2.5,
+            nextReviewDate: new Date(Date.now() + 5 * 86400000)
+        })));
+
+        const once = await ProgressService.checkAndUnlockNextLevel(user._id, 'N2');
+        assert.equal(once.unlocked, false, 'seviyenin tamamı Orta\'da: oran %0');
+
+        await UserWord.updateMany({ user: user._id }, { masteryLevel: 4, repetitions: 3, interval: 15 });
+        const sonra = await ProgressService.checkAndUnlockNextLevel(user._id, 'N2');
+        assert.deepEqual(sonra, { unlocked: true, level: 'N1' });
+    });
+
+    it('eski eşikle kaydedilmiş oranlar açılışta yeniden hesaplanır, kilit kapanmaz', async () => {
+        const user = await createVerifiedUser('esik-sync@test.com');
+        const n5 = await Word.find({ jlptLevel: 'N5', isCore: true }).sort({ frequencyRank: 1 }).limit(4);
+        await UserWord.insertMany(n5.map((w, i) => ({
+            user: user._id, word: w._id, status: 'learning', masteryLevel: i < 2 ? 3 : 4,
+            repetitions: 3, interval: 15, easeFactor: 2.5,
+            nextReviewDate: new Date(Date.now() + 5 * 86400000)
+        })));
+        // Eski kod: oran eşik 3 ile yazılmış, rateMasteryMin alanı yok; N4 açılmış
+        await Progress.updateOne({ user: user._id, jlptLevel: 'N5' }, { completionRate: 80, $unset: { rateMasteryMin: 1 } });
+        await Progress.updateOne({ user: user._id, jlptLevel: 'N4' }, { isUnlocked: true });
+
+        await ProgressService.syncCompletionRates();
+
+        const total = await Word.countDocuments({ jlptLevel: 'N5', isCore: true });
+        const n5p = await Progress.findOne({ user: user._id, jlptLevel: 'N5' });
+        assert.equal(n5p.completionRate, Math.round((2 / total) * 100));
+        assert.equal(n5p.rateMasteryMin, 4);
+        const n4p = await Progress.findOne({ user: user._id, jlptLevel: 'N4' });
+        assert.equal(n4p.isUnlocked, true, 'açılmış kilit geri kapanmaz');
+
+        // İdempotent: ikinci çalıştırmada yeniden hesaplanacak kayıt yok
+        assert.equal(await ProgressService.syncCompletionRates(), 0);
+    });
+
+    it('anasayfadaki "Kilit Açıldı" kartının seviye adı kullanıcının dilinde', async () => {
+        const user = await createVerifiedUser('kilit-en@test.com', { 'preferences.language': 'en' });
+        await Progress.updateOne({ user: user._id, jlptLevel: 'N4' }, { isUnlocked: true });
+        const token = (await login('kilit-en@test.com')).accessToken;
+
+        const res = await api('GET', '/home/summary', { token });
+        assert.equal(res.status, 200);
+        assert.equal(res.json.data.activeLevelLabel, 'Beginner');
+        assert.deepEqual(res.json.data.advanceableLevel, { jlptLevel: 'N4', label: 'Elementary' });
     });
 });
 

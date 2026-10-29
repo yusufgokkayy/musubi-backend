@@ -50,7 +50,7 @@ const dayStudied = (session) =>
 const HomeService = {
     async getSummary(userId) {
         const user = await User.findById(userId)
-            .select('timezone name dailyGoal activeLevel placementDeferredAt avatarKey');
+            .select('timezone name dailyGoal activeLevel placementDeferredAt avatarKey preferences.language');
         const tz = user?.timezone;
 
         // Tek bir "şimdi" sabitlenir: her yardımcı kendi new Date()'ini okusaydı
@@ -179,14 +179,15 @@ const HomeService = {
             name: user?.name || '',        // "Merhaba Emirhan" başlığı
             greeting: greetingFor(localHourInTz(tz, now)), // ismin üstündeki Japonca satır
             activeLevel,
-            activeLevelLabel: ProgressService.LEVEL_LABELS[activeLevel], // "N4 • Temel" bandı
+            // "N4 • Temel" bandı; seviye adları kullanıcının dilinde
+            activeLevelLabel: ProgressService.levelLabel(activeLevel, user?.preferences?.language),
             // BUGÜNKÜ DERSİN seviyesi. activeLevel anında değişir, ama ders
             // bugün başlamışsa bugün eski seviyede devam eder: istemci
             // "Bugünkü dersine başladığın için N4 yarın başlayacak" der.
             lessonLevel: ders.jlptLevel,
             levelStartsTomorrow: ders.levelStartsTomorrow,
             advanceableLevel: nextUnlocked
-                ? { jlptLevel: nextLevel, label: ProgressService.LEVEL_LABELS[nextLevel] }
+                ? { jlptLevel: nextLevel, label: ProgressService.levelLabel(nextLevel, user?.preferences?.language) }
                 : null,
             // true ise "Seviyeni Öğrenelim Mi?" modalı açılır. "Daha Sonra"
             // POST /quiz/placement/defer çağırır ve bayrak kalıcı olarak söner.
