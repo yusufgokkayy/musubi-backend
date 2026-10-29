@@ -5928,7 +5928,7 @@ describe('Uygulamaya dönüş ve /indir (27.10.2026)', () => {
 });
 
 describe('Mail tasarımı (29.10.2026)', () => {
-    // "Sade" şablon: önizleme metni, alıcı adresi, AlpsoySoft alt bilgisi;
+    // "Sade" şablon: önizleme metni, alıcı adresi, Alpsoy Yazılım alt bilgisi;
     // şifre değişince butonsuz bilgi maili
     const mailTo = (email) => sendEmail.outbox.filter(m => m.to === email);
 
@@ -5938,10 +5938,16 @@ describe('Mail tasarımı (29.10.2026)', () => {
         const mail = sendEmail.outbox.at(-1);
         assert.equal(mail.subject, "E-postanı doğrula, Musubi'ye bir adım kaldı");
         assert.match(mail.html, /display:none[^>]*>Hesabını tek dokunuşla etkinleştir/, 'gizli önizleme metni');
-        assert.match(mail.html, /<a href="mailto:tasarim-dogrulama@test\.com" style="[^"]*font-weight:700;text-decoration:none;">tasarim-dogrulama@test\.com<\/a>/,
+        assert.match(mail.html, /<a class="m-ink" href="mailto:tasarim-dogrulama@test\.com" style="[^"]*font-weight:700;text-decoration:none;">tasarim-dogrulama@test\.com<\/a>/,
             'alıcı adresi kalın; Gmail mavi link yapmasın diye rengi belirli');
         assert.match(mail.html, /href="[^"]*\/verify-email\/[a-f0-9]{40}\?lang=tr"[^>]*>E-postamı Doğrula/);
-        assert.match(mail.html, /Musubi · AlpsoySoft · <a href="[^"]*\/legal\/privacy\?lang=tr"/);
+        assert.match(mail.html, /Musubi · Alpsoy Yazılım · <a class="m-muted" href="[^"]*\/legal\/privacy\?lang=tr"/);
+        // Cihaz karanlık temadaysa uygulamanın karanlık renkleri (Apple Mail,
+        // Outlook); inline stiller açık tema olarak kalır
+        assert.match(mail.html, /<meta name="color-scheme" content="light dark">/);
+        assert.match(mail.html, /@media \(prefers-color-scheme: dark\)\{[^}]*\.m-bg\{background-color:#13141a !important;\}/);
+        assert.match(mail.html, /\[data-ogsb\] \.m-bg\{background-color:#13141a/, 'Outlook.com karartması');
+        assert.match(mail.html, /<td class="m-btn"[^>]*background:#bc002d/, 'açık temada buton rengi inline');
         assert.doesNotMatch(mail.html, /ALPSOY|Kelime Ezberlemenin/, 'eski kırmızı bant ve büyük harfli unvan yok');
     });
 
@@ -5985,7 +5991,7 @@ describe('Mail tasarımı (29.10.2026)', () => {
         await api('POST', '/auth/forgot-password', { body: { email: 'tasarim-en@test.com' } });
         const mail = sendEmail.outbox.at(-1);
         assert.equal(mail.subject, 'Reset your Musubi password');
-        assert.match(mail.html, /Musubi · AlpsoySoft · <a [^>]*>Privacy<\/a>/);
+        assert.match(mail.html, /Musubi · Alpsoy Yazılım · <a [^>]*>Privacy<\/a>/);
         assert.match(mail.html, /reset-password\/[a-f0-9]{40}\?lang=en/);
     });
 });
