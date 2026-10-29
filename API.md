@@ -342,7 +342,7 @@ Push token'ını siler. Kullanıcı bildirim iznini işletim sisteminden kapatt�
     "dailyWord": false,               // "Günlük Kelimeler" — dailyReminder'dan AYRI
     "reminderTime": "14:30"           // HH:mm — "Pratik Anımsatıcısı" saati
   },
-  "preferences": { "theme": "dark" }  // kısmi güncelleme — language: tr | theme: light/dark/system | fontSize: small/medium/large
+  "preferences": { "theme": "dark" }  // kısmi güncelleme — language: tr | en | theme: light/dark/system | fontSize: small/medium/large
 }
 
 // 200 — güncellenmiş kullanıcı (GET /auth/me ile aynı biçim)
