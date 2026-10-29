@@ -60,7 +60,9 @@ const WordSchema = new mongoose.Schema({
     // Neden example'ın yanında ayrı bir alan: boşluk doldurma sorusu example
     // üzerinde replaceAll(kanji, '____') yapıyor — furiganalı metinde bu
     // 駅[えき] → ____[えき] üretir ve sorunun cevabını okunuşuyla sızdırırdı.
-    // Bu yüzden example işaretlemesiz hâliyle korunur, furigana buraya yazılır.
+    // Bu yüzden example furiganasız korunur, furigana buraya yazılır. DİKKAT:
+    // veri setinde example da ** vurgusunu taşır (東京**駅**で…) — onu kullanan
+    // kod işareti kendisi temizlemelidir.
     exampleFurigana: {
         type: String
     },

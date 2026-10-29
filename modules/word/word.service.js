@@ -46,7 +46,8 @@ const relevanceScore = (q) => {
 
 const WordService = {
     // Kütüphane listesi VE arama aynı uçtan döner: ikisi de aynı sayfalama
-    // şeklini üretsin ki istemci tarafında tek kod yolu olsun.
+    // şeklini üretsin ki istemci tarafında tek kod yolu olsun. (Sayfasız eski
+    // GET /words/search 29.10.2026'da kaldırıldı — uygulama kullanmıyordu.)
     async getAllWords({ jlptLevel, type, q, page = 1, limit = 20, includeAll = false }) {
         // Query parametreleri kullanıcıdan gelir: sınırla ki ?limit=100000 atılamasın
         page = Math.max(parseInt(page) || 1, 1);
@@ -64,23 +65,26 @@ const WordService = {
 
         // Sıralama olmadan sayfalama güvenilmez: Mongo sırayı garanti etmediği
         // için aynı kelime iki sayfada birden çıkabilir ya da hiç görünmeyebilir.
-        // frequencyRank seviye içi müfredat sırası — asıl kullanım olan
-        // ?jlptLevel=N5 sorgusunda kelimeler öğretilme sırasında gelir.
-        // Seviye filtresi yokken seviyeler bu sıraya göre iç içe geçer;
+        // Önce seviye (N5 → N1), sonra seviye içi müfredat sırası (frequencyRank).
+        // Seviye anahtarı olmasa "Tümü" listesi seviyeleri iç içe geçirirdi:
+        // her seviyenin 1. kelimesi, sonra her seviyenin 2.si… — yeni başlayan
+        // kullanıcı ilk ekranda N1 kelimesi görürdü. jlptLevel'ın metin sırası
+        // ters çevrilince zorluk sırası çıkar ('N5' > 'N4' > … > 'N1').
         // _id son çare olarak sırayı tekilleştirip sayfalamayı kararlı kılar.
+        const order = { jlptLevel: -1, frequencyRank: 1, _id: 1 };
         const listQuery = search
-            // Aramada önce alaka, sonra müfredat sırası. Aggregate düz nesne
+            // Aramada önce alaka, eşitlikte yukarıdaki sıra. Aggregate düz nesne
             // döndürdüğü için hydrate ile mongoose belgesine çevriliyor —
             // aksi hâlde yanıttaki isKana virtual'ı sessizce kaybolurdu.
             ? Word.aggregate([
                 { $match: filter },
                 { $addFields: { _score: relevanceScore(q) } },
-                { $sort: { _score: -1, frequencyRank: 1, _id: 1 } },
+                { $sort: { _score: -1, ...order } },
                 { $project: { _score: 0 } },
                 { $skip: skip },
                 { $limit: limit }
             ]).then(docs => docs.map(d => Word.hydrate(d)))
-            : Word.find(filter).sort({ frequencyRank: 1, _id: 1 }).skip(skip).limit(limit);
+            : Word.find(filter).sort(order).skip(skip).limit(limit);
 
         const [words, total] = await Promise.all([
             listQuery,
@@ -115,14 +119,6 @@ const WordService = {
         const counts = { N5: 0, N4: 0, N3: 0, N2: 0, N1: 0 };
         rows.forEach(r => { if (r._id in counts) counts[r._id] = r.count; });
         return counts;
-    },
-
-    // Eski uç (GET /api/words/search): yalnız kelime dizisi döndürür, sayfa yok.
-    // Yerini GET /api/words?q= aldı — mobil taraf geçene kadar duruyor, ama
-    // arama alanları artık ortak (kana ve meaningTr burada da geçerli).
-    async searchWords(query) {
-        const { words } = await WordService.getAllWords({ q: query, page: 1, limit: 20 });
-        return words;
     },
 
     // async createWord(data) {

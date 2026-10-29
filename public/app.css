@@ -164,6 +164,10 @@ body {
 
 .bell { position: relative; display: grid; place-items: center; width: 30px; height: 30px; cursor: pointer; }
 .bell svg { width: 22px; height: 22px; fill: none; stroke: var(--ink); stroke-width: 1.7; }
+button.bell { background: none; border: 0; padding: 0; font: inherit; }
+/* ÖRNEK KULLANIM başlığındaki hoparlör: tasarımda 16 px, marka kırmızısı */
+.ex-speaker { width: 22px; height: 22px; }
+.ex-speaker svg { width: 16px; height: 16px; stroke: var(--brand); }
 .bell .dot {
   position: absolute; top: 1px; right: 2px; width: 9px; height: 9px;
   background: var(--brand); border: 2px solid var(--bg); border-radius: 50%;
@@ -478,6 +482,8 @@ select.select {
 .slabel { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); }
 .example { background: var(--surface); border-radius: var(--r); padding: 15px; font-family: var(--jp); font-size: 19px; line-height: 2.1; }
 .example em { font-style: normal; color: var(--brand); }
+/* Çeviri tasarımda cümleyle aynı kartın içinde, cümlenin altında */
+.example .tr { margin: 6px 0 0; font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif; font-size: 13.5px; line-height: 1.4; color: var(--ink); }
 ruby rt { font-size: .48em; color: var(--muted); font-weight: 400; }
 
 .answerbox { display: flex; align-items: center; gap: 10px; min-height: 54px; padding: 0 15px; background: var(--surface); border: 1.5px solid transparent; border-radius: var(--r); }
@@ -609,8 +615,6 @@ ruby rt { font-size: .48em; color: var(--muted); font-weight: 400; }
 }
 .filterchip.on { background: var(--brand); border-color: var(--brand); color: #fff; }
 
-.pager { display: flex; align-items: center; justify-content: center; gap: 14px; margin-top: 18px; }
-.pager .pg { font-size: 13.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* ─────────────────── Bildirimler ─────────────────── */
 .notif { display: flex; gap: 13px; padding: 15px 16px; cursor: pointer; background: var(--brand-soft); border-radius: var(--r); margin-bottom: 10px; transition: background .16s var(--ease); }

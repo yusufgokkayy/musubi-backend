@@ -708,7 +708,7 @@ birden taşır: `meaning` İngilizce, `meaningTr` Türkçe. Sunucu dile göre se
 
 | Alan | İçerik | Kullanım |
 |---|---|---|
-| `example` | `東京**駅**で会いましょう。` | işaretlemesiz düz cümle gerektiğinde |
+| `example` | `東京**駅**で会いましょう。` | furiganasız cümle gerektiğinde (o da `**` vurgusunu taşır) |
 | `exampleFurigana` | `東京[とうきょう]**駅[えき]**で会[あ]いましょう。` | kütüphane detay kartı (tasarımdaki hâli) |
 
 - `[...]` içindeki okunuş, **kendinden önceki karaktere** aittir → ruby olarak üstüne yazılır.
@@ -738,30 +738,21 @@ Query (hepsi opsiyonel): `?q=tren&jlptLevel=N5&type=isim&page=1&limit=20&include
 }
 ```
 
-Sıralama `frequencyRank` (seviye içi müfredat sırası, küçük = önce öğretilir), eşitlikte
-`_id`. **Sayfalama bu sıraya güvenir**; `?jlptLevel=` ile çağırdığında kelimeler
-öğretilme sırasında gelir. Seviye filtresi verilmezse seviyeler bu sıraya göre iç içe geçer.
-
-### GET /words/search?q=mizu 🔒✉️ (eski uç)
-`GET /words?q=` ile aynı arama alanlarını kullanır ama **sayfalama yok**: sabit en fazla
-20 sonuç döner ve `total` bilgisi vermez — yani sonuç 20'yi aşınca kullanıcı sessizce
-eksik liste görür. Yeni ekranlarda `GET /words?q=` kullan; bu uç geriye dönük uyumluluk
-için duruyor.
-```jsonc
-// 200
-{ "success": true, "data": [ /* Word[] */ ] }
-```
-Hata: `400 "Please provide a search query"`.
+Sıralama: önce seviye (**N5 → N1**), sonra `frequencyRank` (seviye içi müfredat sırası,
+küçük = önce öğretilir), eşitlikte `_id`. Yani "Tümü" (filtresiz) liste bütün N5 kelimeleriyle
+açılır, en son N1 gelir; `?jlptLevel=` ile o seviyenin kelimeleri öğretilme sırasında gelir.
+Aramada önce alaka, alakası eşit olanlarda yine bu sıra. **Sayfalama bu sıraya güvenir.**
 
 ### GET /words/:id 🔒✉️
 ```jsonc
 // 200
 { "success": true, "data": { /* Word */ } }
 ```
-Hata: `404 "Word not found"`.
+Hata: `404 "Word not found"`, kimlik biçimi geçersizse `400 "Invalid ID format"`.
 
-### POST /words · PUT /words/:id · DELETE /words/:id 🔒 (yalnızca admin)
-Gövde `Word` alanlarıdır; mobil uygulamanın kullanması gerekmez.
+Eski `GET /words/search` 29.10.2026'da kaldırıldı (sayfasızdı, uygulama kullanmıyordu);
+arama `GET /words?q=` ile yapılır. Kelime ekleme/düzenleme/silme ucu yok — kelimeler
+veri setinden `npm run seed` ile gelir.
 
 ---
 

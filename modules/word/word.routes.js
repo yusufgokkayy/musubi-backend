@@ -7,7 +7,6 @@ const router = express.Router();
 
 // Kullanıcı endpointleri
 router.get('/',         WordController.getAllWords);
-router.get('/search',   WordController.searchWords);
 router.get('/:id',      WordController.getWordById);
 
 // Admin endpointleri
