@@ -2,15 +2,24 @@ const Notification = require('../../models/Notification');
 const User = require('../../models/User');
 const Streak = require('../../models/Streak');
 const Word = require('../../models/Word');
-const Progress = require('../../models/Progress');
 const DailyWordPool = require('../../models/DailyWordPool');
 const StudySession = require('../../models/StudySession');
 const AppError = require('../../utils/AppError');
 const sendNotification = require('../../utils/notification');
 const { startOfDayInTz, localHourInTz, localMinutesInTz, parseHHmm } = require('../../utils/date.util');
+const { renderAll } = require('./notification.texts');
 
-// notificationSettings.reminderTime yoksa/bozuksa kullanılan eski sabit saat
-const DEFAULT_REMINDER_MINUTES = 10 * 60;
+// notificationSettings.reminderTime yoksa/bozuksa kullanılan saat — şemadaki
+// varsayılanla aynı (Figma'daki saat seçicinin başlangıç değeri 14:00)
+const DEFAULT_REMINDER_MINUTES = 14 * 60;
+
+const langOf = (user) => user?.preferences?.language || 'tr';
+
+// Kayıtları kullanıcının ŞU ANKİ dilinde döndürür (bkz. notification.texts.js)
+const localize = async (notifications, lang) => {
+    const texts = await renderAll(notifications, lang);
+    return notifications.map((n, i) => ({ ...n.toObject(), ...texts[i] }));
+};
 // Hatırlatma saatinden sonra bildirimin hâlâ "zamanında" sayıldığı süre
 const REMINDER_GRACE_MINUTES = 120;
 // server.js'teki '*/15 * * * *' ile aynı olmak ZORUNDA: gün dönümünde son turun
@@ -21,8 +30,13 @@ const MINUTES_IN_DAY = 24 * 60;
 // Push'u arkaplanda gönderir; asla hata fırlatmaz, cevap gecikmesine eklenmez.
 // FCM "token artık kayıtlı değil" derse token'ı kullanıcıdan siler ki
 // ölü cihaza tekrar tekrar denenmesin.
-const sendPushSafe = (fcmToken, { title, body, data }) => {
+//
+// data'ya tip ve kayıt id'si de eklenir: push'a dokunulduğunda uygulama
+// tahmin yürütmeden doğru ekrana gider ve o kaydı okundu işaretler.
+const sendPushSafe = (fcmToken, notification) => {
     if (!fcmToken) return;
+    const { title, body, type, _id } = notification;
+    const data = { ...notification.data, type, notificationId: _id };
     sendNotification({ token: fcmToken, title, body, data })
         .catch(async (err) => {
             if (err.code === 'messaging/registration-token-not-registered' ||
@@ -68,19 +82,29 @@ const SETTING_MAP = {
 
 const NotificationService = {
     // userDoc verilirse (toplu işlerde tekrar sorgu atmamak için) onun
-    // notificationSettings + fcmToken alanları kullanılır.
+    // notificationSettings + preferences.language + fcmToken alanları kullanılır.
+    //
+    // Metin verilmez, tip + data'dan kullanıcının dilinde üretilir. Yalnızca
+    // şablonu olmayan tipler (test) title/body'yi kendisi getirir. Kayda
+    // yazılan metin oluşturulduğu anın dilidir; liste onu her okumada yeniden
+    // üretir, kayıttaki yalnızca şablon üretemezse gösterilir.
     async create(userId, { type, title, body, data = {} }, userDoc = null) {
         const user = userDoc ||
-            await User.findById(userId).select('notificationSettings +fcmToken');
+            await User.findById(userId).select('notificationSettings preferences.language +fcmToken');
 
         // Kullanıcı bu bildirim tipini kapattıysa oluşturma
         const flag = SETTING_MAP[type];
         if (flag && user?.notificationSettings?.[flag] === false) return null;
 
-        const notification = await Notification.create({ user: userId, type, title, body, data });
+        const [text] = await renderAll([{ type, data, title, body }], langOf(user));
+        // Metin üretilemediyse (ör. kelime veri setinden silinmiş) boş kart
+        // göndermektense hiç gönderme
+        if (!text.title) return null;
+
+        const notification = await Notification.create({ user: userId, type, ...text, data });
 
         // Uygulama içi kayıt + telefona push (arkaplanda)
-        sendPushSafe(user?.fcmToken, { title, body, data });
+        sendPushSafe(user?.fcmToken, notification);
 
         return notification;
     },
@@ -90,17 +114,18 @@ const NotificationService = {
         limit = Math.min(Math.max(parseInt(limit) || 20, 1), 100);
         const skip = (page - 1) * limit;
 
-        const [notifications, total, unreadCount] = await Promise.all([
+        const [notifications, total, unreadCount, user] = await Promise.all([
             Notification.find({ user: userId })
                 .sort({ createdAt: -1 })
                 .skip(skip)
                 .limit(limit),
             Notification.countDocuments({ user: userId }),
-            Notification.countDocuments({ user: userId, read: false })
+            Notification.countDocuments({ user: userId, read: false }),
+            User.findById(userId).select('preferences.language')
         ]);
 
         return {
-            notifications,
+            notifications: await localize(notifications, langOf(user)),
             total,
             unreadCount,
             page,
@@ -117,7 +142,10 @@ const NotificationService = {
 
         notification.read = true;
         await notification.save();
-        return notification;
+
+        const user = await User.findById(userId).select('preferences.language');
+        const [localized] = await localize([notification], langOf(user));
+        return localized;
     },
 
     async markAllAsRead(userId) {
@@ -142,7 +170,7 @@ const NotificationService = {
     // gerçekten 1'den farklı olabilir, tasarımdaki "3. seviyeye düştü" metni
     // ancak buradan üretilebilir.
     async createDecaySummary(userId, { count, samples = [] }) {
-        const user = await User.findById(userId).select('notificationSettings timezone +fcmToken');
+        const user = await User.findById(userId).select('notificationSettings timezone preferences.language +fcmToken');
         if (!user || user.notificationSettings?.wordLevelDown === false) return null;
 
         const streak = await Streak.findOne({ user: userId });
@@ -170,34 +198,25 @@ const NotificationService = {
         });
         if (todayAny) return null;
 
-        const sampleWords = await Word.find({ _id: { $in: samples.map(s => s.word) } })
-            .select('kanji romaji');
-        const levelOf = new Map(samples.map(s => [String(s.word), s.level]));
+        const first = samples[0];
+        if (!first) return null;
 
         // Tek kelime düştüyse onu adıyla söyle (tasarımdaki kart bu); birden
-        // fazlaysa özete geç — beş ayrı bildirim yerine tek davet.
-        let title, body, data;
-        if (count === 1 && sampleWords[0]) {
-            const w = sampleWords[0];
-            const level = levelOf.get(String(w._id));
-            title = 'Kelimenin Seviyesi Düştü';
-            body = `${w.kanji} (${w.romaji}) kelimesinin seviyesi ${level}. seviyeye düştü. Uygulamaya gir tekrar hatırla!`;
-            data = { source: 'decay', count, wordId: w._id, kanji: w.kanji, newLevel: level };
+        // fazlaysa aynı kartın dilinde tek bildirim: "X ve 4 kelime daha
+        // seviye kaybetti" — beş ayrı bildirim yerine tek davet.
+        //
+        // Çoklu düşüşte örnek kelime BİLEREK `wordId` değil `sampleWordId`:
+        // mobil taraf `wordId` varlığını "tek kelime → detayına git" diye okuyor.
+        let data;
+        if (count === 1) {
+            const w = await Word.findById(first.word).select('kanji');
+            if (!w) return null;
+            data = { source: 'decay', count, wordId: w._id, kanji: w.kanji, newLevel: first.level };
         } else {
-            const sample = sampleWords.map(w => w.kanji).join(', ');
-            const rest = count - sampleWords.length;
-            title = 'Kelimeler tazelenmek istiyor 🌱';
-            body = `${sample}${rest > 0 ? ` ve ${rest} kelime daha` : ''} seni bekliyor. Birkaç dakikada hafızanı tazele!`;
-            data = { source: 'decay', count };
+            data = { source: 'decay', count, sampleWordId: first.word };
         }
 
-        const notification = await Notification.create({
-            user: userId, type: 'word_level_down', title, body, data
-        });
-
-        sendPushSafe(user.fcmToken, { title, body, data });
-
-        return notification;
+        return NotificationService.create(userId, { type: 'word_level_down', data }, user);
     },
 
     // Cron tarafından çeyrek saatte bir çağrılır (server.js). Her kullanıcının
@@ -208,7 +227,7 @@ const NotificationService = {
     // `now` parametresi test edilebilirlik içindir.
     async generateDailyNotifications(now = new Date()) {
         const users = await User.find({ active: true })
-            .select('notificationSettings timezone dailyGoal +fcmToken');
+            .select('notificationSettings timezone dailyGoal activeLevel preferences.language +fcmToken');
 
         for (const user of users) {
             try {
@@ -256,19 +275,15 @@ const NotificationService = {
                         if (remaining > 0) {
                             await NotificationService.create(user._id, {
                                 type: 'daily_task',
-                                title: 'Bugünün Görevi',
-                                body: `Bugün ${remaining} ezberlenecek kelime seni bekliyor!`,
                                 data: { remaining, dailyGoal: user.dailyGoal || 20 }
                             }, user);
                         }
                     }
                     if (!(await dedupe('daily_word'))) {
-                        const word = await NotificationService.pickDailyWord(user._id);
+                        const word = await NotificationService.pickDailyWord(user);
                         if (word) {
                             await NotificationService.create(user._id, {
                                 type: 'daily_word',
-                                title: 'Günlük Kelime',
-                                body: `Bugünün günlük kelimesi; ${word.kanji} (${word.romaji}) = ${word.meaning}`,
                                 data: { wordId: word._id, kanji: word.kanji }
                             }, user);
                         }
@@ -287,8 +302,6 @@ const NotificationService = {
                 if (hour === 19 && !(await dedupe('streak_reminder'))) {
                     await NotificationService.create(user._id, {
                         type: 'streak_reminder',
-                        title: `${streak.currentStreak} Günlük Seri!`,
-                        body: 'Serini devam ettirmeyi unutma.',
                         data: { currentStreak: streak.currentStreak }
                     }, user);
                 }
@@ -296,8 +309,6 @@ const NotificationService = {
                 if (hour === 23 && !(await dedupe('streak_warning'))) {
                     await NotificationService.create(user._id, {
                         type: 'streak_warning',
-                        title: 'Serini Kaybedeceksin',
-                        body: '1 saat sonra serini kaybedeceksin. Acele et, dersini kaçırma...',
                         data: { currentStreak: streak.currentStreak }
                     }, user);
                 }
@@ -307,14 +318,13 @@ const NotificationService = {
         }
     },
 
-    // Günlük kelime: kullanıcının açık en yüksek seviyesinden rastgele bir core kelime
-    async pickDailyWord(userId) {
-        const unlocked = await Progress.find({ user: userId, isUnlocked: true }).select('jlptLevel');
-        const LEVELS = ['N5', 'N4', 'N3', 'N2', 'N1'];
-        const highestIdx = unlocked.reduce((max, p) => Math.max(max, LEVELS.indexOf(p.jlptLevel)), 0);
-
+    // Günlük kelime: kullanıcının ÇALIŞTIĞI seviyeden (activeLevel) rastgele bir
+    // core kelime. Eskiden açık olan en yüksek seviyeden seçiliyordu; N3'ü açıp
+    // N5 çalışmayı seçen kullanıcıya N3 kelimesi gidiyordu. Ders seviyesinin
+    // tek kaynağı activeLevel (bkz. User modeli).
+    async pickDailyWord(user) {
         const [word] = await Word.aggregate([
-            { $match: { jlptLevel: LEVELS[highestIdx], isCore: true } },
+            { $match: { jlptLevel: user.activeLevel || 'N5', isCore: true } },
             { $sample: { size: 1 } }
         ]);
         return word || null;

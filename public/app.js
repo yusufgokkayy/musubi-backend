@@ -77,6 +77,10 @@ const I = {
   bulb: '<svg viewBox="0 0 24 24"><path d="M9.5 18.5h5"/><path d="M10 21.5h4"/><path d="M12 2.5a6.5 6.5 0 0 0-3.7 11.8c.6.5 1 1.2 1.1 2h5.2c.1-.8.5-1.5 1.1-2A6.5 6.5 0 0 0 12 2.5z"/></svg>',
   info: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="M12 11v5.5"/><circle cx="12" cy="8" r="1" fill="currentColor" stroke="none"/></svg>',
   trend: '<svg viewBox="0 0 24 24"><path d="M3 17 9.5 10.5l4 4L21 7"/><path d="M15.5 7H21v5.5"/></svg>',
+  // Bildirimler ve Bildirim Ayarları — Figma'daki lucide ikonları
+  calendarClock: '<svg viewBox="0 0 24 24"><path d="M21 7.5V6a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h3.5"/><path d="M16 2v4M8 2v4M3 10h5"/><path d="M17.5 17.5 16 16.3V14"/><circle cx="16" cy="16" r="6"/></svg>',
+  arrowDownRight: '<svg viewBox="0 0 24 24"><path d="m7 7 10 10"/><path d="M17 7v10H7"/></svg>',
+  frown: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M16 16s-1.5-2-4-2-4 2-4 2"/><path d="M9 9h.01M15 9h.01"/></svg>',
   pause: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="M10 9v6M14 9v6"/></svg>',
   close: '<svg viewBox="0 0 20 20"><path d="m4 4 12 12M16 4 4 16"/></svg>',
   user: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></svg>',
@@ -664,43 +668,49 @@ function showRegPassword() {
 // arasında kalabilir ve seçimler yarım kaydedilirdi.
 const pad2 = (n) => String(n).padStart(2, '0');
 
-function showRegReminder() {
-  let h = state.wizard.reminderHour ?? 20;
-  let m = state.wizard.reminderMinute ?? 0;
-  paint(topbar() + `<div class="pad">
-      <h1 class="title-xl">Hatırlatma Bildirimi</h1>
-      <p class="lead">Sana ne zaman ders çalışacağını hatırlatalım?</p>
-      <div class="timepick">
+// "Hatırlatma Bildirimi" saat seçicisi — kayıt ve Ayarlar'daki iki ekran ortak.
+// Başlangıç 14:00: Figma'daki değer ve sunucunun varsayılanı.
+function timePicker(hhmm) {
+  const [hs, ms] = String(hhmm || '14:00').split(':');
+  const tp = { h: Number(hs) || 0, m: Number(ms) || 0 };
+  tp.value = () => `${pad2(tp.h)}:${pad2(tp.m)}`;
+  tp.html = `<div class="timepick">
         <div class="col">
           <button class="arrow" data-step="h:1">${I.chevU}</button>
-          <div class="cell" id="tp-h">${pad2(h)}</div>
+          <div class="cell" id="tp-h">${pad2(tp.h)}</div>
           <button class="arrow" data-step="h:-1">${I.chevD}</button>
         </div>
         <div class="colon">:</div>
         <div class="col">
           <button class="arrow" data-step="m:1">${I.chevU}</button>
-          <div class="cell" id="tp-m">${pad2(m)}</div>
+          <div class="cell" id="tp-m">${pad2(tp.m)}</div>
           <button class="arrow" data-step="m:-1">${I.chevD}</button>
         </div>
-      </div>
-      <p class="tiny" style="text-align:center">Saat kendi saat dilimine göre ayarlanır.</p>
+      </div>`;
+  tp.bind = () => $$('[data-step]').forEach(b => b.addEventListener('click', () => {
+    const [unit, dir] = b.dataset.step.split(':');
+    if (unit === 'h') { tp.h = (tp.h + Number(dir) + 24) % 24; $('#tp-h').textContent = pad2(tp.h); }
+    // Dakika 5'er adım ilerler: 60 tıklamayla 55'e ulaşmak için sebep yok
+    else { tp.m = (tp.m + Number(dir) * 5 + 60) % 60; $('#tp-m').textContent = pad2(tp.m); }
+  }));
+  return tp;
+}
+
+function showRegReminder() {
+  const tp = timePicker(state.wizard.reminderTime);
+  paint(topbar() + `<div class="pad">
+      <h1 class="title-xl">Hatırlatma Bildirimi</h1>
+      <p class="lead">Size ne zaman ders çalışacağınızı hatırlatalım?</p>
+      ${tp.html}
     </div>
     <div class="footer">
       <button class="link skip" id="b-skip">Şimdilik Geç</button>
       <button class="btn btn-primary" id="f-action">Devam Et</button>
     </div>`);
-
-  $$('[data-step]').forEach(b => b.addEventListener('click', () => {
-    const [unit, dir] = b.dataset.step.split(':');
-    if (unit === 'h') { h = (h + Number(dir) + 24) % 24; $('#tp-h').textContent = pad2(h); }
-    // Dakika 5'er adım ilerler: 60 tıklamayla 55'e ulaşmak için sebep yok
-    else { m = (m + Number(dir) * 5 + 60) % 60; $('#tp-m').textContent = pad2(m); }
-  }));
+  tp.bind();
 
   $('#f-action').addEventListener('click', () => {
-    state.wizard.reminderHour = h;
-    state.wizard.reminderMinute = m;
-    state.wizard.reminderTime = `${pad2(h)}:${pad2(m)}`;
+    state.wizard.reminderTime = tp.value();
     state.wizard.dailyReminder = true;
     go('reg-goal');
   });
@@ -1126,9 +1136,10 @@ function openStory(stories, startIndex) {
 // ═══════════════════════════════════════════════════════════════
 // BİLDİRİMLER
 // ═══════════════════════════════════════════════════════════════
+// Figma › Bildirimler: あ / alev / takvim+saat / üzgün yüz / ↘
 const NOTIF_ICON = {
-  daily_word: '<span class="jp">あ</span>', streak_reminder: I.flame, streak_warning: I.flame,
-  daily_task: I.target, word_level_down: I.trend
+  daily_word: '<span class="jp">あ</span>', streak_reminder: I.flame, streak_warning: I.frown,
+  daily_task: I.calendarClock, word_level_down: I.arrowDownRight
 };
 
 async function showNotifications() {
@@ -2014,36 +2025,57 @@ function showSettingsPasswordSuccess() {
   });
 }
 
+// Figma › Ayarlar › Bildirim Ayarları: dört satır. Anahtarlar dokununca
+// kaydedilir (tasarımda Kaydet yok); "Pratik Anımsatıcısı" anahtar değil,
+// saati ya da "Kapalı" yazar ve ayrı Hatırlatma Bildirimi ekranını açar.
 function showSettingsNotifications() {
   const n = state.me?.notificationSettings || {};
-  const rows = [
-    ['dailyWord', 'Günlük Kelimeler', 'Her gün seçtiğin saatte yeni bir kelime.'],
-    ['streakReminder', 'Seri Koruma Uyarısı', 'Serin tehlikedeyken haber verir.'],
-    ['dailyReminder', 'Pratik Anımsatıcısı', 'Günün görevini hatırlatır.'],
-    ['wordLevelDown', 'Tekrar Gereken Kelimeler', 'Unutulmaya başlayan kelimeler için.']
-  ];
+  const toggle = (key, icon, label) => `
+      <div class="row-item"><span class="ic">${icon}</span><span class="lbl">${label}</span>
+        <span class="switch ${n[key] !== false ? 'on' : ''}" data-key="${key}"><i></i></span></div>`;
+  const reminder = n.dailyReminder !== false
+    ? `<span class="val accent">${esc(n.reminderTime || '14:00')}</span>`
+    : '<span class="val accent">Kapalı</span>';
   paint(topbar() + `<div class="pad">
       <h1 class="title-xl">Bildirim Ayarları</h1>
-      <p class="lead">Dört bildirim türü birbirinden bağımsızdır; biri diğerini kapatmaz.</p>
       <div class="group">
-        ${rows.map(([key, label, desc]) => `
-          <div class="switch-row">
-            <span class="txt"><b>${label}</b><span>${desc}</span></span>
-            <span class="switch ${n[key] !== false ? 'on' : ''}" data-key="${key}"><i></i></span>
-          </div>`).join('')}
+        ${toggle('dailyWord', '<span class="jp">あ</span>', 'Günlük Kelimeler')}
+        ${toggle('streakReminder', I.flame, 'Seri Koruma Uyarısı')}
+        <button class="row-item" data-nav="settings-reminder"><span class="ic">${I.calendarClock}</span><span class="lbl">Pratik Anımsatıcısı</span>${reminder}</button>
+        ${toggle('wordLevelDown', I.arrowDownRight, 'Tekrar Gereken Kelimeler')}
       </div>
-      <div class="grouplabel">Hatırlatma Saati</div>
-      <div class="input">${I.bellRing}<input id="in-time" type="time" value="${esc(n.reminderTime || '20:00')}"></div>
-      <p class="tiny gap-8">Bu saat hem "Pratik Anımsatıcısı" hem "Günlük Kelimeler" için zamanlama kaynağıdır.</p>
+    </div>`);
+  $$('.switch').forEach(s => s.addEventListener('click', async () => {
+    const on = !s.classList.contains('on');
+    s.classList.toggle('on', on);
+    const res = await api('PUT', '/auth/update-info', { notificationSettings: { [s.dataset.key]: on } });
+    if (guard(res)) state.me = res.json.data;
+    else s.classList.toggle('on', !on);
+  }));
+}
+
+// Figma › Ayarlar › Hatırlatma Bildirimi: Kaydet anımsatıcıyı bu saatte AÇAR,
+// "Anımsatıcıyı Kapat" yalnızca dailyReminder'ı kapatır (saat korunur —
+// Günlük Kelimeler bu saatte gitmeye devam eder).
+function showSettingsReminder() {
+  const tp = timePicker(state.me?.notificationSettings?.reminderTime);
+  paint(topbar() + `<div class="pad">
+      <h1 class="title-xl">Hatırlatma Bildirimi</h1>
+      <p class="lead">Size ne zaman ders çalışacağınızı hatırlatalım?</p>
+      ${tp.html}
     </div>
-    <div class="footer"><button class="btn btn-primary" id="b-save">Kaydet</button></div>`);
-  $$('.switch').forEach(s => s.addEventListener('click', () => s.classList.toggle('on')));
-  $('#b-save').addEventListener('click', async () => {
-    const notificationSettings = { reminderTime: $('#in-time').value };
-    $$('.switch').forEach(s => { notificationSettings[s.dataset.key] = s.classList.contains('on'); });
+    <div class="footer">
+      <button class="link skip" id="b-off">Anımsatıcıyı Kapat</button>
+      <button class="btn btn-primary" id="b-save">Kaydet</button>
+    </div>`);
+  tp.bind();
+  const save = async (notificationSettings, msg) => {
     const res = await api('PUT', '/auth/update-info', { notificationSettings });
-    if (guard(res, 'Bildirim ayarların kaydedildi')) { state.me = res.json.data; back(); }
-  });
+    if (guard(res, msg)) { state.me = res.json.data; back(); }
+  };
+  $('#b-save').addEventListener('click', () =>
+    save({ dailyReminder: true, reminderTime: tp.value() }, `Anımsatıcı ${tp.value()} olarak kaydedildi`));
+  $('#b-off').addEventListener('click', () => save({ dailyReminder: false }, 'Anımsatıcı kapatıldı'));
 }
 
 // Hukuki metinler backend'den gelir (uygulamaya gömülü DEĞİL) — düzeltme
@@ -2700,6 +2732,7 @@ const SHOW = {
   'settings-password': showSettingsPassword, 'settings-password-new': showSettingsPasswordNew,
   'settings-password-success': showSettingsPasswordSuccess,
   'settings-notifications': showSettingsNotifications,
+  'settings-reminder': showSettingsReminder,
   'settings-legal': showSettingsLegal, 'legal-doc': showLegalDoc, 'settings-delete': showSettingsDelete,
 
   // v2 önizleme (örnek veri)

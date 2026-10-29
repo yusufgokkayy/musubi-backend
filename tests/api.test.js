@@ -330,7 +330,7 @@ describe('Auth', () => {
 
         const user = await User.findOne({ email });
         assert.equal(user.notificationSettings.dailyReminder, false);
-        assert.equal(user.notificationSettings.reminderTime, '10:00');
+        assert.equal(user.notificationSettings.reminderTime, '14:00');
     });
 
     it('geçersiz hatırlatma saati 400 döner', async () => {
@@ -4020,9 +4020,9 @@ describe('Bildirim üretimi (cron)', () => {
         );
     });
 
-    it('10:00 — Bugünün Görevi + Günlük Kelime üretilir; tekrar çağrı çoğaltmaz', async () => {
-        await NotificationService.generateDailyNotifications(atIstanbulHour(10));
-        await NotificationService.generateDailyNotifications(atIstanbulHour(10));
+    it('14:00 (varsayılan) — Bugünün Görevi + Günlük Kelime üretilir; tekrar çağrı çoğaltmaz', async () => {
+        await NotificationService.generateDailyNotifications(atIstanbulHour(14));
+        await NotificationService.generateDailyNotifications(atIstanbulHour(14));
 
         const tasks = await Notification.find({ user: userId, type: 'daily_task' });
         assert.equal(tasks.length, 1, 'dedupe: günde 1 görev bildirimi');
@@ -4034,23 +4034,23 @@ describe('Bildirim üretimi (cron)', () => {
         assert.ok(words[0].data.wordId, 'push deep-link için wordId dönmeli');
     });
 
-    it('hatırlatma kullanıcının seçtiği saatte gider, varsayılan 10:00\'da gitmez', async () => {
+    it('hatırlatma kullanıcının seçtiği saatte gider, varsayılan 14:00\'te gitmez', async () => {
         const user = await createVerifiedUser('saat@test.com', {
-            notificationSettings: { reminderTime: '14:00' }
+            notificationSettings: { reminderTime: '17:00' }
         });
 
         // Seçilen saatten önce hiçbir şey üretilmez
-        await NotificationService.generateDailyNotifications(atIstanbulHour(10));
+        await NotificationService.generateDailyNotifications(atIstanbulHour(14));
         assert.equal(
             await Notification.countDocuments({ user: user._id, type: 'daily_task' }), 0,
-            '14:00 seçen kullanıcıya 10:00\'da gitmemeli'
+            '17:00 seçen kullanıcıya 14:00\'te gitmemeli'
         );
 
-        await NotificationService.generateDailyNotifications(atIstanbulHour(14));
+        await NotificationService.generateDailyNotifications(atIstanbulHour(17));
         assert.equal(await Notification.countDocuments({ user: user._id, type: 'daily_task' }), 1);
 
         // Çeyrek saatlik cron aynı günü tekrar tetiklese de çoğaltmaz
-        await NotificationService.generateDailyNotifications(atIstanbulHour(15));
+        await NotificationService.generateDailyNotifications(atIstanbulHour(18));
         assert.equal(await Notification.countDocuments({ user: user._id, type: 'daily_task' }), 1);
 
         // Gecikme payı aşılınca gece yarısına doğru artık gönderilmez
@@ -4104,7 +4104,7 @@ describe('Bildirim üretimi (cron)', () => {
         });
 
         await NotificationService.generateDailyNotifications(atIstanbulHour(19));
-        await NotificationService.generateDailyNotifications(atIstanbulHour(10));
+        await NotificationService.generateDailyNotifications(atIstanbulHour(14));
 
         assert.equal(
             await Notification.countDocuments({ user: calisan._id, type: { $in: ['streak_reminder', 'streak_warning'] } }),
@@ -4127,7 +4127,7 @@ describe('Bildirim üretimi (cron)', () => {
             notificationSettings: { dailyWord: false }
         });
 
-        await NotificationService.generateDailyNotifications(atIstanbulHour(10));
+        await NotificationService.generateDailyNotifications(atIstanbulHour(14));
 
         assert.equal(await Notification.countDocuments({ user: sadeceKelime._id, type: 'daily_task' }), 0);
         assert.equal(await Notification.countDocuments({ user: sadeceKelime._id, type: 'daily_word' }), 1,
@@ -4179,7 +4179,7 @@ describe('Bildirim üretimi (cron)', () => {
         await kuranHavuz(yarim, 10);
         await StudySession.create({ user: yarim._id, date: gunBasi, totalWords: 4 });
 
-        await NotificationService.generateDailyNotifications(atIstanbulHour(10));
+        await NotificationService.generateDailyNotifications(atIstanbulHour(14));
 
         assert.equal(
             await Notification.countDocuments({ user: biten._id, type: 'daily_task' }), 0,
@@ -4190,6 +4190,116 @@ describe('Bildirim üretimi (cron)', () => {
         assert.ok(kalan, 'iş kaldıysa hatırlatma gitmeli');
         assert.match(kalan.body, /Bugün 6 ezberlenecek/, 'gövde hedefi değil KALANI yazmalı');
         assert.equal(kalan.data.remaining, 6);
+    });
+});
+
+describe('Bildirim dili, günlük kelime seviyesi ve push', () => {
+    const atIstanbulHour = (h) => {
+        const d = new Date();
+        d.setUTCHours(h - 3, 30, 0, 0);
+        return d;
+    };
+    const { renderAll } = require('../modules/notification/notification.texts');
+
+    it('günlük kelime kullanıcının çalıştığı seviyeden (activeLevel) seçilir', async () => {
+        // N3 de açık ama kullanıcı N4 çalışıyor: kelime N4'ten gelmeli
+        const user = await createVerifiedUser('gunluk-seviye@test.com', { activeLevel: 'N4' });
+        await Progress.updateOne({ user: user._id, jlptLevel: 'N3' }, { isUnlocked: true });
+
+        await NotificationService.generateDailyNotifications(atIstanbulHour(14));
+
+        const n = await Notification.findOne({ user: user._id, type: 'daily_word' });
+        const word = await Word.findById(n.data.wordId);
+        assert.equal(word.jlptLevel, 'N4');
+    });
+
+    // Eskiden gövde `meaning` (İngilizce) kullanıyordu; tasarımda "= tehlikeli"
+    it('günlük kelimenin anlamı kullanıcının dilinde: tr → meaningTr, en → meaning', async () => {
+        const w = await Word.create({
+            kanji: '危ない', romaji: 'abunai', meaning: 'dangerous', meaningTr: 'tehlikeli',
+            type: 'isim', jlptLevel: 'N5', isCore: false
+        });
+        const item = { type: 'daily_word', data: { wordId: w._id, kanji: w.kanji } };
+
+        const [tr] = await renderAll([item], 'tr');
+        assert.equal(tr.title, 'Günlük Kelime');
+        assert.equal(tr.body, 'Bugünün günlük kelimesi; 危ない (abunai) = tehlikeli');
+
+        const [en] = await renderAll([item], 'en');
+        assert.equal(en.title, 'Word of the Day');
+        assert.equal(en.body, 'Today\'s word: 危ない (abunai) = dangerous');
+
+        // Çevirisi olmayan dil İngilizceye düşer
+        const [de] = await renderAll([item], 'de');
+        assert.equal(de.body, 'Today\'s word: 危ない (abunai) = dangerous');
+    });
+
+    it('İngilizcede sayı çekimlenir (1 word / 3 words)', async () => {
+        const [one, many] = await renderAll([
+            { type: 'daily_task', data: { remaining: 1 } },
+            { type: 'daily_task', data: { remaining: 3 } }
+        ], 'en');
+        assert.equal(one.body, '1 word is waiting for you today!');
+        assert.equal(many.body, '3 words are waiting for you today!');
+    });
+
+    it('liste metni okunduğu andaki dilde üretilir; dil değişince eski bildirimler de çevrilir', async () => {
+        const user = await createVerifiedUser('dil-degisen@test.com', { preferences: { language: 'en' } });
+        await NotificationService.generateDailyNotifications(atIstanbulHour(14));
+
+        const kayit = await Notification.findOne({ user: user._id, type: 'daily_task' });
+        assert.equal(kayit.title, 'Today\'s Task', 'kayıt oluşturulduğu anın dilinde');
+
+        await User.updateOne({ _id: user._id }, { 'preferences.language': 'tr' });
+        const { notifications } = await NotificationService.list(user._id);
+        const gorev = notifications.find(n => n.type === 'daily_task');
+        assert.equal(gorev.title, 'Bugünün Görevi');
+        assert.match(gorev.body, /^Bugün \d+ ezberlenecek kelime seni bekliyor!$/);
+        assert.equal(String(gorev._id), String(kayit._id), 'aynı kayıt, yalnızca metin yeniden üretildi');
+
+        const okundu = await NotificationService.markAsRead(user._id, kayit._id);
+        assert.equal(okundu.title, 'Bugünün Görevi', 'okundu yanıtı da güncel dilde');
+        assert.equal(okundu.read, true);
+    });
+
+    it('şablonu üretilemeyen eski kayıt kendi metniyle gösterilir', async () => {
+        const user = await createVerifiedUser('eski-kayit@test.com');
+        // Yeni sürümden önceki çoklu düşüş kaydı: örnek kelime taşımıyordu
+        await Notification.create({
+            user: user._id, type: 'word_level_down',
+            title: 'Kelimeler tazelenmek istiyor 🌱', body: 'eski gövde',
+            data: { source: 'decay', count: 3 }
+        });
+        const { notifications } = await NotificationService.list(user._id);
+        assert.equal(notifications[0].title, 'Kelimeler tazelenmek istiyor 🌱');
+        assert.equal(notifications[0].body, 'eski gövde');
+    });
+
+    it('push data\'sı tip ve kayıt id\'si taşır; değerler string', async () => {
+        const firebase = require('../config/firebase');
+        const original = firebase.getMessaging;
+        const sent = [];
+        firebase.getMessaging = () => ({ send: async (msg) => { sent.push(msg); } });
+        try {
+            const user = await createVerifiedUser('push-veri@test.com', { fcmToken: 'cihaz-1' });
+            await Streak.updateOne(
+                { user: user._id },
+                { currentStreak: 7, lastStudyDate: new Date(Date.now() - 2 * 86400000) }
+            );
+            await NotificationService.generateDailyNotifications(atIstanbulHour(19));
+            await new Promise(r => setImmediate(r)); // push arkaplanda gider
+
+            const kayit = await Notification.findOne({ user: user._id, type: 'streak_reminder' });
+            const msg = sent.find(m => m.data.type === 'streak_reminder');
+            assert.ok(msg, 'seri hatırlatması push\'u gitmeli');
+            assert.equal(msg.token, 'cihaz-1');
+            assert.equal(msg.notification.title, '7 Günlük Seri!');
+            assert.deepEqual(msg.data, {
+                currentStreak: '7', type: 'streak_reminder', notificationId: String(kayit._id)
+            });
+        } finally {
+            firebase.getMessaging = original;
+        }
     });
 });
 
@@ -4238,7 +4348,11 @@ describe('Mastery decay', () => {
         const notifs = await Notification.find({ user: userId, type: 'word_level_down', 'data.source': 'decay' });
         assert.equal(notifs.length, 1);
         assert.equal(notifs[0].data.count, 2);
-        assert.equal(notifs[0].title, 'Kelimeler tazelenmek istiyor 🌱');
+        // Tasarımdaki tek kelimelik kartın dilinde: başlık + "X ve 1 kelime daha"
+        assert.equal(notifs[0].title, 'Kelimelerin Seviyesi Düştü');
+        assert.match(notifs[0].body, /\) ve 1 kelime daha seviye kaybetti\. Uygulamaya gir tekrar hatırla!$/);
+        assert.ok(notifs[0].data.sampleWordId, 'örnek kelime sampleWordId ile taşınır');
+        assert.equal(notifs[0].data.wordId, undefined, 'çoklu düşüşte wordId yok (mobil tekil sanmasın)');
     });
 
     // Tasarımdaki "Kelimenin Seviyesi Düştü" kartı: tek kelime düşmüşse onu

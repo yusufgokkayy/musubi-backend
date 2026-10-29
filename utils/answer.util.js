@@ -25,11 +25,12 @@ const gradeTyping = (answer, correctAnswers) => {
     return correctAnswers.some(c => normalizeAnswer(c) === typed);
 };
 
-// Kullanıcının dilindeki anlam: İngilizce arayüzde `meaning`, Türkçede
-// `meaningTr` (yoksa İngilizceye düşer). Şık metni, geri bildirim kartı ve
-// "doğru cevap" satırı bununla üretilir.
+// Kullanıcının dilindeki anlam: Türkçede `meaningTr` (yoksa İngilizceye
+// düşer), diğer dillerde İngilizce `meaning` — veri setinde yalnızca bu iki
+// dil var, yeni bir arayüz dili Türkçe anlam görmesin. Şık metni, geri
+// bildirim kartı, "doğru cevap" satırı ve günlük kelime bildirimi bununla üretilir.
 const meaningIn = (word, lang = 'tr') =>
-    (lang === 'en' ? word.meaning : (word.meaningTr || word.meaning));
+    (lang === 'tr' ? (word.meaningTr || word.meaning) : word.meaning);
 
 // Yazma sorusunda kabul edilen cevaplar. İKİ DİL DE kabul edilir, kullanıcının
 // dili önce gelir (ilk eleman "doğru cevap" olarak gösterilir).
@@ -47,7 +48,7 @@ const wordAnswerVariants = (word, lang = 'tr') => {
     const en = word.meaning
         ? [...meaningVariants(word.meaning), ...(word.meaningEnAccepted || [])]
         : [];
-    return [...new Set(lang === 'en' ? [...en, ...tr] : [...tr, ...en])];
+    return [...new Set(lang === 'tr' ? [...tr, ...en] : [...en, ...tr])];
 };
 
 module.exports = { normalizeAnswer, meaningVariants, gradeTyping, wordAnswerVariants, meaningIn };

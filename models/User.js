@@ -147,7 +147,8 @@ const UserSchema = new mongoose.Schema({
         // dailyWord açıksa günlük kelime yine bu saatte gider.
         reminderTime: {
             type: String,
-            default: '10:00',
+            // Figma'daki saat seçicinin başlangıç değeri
+            default: '14:00',
             match: [/^([01]\d|2[0-3]):[0-5]\d$/, 'Hatırlatma saati HH:mm biçiminde olmalı']
         },
         // "Seri Koruma Uyarısı" (alev ikonu) → streak_reminder + streak_warning

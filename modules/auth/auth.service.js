@@ -251,7 +251,7 @@ const AuthService = {
     // Onboarding tek "Kayıt Ol" ile biter: e-posta/ad/şifre adımlarının yanında
     // hatırlatma saati ve günlük hedef ekranlarının seçimleri de buraya gelir.
     // Hepsi opsiyoneldir — "Şimdilik Geç" diyen kullanıcı bunları göndermez ve
-    // şema varsayılanlarıyla (10:00 / 20 kelime) devam eder.
+    // şema varsayılanlarıyla (14:00 / 20 kelime) devam eder.
     // username: v2 istemcisi "Kişisel Bilgiler" ekranında alır ve burada
     // gönderir. Opsiyoneldir — göndermeyen (eski) istemcinin kaydı bozulmaz,
     // hesap needsUsername: true ile açılır ve ad sonra update-info ile verilir.
