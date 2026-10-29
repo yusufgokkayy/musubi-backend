@@ -49,9 +49,14 @@ if (isDevelopment) {
 // Marka varlıkları — HER ortamda servis edilir (public/ yalnızca dev'de açık).
 // Hem mail linklerinin indiği web sayfaları hem de e-posta şablonu buradaki
 // logoyu kullanır; tek dosya, iki tüketici.
+// helmet'in varsayılan Cross-Origin-Resource-Policy: same-origin başlığı,
+// görseli tarayıcıda doğrudan yükleyen mail istemcilerinde (Outlook.com,
+// outlook.live.com) logoyu engelliyordu (29.10.2026). Herkese açık marka
+// görseli olduğu için yalnızca burada cross-origin.
 app.use('/assets', express.static('assets', {
     maxAge: '30d',
-    immutable: false
+    immutable: false,
+    setHeaders: (res) => res.set('Cross-Origin-Resource-Policy', 'cross-origin')
 }));
 
 // Yüklenen görseller — yalnızca `local` sürücüde bizden servis edilir;

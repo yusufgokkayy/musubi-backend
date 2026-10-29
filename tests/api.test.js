@@ -1073,6 +1073,8 @@ describe('E-posta akışları', () => {
         const res = await fetch(BASE.replace(/\/api$/, '') + '/assets/musubi-logo.png');
         assert.equal(res.status, 200);
         assert.match(res.headers.get('content-type'), /image\/png/);
+        assert.equal(res.headers.get('cross-origin-resource-policy'), 'cross-origin',
+            'Outlook.com logoyu tarayıcıdan yükler; same-origin engelliyordu');
     });
 
     it('verify landing: geçerli tokende doğrulama butonu, geçersizde hata sayfası; sayfa yan etkisizdir', async () => {
