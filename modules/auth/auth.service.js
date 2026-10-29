@@ -35,31 +35,57 @@ const { revokeAppleTokens } = require('../../utils/appleRevoke');
 
 const MAX_SESSIONS_PER_USER = 5;
 
-// İşlem maillerini kullanıcının dilinde kurar.
+// İşlem maillerini kullanıcının dilinde kurar. Metin anahtarları i18n'de
+// `<kind>Mail<Alan>` adıyla durur (verifyMailSubject, resetMailCta…).
 // Linke ?lang eklenir ki tıklanınca açılan web sayfası da MAİLLE AYNI dilde
 // gelsin — kullanıcı Türkçe mail alıp İngilizce sayfayla karşılaşmasın.
-const MAIL_KEYS = {
-    verify: ['verifyMailSubject', 'verifyMailTitle', 'verifyMailText', 'verifyMailCta', 'verifyMailNote'],
-    change: ['changeMailSubject', 'changeMailTitle', 'changeMailText', 'changeMailCta', 'changeMailNote'],
-    reset: ['resetMailSubject', 'resetMailTitle', 'resetMailText', 'resetMailCta', 'resetMailNote']
-};
-
-const buildMail = (lang, kind, path) => {
+// path yoksa (bilgi maili) buton çizilmez.
+const buildMail = (lang, kind, { path, email, time } = {}) => {
     const s = t(lang);
-    const [subject, title, text, ctaLabel, note] = MAIL_KEYS[kind].map(k => s[k]);
+    const k = (field) => s[`${kind}Mail${field}`];
     return {
-        subject,
+        subject: k('Subject'),
         html: ctaEmailHtml({
-            lang, title, text, ctaLabel, note,
-            ctaUrl: clientUrl(`${path}?lang=${lang}`),
+            lang, email, time,
+            preheader: k('Preheader'),
+            title: k('Title'),
+            text: k('Text'),
+            warning: k('Warning'),
+            ctaLabel: path ? k('Cta') : undefined,
+            ctaUrl: path ? clientUrl(`${path}?lang=${lang}`) : undefined,
+            note: k('Note'),
+            reason: k('Reason'),
             // Uzak görseller çoğu istemcide varsayılan engelli; şablon logosuz
-            // da eksiksiz durur, bu yalnızca bonus
-            logoUrl: clientUrl('/assets/musubi-logo.png')
+            // da eksiksiz durur (alt metin "Musubi"), bu yalnızca bonus
+            logoUrl: clientUrl('/assets/musubi-logo.png'),
+            privacyUrl: clientUrl(`/legal/privacy?lang=${lang}`)
         })
     };
 };
 
 const userLang = (user) => user?.preferences?.language || DEFAULT_LANG;
+
+// "Şifren değiştirildi" zamanı, kullanıcının kendi saat diliminde
+const changeTime = (user, lang) => new Intl.DateTimeFormat(lang === 'en' ? 'en-GB' : 'tr-TR', {
+    dateStyle: 'long', timeStyle: 'short', timeZone: safeTimezone(user.timezone)
+}).format(new Date());
+
+// Şifre değişince (sıfırlama ya da Ayarlar) hesap sahibine bilgi maili: şifreyi
+// başkası değiştirdiyse gerçek sahip haberdar olsun. İşlemin parçası DEĞİLDİR —
+// gönderilemezse şifre değişikliği yine geçerli kalır, yalnızca loglanır.
+// Adres bazlı mail kısıtına sayılmaz: kullanıcının istediği değil, güvenlik
+// için kendiliğinden giden bir bildirim.
+const notifyPasswordChanged = async (user) => {
+    const lang = userLang(user);
+    try {
+        await sendEmail({
+            to: user.email,
+            ...buildMail(lang, 'passwordChanged', { email: user.email, time: changeTime(user, lang) })
+        });
+    } catch (err) {
+        console.warn(`[mail] şifre değişikliği bildirimi gönderilemedi (${user._id}): ${err.message}`);
+    }
+};
 
 // Onboarding ekranlarının ("Hatırlatma Bildirimi" + "Günlük Kelime Hedefi")
 // seçimleri. register ve social AYNI alanları kabul eder ki mobil tarafta tek
@@ -270,7 +296,7 @@ const AuthService = {
         try {
             await sendEmail({
                 to: email,
-                ...buildMail(userLang(user), 'verify', `/verify-email/${verificationToken}`)
+                ...buildMail(userLang(user), 'verify', { path: `/verify-email/${verificationToken}`, email: user.email })
             });
         } catch (err) {
             await User.findByIdAndDelete(user._id);
@@ -597,7 +623,7 @@ const AuthService = {
         try {
             await sendEmail({
                 to: user.email,
-                ...buildMail(userLang(user), 'reset', `/reset-password/${resetToken}`)
+                ...buildMail(userLang(user), 'reset', { path: `/reset-password/${resetToken}`, email: user.email })
             });
         } catch (err) {
             user.resetPasswordToken = undefined;
@@ -642,6 +668,7 @@ const AuthService = {
         // girerdi; maildeki linke tıklamak zaten hesap sahipliğini kanıtlıyor
         clearLoginFailures(user);
         await user.save();
+        await notifyPasswordChanged(user);
 
         // Web landing sayfasından (deviceName'siz) sıfırlamada tarayıcıya oturum
         // AÇILMAZ: eski oturumlar yine düşer, kullanıcı uygulamadan giriş yapar
@@ -695,7 +722,7 @@ const AuthService = {
                 try {
                     await sendEmail({
                         to: newEmail,
-                        ...buildMail(userLang(user), 'change', `/verify-email/${verificationToken}`)
+                        ...buildMail(userLang(user), 'change', { path: `/verify-email/${verificationToken}`, email: newEmail })
                     });
                 } catch (err) {
                     throw new AppError('Doğrulama maili gönderilemedi, e-posta değiştirilmedi', 500);
@@ -847,7 +874,7 @@ const AuthService = {
         try {
             await sendEmail({
                 to: user.email,
-                ...buildMail(userLang(user), 'verify', `/verify-email/${verificationToken}`)
+                ...buildMail(userLang(user), 'verify', { path: `/verify-email/${verificationToken}`, email: user.email })
             });
         } catch (err) {
             // Gelmeyen mail yüzünden kullanıcı bir dakika boyunca kilitlenmesin
@@ -900,6 +927,7 @@ const AuthService = {
         // yeni şifreye taşımanın anlamı yok
         clearLoginFailures(user);
         await user.save();
+        await notifyPasswordChanged(user);
 
         // Güvenlik: diğer tüm cihazların oturumları kapanır, bu cihaz taze çift alır
         return rotateAllSessions(userId, deviceName);

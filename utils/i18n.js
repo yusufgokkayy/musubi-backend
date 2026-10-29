@@ -12,28 +12,49 @@ const STRINGS = {
     tr: {
         brandTagline: 'Kelime Ezberlemenin En Hızlı Yolu',
 
+        // Mailler (utils/emailTemplate.js). Text/Warning içindeki {email} alıcının
+        // adresiyle (kalın), {time} değişiklik zamanıyla dolar. Preheader gelen
+        // kutusunda konunun yanında görünen gri satırdır.
         // Mail: doğrulama
-        verifyMailSubject: 'Musubi - E-posta Doğrulama',
+        verifyMailSubject: 'E-postanı doğrula, Musubi\'ye bir adım kaldı',
+        verifyMailPreheader: 'Hesabını tek dokunuşla etkinleştir. Bağlantı 24 saat geçerli.',
         verifyMailTitle: 'E-postanı doğrula',
-        verifyMailText: 'Musubi hesabını kullanmaya başlamak için e-posta adresini doğrulaman gerekiyor.',
+        verifyMailText: 'Merhaba, Musubi hesabını açmak için {email} adresini doğrulaman yeterli.',
         verifyMailCta: 'E-postamı Doğrula',
-        verifyMailNote: 'Bu bağlantı 24 saat geçerlidir. Bu hesabı sen açmadıysan bu e-postayı yok sayabilirsin.',
+        verifyMailNote: 'Bağlantı 24 saat geçerli. Bu hesabı sen açmadıysan bu e-postayı yok sayabilirsin.',
+        verifyMailReason: 'Bu e-postayı, Musubi\'de bu adresle hesap açıldığı için aldın.',
 
         // Mail: yeni adres doğrulama
-        changeMailSubject: 'Musubi - Yeni E-posta Doğrulama',
+        changeMailSubject: 'Yeni e-posta adresini doğrula',
+        changeMailPreheader: 'Değişiklik, yeni adresini doğruladığında geçerli olur.',
         changeMailTitle: 'Yeni adresini doğrula',
-        changeMailText: 'Musubi hesabının e-posta adresini değiştirdin. Yeni adresi doğrulamak için aşağıdaki butona bas.',
+        changeMailText: 'Merhaba, Musubi hesabının e-posta adresini {email} olarak değiştirmek istedin. Değişiklik, bu adresi doğruladığında geçerli olur.',
         changeMailCta: 'Yeni Adresimi Doğrula',
-        changeMailNote: 'Bu bağlantı 24 saat geçerlidir. Bu değişikliği sen yapmadıysan bu e-postayı yok sayabilirsin.',
+        changeMailNote: 'Bağlantı 24 saat geçerli. Bu değişikliği sen istemediysen bu e-postayı yok sayabilirsin; adresin değişmez.',
+        changeMailReason: 'Bu e-postayı, bir Musubi hesabına bu adres eklenmek istendiği için aldın.',
 
         // Mail: şifre sıfırlama
-        resetMailSubject: 'Musubi - Şifre Sıfırlama',
+        resetMailSubject: 'Musubi şifreni sıfırla',
+        resetMailPreheader: 'Bağlantı 1 saat geçerli. Bu isteği sen yapmadıysan yok sayabilirsin.',
         resetMailTitle: 'Şifreni sıfırla',
-        resetMailText: 'Musubi hesabının şifresini sıfırlamak için aşağıdaki butona bas.',
+        resetMailText: 'Merhaba, {email} hesabı için şifre sıfırlama isteği aldık. Yeni şifreni belirlemek için butona dokun.',
         resetMailCta: 'Şifremi Sıfırla',
-        resetMailNote: 'Bu bağlantı 1 saat geçerlidir. Bu isteği sen yapmadıysan bu e-postayı yok sayabilirsin.',
-        mailFooter: 'Bu e-posta Musubi tarafından gönderildi.',
-        mailButtonFallback: 'Buton çalışmıyorsa bu adresi tarayıcına yapıştır:',
+        resetMailNote: 'Bağlantı 1 saat geçerli. Bu isteği sen yapmadıysan bu e-postayı yok sayabilirsin; şifren değişmez.',
+        resetMailReason: 'Bu e-postayı, Musubi hesabın için şifre sıfırlama istendiği için aldın.',
+
+        // Mail: şifre değiştirildi (bilgi maili, butonsuz)
+        passwordChangedMailSubject: 'Musubi şifren değiştirildi',
+        passwordChangedMailPreheader: 'Bunu sen yapmadıysan hemen şifreni sıfırla.',
+        passwordChangedMailTitle: 'Şifren değiştirildi',
+        passwordChangedMailText: 'Merhaba, {email} hesabının şifresi değiştirildi ({time}). Bunu sen yaptıysan başka bir şey yapmana gerek yok.',
+        passwordChangedMailWarning: 'Bunu sen yapmadıysan uygulamadaki Giriş Yap ekranından "Şifremi Unuttum" ile şifreni hemen sıfırla.',
+        passwordChangedMailNote: 'Şifre değişince açık olan diğer oturumların kapatıldı.',
+        passwordChangedMailReason: 'Bu e-postayı, Musubi hesabının güvenliği için gönderiyoruz.',
+
+        mailFallbackPre: 'Buton çalışmazsa',
+        mailFallbackLink: 'bu bağlantıyı',
+        mailFallbackPost: ' aç.',
+        mailPrivacy: 'Gizlilik',
 
         // Sayfa: doğrulama
         verifyPageTitle: 'E-posta Doğrulama',
@@ -106,25 +127,42 @@ const STRINGS = {
     en: {
         brandTagline: 'The Fastest Way to Learn Words',
 
-        verifyMailSubject: 'Musubi - Verify Your Email',
+        verifyMailSubject: 'Verify your email, you\'re one step from Musubi',
+        verifyMailPreheader: 'Activate your account with one tap. The link is valid for 24 hours.',
         verifyMailTitle: 'Verify your email',
-        verifyMailText: 'To start using your Musubi account, please verify your email address.',
+        verifyMailText: 'Hi, to open your Musubi account just verify {email}.',
         verifyMailCta: 'Verify My Email',
-        verifyMailNote: 'This link is valid for 24 hours. If you did not create this account, you can ignore this email.',
+        verifyMailNote: 'The link is valid for 24 hours. If you didn\'t create this account, you can ignore this email.',
+        verifyMailReason: 'You received this email because a Musubi account was created with this address.',
 
-        changeMailSubject: 'Musubi - Verify Your New Email',
+        changeMailSubject: 'Verify your new email address',
+        changeMailPreheader: 'The change takes effect once you verify your new address.',
         changeMailTitle: 'Verify your new address',
-        changeMailText: 'You changed the email address on your Musubi account. Tap the button below to verify it.',
+        changeMailText: 'Hi, you asked to change your Musubi account email to {email}. The change takes effect once you verify this address.',
         changeMailCta: 'Verify New Address',
-        changeMailNote: 'This link is valid for 24 hours. If you did not make this change, you can ignore this email.',
+        changeMailNote: 'The link is valid for 24 hours. If you didn\'t ask for this, you can ignore this email; your address won\'t change.',
+        changeMailReason: 'You received this email because someone asked to add this address to a Musubi account.',
 
-        resetMailSubject: 'Musubi - Password Reset',
+        resetMailSubject: 'Reset your Musubi password',
+        resetMailPreheader: 'The link is valid for 1 hour. If you didn\'t ask for this, you can ignore it.',
         resetMailTitle: 'Reset your password',
-        resetMailText: 'Tap the button below to reset the password for your Musubi account.',
+        resetMailText: 'Hi, we received a request to reset the password for {email}. Tap the button to set a new one.',
         resetMailCta: 'Reset My Password',
-        resetMailNote: 'This link is valid for 1 hour. If you did not request this, you can ignore this email.',
-        mailFooter: 'This email was sent by Musubi.',
-        mailButtonFallback: 'If the button does not work, paste this address into your browser:',
+        resetMailNote: 'The link is valid for 1 hour. If you didn\'t ask for this, you can ignore this email; your password won\'t change.',
+        resetMailReason: 'You received this email because a password reset was requested for your Musubi account.',
+
+        passwordChangedMailSubject: 'Your Musubi password was changed',
+        passwordChangedMailPreheader: 'If this wasn\'t you, reset your password right away.',
+        passwordChangedMailTitle: 'Your password was changed',
+        passwordChangedMailText: 'Hi, the password for {email} was changed ({time}). If this was you, there\'s nothing else to do.',
+        passwordChangedMailWarning: 'If this wasn\'t you, reset your password right away with "Forgot Password" on the app\'s sign-in screen.',
+        passwordChangedMailNote: 'Your other open sessions were signed out when the password changed.',
+        passwordChangedMailReason: 'We send this email to keep your Musubi account secure.',
+
+        mailFallbackPre: 'If the button doesn\'t work,',
+        mailFallbackLink: 'open this link',
+        mailFallbackPost: '.',
+        mailPrivacy: 'Privacy',
 
         verifyPageTitle: 'Email Verification',
         verifyHeading: 'Verify Your Email',
