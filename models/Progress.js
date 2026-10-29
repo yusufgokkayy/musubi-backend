@@ -26,6 +26,12 @@ const ProgressSchema = new mongoose.Schema({
         type: Number,
         default: 0  // yüzde olarak
     },
+    // completionRate hangi "sayılan" mastery eşiğiyle hesaplandı. Eşik kodda
+    // değişince ProgressService.syncCompletionRates bu alana bakarak eski
+    // oranları açılışta yeniler.
+    rateMasteryMin: {
+        type: Number
+    },
     createdAt: {
         type: Date,
         default: Date.now

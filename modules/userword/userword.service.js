@@ -852,7 +852,7 @@ const UserWordService = {
 
                 // Hafıza ekranındaki "Bu hafta +N kelime iyiye geçti" çipinin
                 // kaynağı: kelimenin "sayılan bölgeye" (seviye kilidini açan
-                // eşik) GİRDİĞİ an. 3→4→5 yükselişleri tarihi TAZELEMEZ —
+                // eşik) GİRDİĞİ an. 4→5 yükselişi tarihi TAZELEMEZ —
                 // kelime bölgeye ilk girdiği hafta sayılır, her doğru cevapta
                 // yeniden sayılmaz. Bölgeden düşerse iz silinir ki kelime geri
                 // tırmandığında o hafta yeniden sayılabilsin.
@@ -944,7 +944,7 @@ const UserWordService = {
             const target = Math.max(1, baseLevel - drops);
 
             if (target < uw.masteryLevel) {
-                // Sayılan bölgenin (Orta/İyi/Ezber) altına düşen kelime o
+                // Sayılan bölgenin (İyi/Ezber) altına düşen kelime o
                 // bölgeden çıkmıştır: promotedAt izi silinir, yoksa kullanıcı
                 // geri kazandığında "bu hafta iyiye geçti" bir daha hiç
                 // sayılmazdı (bkz. models/UserWord.js promotedAt notu).

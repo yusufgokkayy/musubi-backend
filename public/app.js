@@ -15,6 +15,9 @@ const TAB_ROOTS = ['home', 'library', 'memory', 'settings'];
 // Hafıza kutusu → CSS değişkeni. Sunucu kutu anahtarlarını ve etiketlerini
 // kendisi veriyor (bkz. GET /memory) — burada YALNIZCA renk eşlemesi var,
 // isim/sıra/eşik sözlüğü istemcide TUTULMAZ.
+// Seviye adının belirtme (-i) hâli, okunuşuna göre: beş → N5'i, dört → N4'ü,
+// üç → N3'ü, iki → N2'yi, bir → N1'i. "N5'i sağlam öğrendin."
+const LEVEL_ACC = { N5: "N5'i", N4: "N4'ü", N3: "N3'ü", N2: "N2'yi", N1: "N1'i" };
 const BOX_COLOR = { new: 'var(--box-new)', weak: 'var(--box-weak)', medium: 'var(--box-medium)', good: 'var(--box-good)', mastered: 'var(--box-mastered)' };
 
 const state = {
@@ -58,6 +61,7 @@ const I = {
   trash: '<svg viewBox="0 0 24 24"><path d="M4 6.5h16"/><path d="M9 6.5V4.5h6v2"/><path d="M6.5 6.5 7.4 20a1.5 1.5 0 0 0 1.5 1.4h6.2a1.5 1.5 0 0 0 1.5-1.4l.9-13.5"/><path d="M10.5 10.5v7M13.5 10.5v7"/></svg>',
   mail: '<svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>',
   lock: '<svg viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3"/></svg>',
+  badgeCheck: '<svg viewBox="0 0 24 24"><path d="M3.85 8.62a4 4 0 0 1 4.78-4.77 4 4 0 0 1 6.74 0 4 4 0 0 1 4.78 4.78 4 4 0 0 1 0 6.74 4 4 0 0 1-4.77 4.78 4 4 0 0 1-6.75 0 4 4 0 0 1-4.78-4.77 4 4 0 0 1 0-6.76Z"/><path d="m9 12 2 2 4-4"/></svg>',
   unlock: '<svg viewBox="0 0 24 24"><rect x="4.5" y="10.5" width="15" height="10" rx="2.5"/><path d="M8 10.5V7.5a4 4 0 0 1 7.5-2"/></svg>',
   eye: '<svg viewBox="0 0 24 24"><path d="M2 12s3.8-6.5 10-6.5S22 12 22 12s-3.8 6.5-10 6.5S2 12 2 12z"/><circle cx="12" cy="12" r="2.8"/></svg>',
   eyeOff: '<svg viewBox="0 0 24 24"><path d="M10 5.7A9.9 9.9 0 0 1 12 5.5C18.2 5.5 22 12 22 12a17 17 0 0 1-3 3.8M6.3 7.9A17 17 0 0 0 2 12s3.8 6.5 10 6.5a9.6 9.6 0 0 0 4-.8"/><path d="M3 3l18 18"/></svg>',
@@ -769,10 +773,11 @@ async function showHome() {
           <span class="nm">${esc(s.title)}</span>
         </button>`).join('')}</div>` : ''}
 
-      ${d.advanceableLevel ? `<div class="unlock-card gap-16">
-        <div class="kicker">${I.unlock}<span>Kilit Açıldı</span></div>
+      ${d.advanceableLevel ? `<div class="unlock-card gap-16 ${state.unlockCollapsed ? 'collapsed' : ''}">
+        <button class="toggle" id="b-unlock-toggle" aria-label="Aç/kapat">${state.unlockCollapsed ? I.chevD : I.chevU}</button>
+        <div class="kicker">${I.badgeCheck}<span>Kilit Açıldı</span></div>
         <h3>${esc(d.advanceableLevel.jlptLevel)} • ${esc(d.advanceableLevel.label)} Seviyesi Hazır</h3>
-        <p>${esc(d.activeLevel)}'i sağlam öğrendin. Hazır olduğunda yeni seviyeye geç.</p>
+        <p>${esc(LEVEL_ACC[d.activeLevel] || d.activeLevel)} sağlam öğrendin. Hazır olduğunda yeni seviyeye geç.</p>
         <button id="b-advance">Şimdi Geç</button>
       </div>` : ''}
 
@@ -810,6 +815,13 @@ async function showHome() {
   $('#b-lesson').addEventListener('click', startLesson);
   const adv = $('#b-advance');
   if (adv) adv.addEventListener('click', () => confirmLevelSwitch(d.advanceableLevel));
+  // Figma'da kart iki hâlli: açık (açıklama + Şimdi Geç) ve tek satırlık kapalı bant
+  const tgl = $('#b-unlock-toggle');
+  if (tgl) tgl.addEventListener('click', () => {
+    state.unlockCollapsed = !state.unlockCollapsed;
+    tgl.closest('.unlock-card').classList.toggle('collapsed', state.unlockCollapsed);
+    tgl.innerHTML = state.unlockCollapsed ? I.chevD : I.chevU;
+  });
   $$('[data-story]').forEach(b => b.addEventListener('click', () => openStory(stories, stories.findIndex(s => String(s.id) === b.dataset.story))));
 
   // "Seviyeni Öğrenelim Mi?" — oturum başına bir kez, ayrı istek gerekmiyor
@@ -1504,14 +1516,14 @@ async function showMemory() {
             <i style="width:${Math.min(100, d.completionRate)}%"></i>
             <span class="notch" style="left:${d.completionThreshold}%"></span>
           </div>
-          ${d.unlockHint ? `<p class="hint">${esc(d.unlockHint)}</p>` : ''}` : `
+          ${d.unlockHint && !d.nextLevel.isUnlocked ? `<p class="hint">${esc(d.unlockHint)}</p>` : ''}` : `
           <div class="split"></div>
           <p class="hint" style="margin:0">En üst seviyedesin — bundan sonrası tekrar ve pekiştirme.</p>`}
       </div>
 
       <div class="sec-row">
         <h2>Hafıza</h2>
-        ${d.weeklyImproved !== null && d.weeklyImproved !== undefined
+        ${d.weeklyImproved
           ? `<span class="trendchip">${I.trend}Bu hafta +${d.weeklyImproved} kelime iyiye geçti</span>` : ''}
       </div>
 
@@ -1530,7 +1542,7 @@ async function showMemory() {
         <button class="more" id="b-seeall">Tümünü Gör</button>
       </div>
       <div id="box-list"><div class="loading" style="padding:30px 0"><div class="spinner"></div></div></div>
-      <p class="tiny gap-16" style="text-align:center">${esc(d.jlptLevel)} seviyesinde toplam ${d.totalWords} kelime · %${d.completionRate}'i Orta ve üzeri</p>
+      <p class="tiny gap-16" style="text-align:center">${esc(d.jlptLevel)} seviyesinde toplam ${d.totalWords} kelime · kilide sayılan (${d.boxes.filter(b => b.countsTowardUnlock).map(b => esc(b.label)).join(' + ')}) %${d.completionRate}</p>
     </div>`);
 
   $$('[data-box]').forEach(b => b.addEventListener('click', () => {
@@ -1545,7 +1557,7 @@ async function showMemory() {
 async function loadBoxPreview(box) {
   const tk = activeToken;
   const label = state.memory.boxes.find(b => b.key === box)?.label || '';
-  const t = $('#box-title'); if (t) t.textContent = `${label} Kutusundakiler`;
+  const t = $('#box-title'); if (t) t.textContent = `${label} Seviye Kelimeler`;
   const res = await api('GET', `/memory/words?box=${box}&limit=5`);
   if (stale(tk)) return;
   const host = $('#box-list');
@@ -1570,7 +1582,7 @@ async function showMemoryBox({ box }) {
         <span class="dot" style="width:11px;height:11px;border-radius:50%;background:${BOX_COLOR[d.box]}"></span>
         <span class="tiny">${esc(d.jlptLevel)} · ${d.total} kelime</span>
       </div>
-      <h1 class="title-xl">${esc(d.label)} Kutusundakiler</h1>
+      <h1 class="title-xl">${esc(d.label)} Seviye Kelimeler</h1>
       <p class="lead">${d.box === 'new'
         ? 'Henüz hiç çalışmadığın kelimeler. Sıra, günlük dersinde geleceği sırayla aynı.'
         : 'Vadesi en yakın olan kelime en üstte — yarınki tekrarında ilk bunu göreceksin.'}</p>

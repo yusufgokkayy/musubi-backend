@@ -92,7 +92,7 @@ cp .env.example .env
 | `GOOGLE_CLIENT_IDS` / `APPLE_CLIENT_IDS` | — | Sosyal girişte `idToken`'ın `aud` claim'i bu listeyle eşleşmeli |
 | `NEW_WORD_DAILY_LIMIT` / `REVIEW_DAILY_LIMIT` | `10` / `10` | Yalnızca kullanıcının `dailyGoal`'u yokken devreye girer |
 | `STORAGE_DRIVER` / `UPLOAD_DIR` | `local` / `./uploads` | Görsel depolama — aşağıdaki uyarıya bakın |
-| `MEMORY_TRACKING_SINCE` | `2026-08-07` | Hafıza ekranındaki haftalık sayımların başlangıcı |
+| `MEMORY_TRACKING_SINCE` | `2026-10-30` | Hafıza ekranındaki haftalık sayımların başlangıcı (eşiğin 4'e çekildiği gün; Railway'de eski bir değer tanımlıysa silinmeli) |
 | `IOS_APP_IDS` / `ANDROID_PACKAGE` / `ANDROID_CERT_FINGERPRINTS` | — | Universal / App Links doğrulama dosyaları. Boşken `/.well-known/…` 404 döner ve mail linkleri web'e iner (akış kırılmaz) |
 | `SIMULATOR_ENABLED` | `false` | Simülatörü canlıda `/sim` altında açar |
 
@@ -221,14 +221,14 @@ Seed **5816 kelimelik omurga müfredatı** yazar (N5→N1, hepsi `isCore: true`)
 
 Bir sonraki JLPT seviyesinin kilidi **iki yoldan** açılır:
 
-- **Çalışma:** seviyenin kelimelerinin **%75'i** `masteryLevel ≥ 3`'e ulaşınca otomatik açılır (her cevapta kontrol edilir).
+- **Çalışma:** seviyenin kelimelerinin **%75'i** `masteryLevel ≥ 4`'e (İyi ve Ezber kutuları: 6 günlük aradan sonra da hatırlanmış) ulaşınca otomatik açılır (her cevapta kontrol edilir). 30.10.2026'ya kadar eşik 3'tü (Orta dahil); değişince kayıtlı oranlar açılışta yeniden hesaplanır (`ProgressService.syncCompletionRates`), açılmış kilitler kapanmaz.
 - **Seviye tespit sınavı:** sınavın belirlediği seviyeye **kadar olan tüm seviyeler** tek seferde açılır.
 
 `GET /api/progress` seviye listesini, `GET /api/progress/:jlptLevel/distribution` o seviyedeki kelimelerin 1–5 ustalık dağılımını döner.
 
-**Hafıza sekmesi** aynı dağılımın etiketlenmiş hâlidir: Yeni (hiç dokunulmamış) · Zayıf (1–2) · Orta (3) · İyi (4) · Ezber (5). Son üç kutu tam olarak kilidi açan kümedir (`masteryLevel ≥ 3`), yani beş kutunun toplamı seviyenin kelime sayısına, sayılan üçünün oranı `completionRate`'e eşittir — eşik tek yerde tanımlıdır (`ProgressService.MASTERY_COUNTED_MIN`).
+**Hafıza sekmesi** aynı dağılımın etiketlenmiş hâlidir: Yeni (hiç dokunulmamış) · Zayıf (1–2) · Orta (3) · İyi (4) · Ezber (5). Son iki kutu (İyi, Ezber) tam olarak kilidi açan kümedir (`masteryLevel ≥ 4`), yani beş kutunun toplamı seviyenin kelime sayısına, sayılan ikisinin oranı `completionRate`'e eşittir — eşik tek yerde tanımlıdır (`ProgressService.MASTERY_COUNTED_MIN`).
 
-"Bu hafta +N kelime iyiye geçti" çipi `UserWord.promotedAt` üzerinden sayılır: kelimenin sayılan bölgeye **girdiği** an. Bölge içi yükselişler (3→4→5) tekrar saymaz, bölgeden düşünce iz silinir. Veri geriye dönük üretilemediği için `MEMORY_TRACKING_SINCE` öncesi haftalarda alan `null` döner ve çip çizilmez.
+"Bu hafta +N kelime iyiye geçti" çipi `UserWord.promotedAt` üzerinden sayılır: kelimenin sayılan bölgeye **girdiği** an. Bölge içi yükseliş (4→5) tekrar saymaz, bölgeden düşünce iz silinir. Veri geriye dönük üretilemediği için `MEMORY_TRACKING_SINCE` öncesi haftalarda alan `null` döner ve çip çizilmez.
 
 ### Seviye Tespit Sınavı
 

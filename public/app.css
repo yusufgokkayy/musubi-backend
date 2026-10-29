@@ -437,7 +437,12 @@ select.select {
 .mistake-card .hd .n { font-size: 13.5px; font-weight: 700; color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
 .mistake-card .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 14px; }
 
-.unlock-card { background: linear-gradient(150deg, var(--brand) 0%, #8E0022 100%); color: #fff; border-radius: var(--r-lg); padding: 17px; }
+.unlock-card { position: relative; background: linear-gradient(150deg, var(--brand) 0%, #8E0022 100%); color: #fff; border-radius: var(--r-lg); padding: 17px; }
+.unlock-card .toggle { position: absolute; z-index: 1; top: 12px; right: 12px; width: 32px; height: 32px; min-height: 0; display: grid; place-items: center; border: 0; background: none; cursor: pointer; }
+.unlock-card .toggle svg { width: 14px; height: 8px; fill: none; stroke: #fff; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.unlock-card.collapsed { padding: 14px 17px; }
+.unlock-card.collapsed .kicker, .unlock-card.collapsed p, .unlock-card.collapsed #b-advance { display: none; }
+.unlock-card.collapsed h3 { margin: 0; font-size: 16px; font-weight: 600; padding-right: 36px; }
 .unlock-card .kicker { display: flex; align-items: center; gap: 7px; font-size: 12.5px; font-weight: 650; opacity: .82; }
 .unlock-card .kicker svg { width: 15px; height: 15px; fill: none; stroke: #fff; stroke-width: 1.8; }
 .unlock-card h3 { margin: 7px 0 5px; font-size: 18px; font-weight: 800; letter-spacing: -.02em; }
@@ -584,6 +589,7 @@ ruby rt { font-size: .48em; color: var(--muted); font-weight: 400; }
 
 .boxes { display: grid; grid-template-columns: repeat(5, 1fr); gap: 7px; }
 .boxbtn {
+  display: flex; flex-direction: column; align-items: center;
   padding: 12px 4px 11px; cursor: pointer; text-align: center;
   background: var(--surface); border: 1.5px solid transparent; border-radius: var(--r-sm);
   font: inherit; color: var(--ink);

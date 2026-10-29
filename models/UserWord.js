@@ -56,9 +56,9 @@ const UserWordSchema = new mongoose.Schema({
         max: 5,
         default: 1
     },
-    // Kelimenin "sayılan bölgeye" (masteryLevel >= 3 — seviye kilidini açan
+    // Kelimenin "sayılan bölgeye" (masteryLevel >= 4 — seviye kilidini açan
     // eşiğin TA KENDİSİ) en son girdiği an. Hafıza ekranındaki "Bu hafta +23
-    // kelime iyiye geçti" çipinin tek kaynağı. Seviye 3'ün altına düşerse
+    // kelime iyiye geçti" çipinin tek kaynağı. Seviye 4'ün altına düşerse
     // null'lanır ki kelime geri tırmandığında o hafta yeniden sayılsın.
     // Event log'dan türetilmez: yazımlar fire-and-forget'tir, güvenilir kaynak
     // değildir (bkz. yukarıdaki lastResult notu). Geçmiş kayıtlar BİLEREK

@@ -53,6 +53,14 @@ connectDatabase().then(async () => {
     } catch (err) {
         console.error('[db] bildirim TTL indeksi güncellenemedi:', err.message);
     }
+    // Kelimenin "öğrenildi" eşiği kodda değiştiyse kayıtlı seviye oranlarını yenile
+    try {
+        const ProgressService = require('./modules/progress/progress.service');
+        const n = await ProgressService.syncCompletionRates();
+        if (n) console.log(`[db] ${n} seviye kaydının oranı yeni eşikle yeniden hesaplandı`);
+    } catch (err) {
+        console.error('[db] seviye oranları yeniden hesaplanamadı:', err.message);
+    }
 });
 
 require('./config/firebase');
