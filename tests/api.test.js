@@ -5527,11 +5527,24 @@ describe('Güvenlik regresyonları (26.09.2026 incelemesi)', () => {
         assert.equal((await Streak.findOne({ user: b._id })).currentStreak, 0);
     });
 
-    it('bildirimler 90 günlük TTL ile silinir', async () => {
+    it('bildirimler 30 günlük TTL ile silinir', async () => {
         await Notification.init();
         const idx = await Notification.collection.indexes();
         const ttl = idx.find(i => i.expireAfterSeconds !== undefined);
-        assert.equal(ttl?.expireAfterSeconds, 90 * 24 * 60 * 60);
+        assert.equal(ttl?.expireAfterSeconds, 30 * 24 * 60 * 60);
+    });
+
+    // Canlıdaki indeks 90 günle kurulmuştu; Mongoose süresi değişen indeksi
+    // kendisi güncellemez, açılıştaki syncTtl günceller
+    it('eski süreyle kurulmuş TTL indeksi açılışta koddaki süreye çekilir', async () => {
+        await Notification.init();
+        await Notification.collection.dropIndex('createdAt_1');
+        await Notification.collection.createIndex({ createdAt: 1 }, { expireAfterSeconds: 90 * 24 * 60 * 60 });
+
+        assert.equal(await Notification.syncTtl(), true);
+        const ttl = (await Notification.collection.indexes()).find(i => i.expireAfterSeconds !== undefined);
+        assert.equal(ttl.expireAfterSeconds, 30 * 24 * 60 * 60);
+        assert.equal(await Notification.syncTtl(), false, 'zaten güncelse dokunmaz');
     });
 
     it('Apple token iptali: yapılandırma yoksa silme yine tamamlanır', async () => {
