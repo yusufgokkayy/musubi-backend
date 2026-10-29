@@ -7,7 +7,7 @@ const router = express.Router();
 // Kapsam varsayılan olarak kullanıcının aktif seviyesidir (?jlptLevel ile
 // başka bir seviyeye de bakılabilir).
 router.get('/',      MemoryController.getMemory);
-// Seçili kutunun kelime listesi ("Zayıf Kutusundakiler" → "Tümünü Gör")
+// Seçili kutunun kelime listesi ("Zayıf Seviye Kelimeler" → "Tümünü Gör")
 router.get('/words', MemoryController.getBoxWords);
 
 module.exports = router;
