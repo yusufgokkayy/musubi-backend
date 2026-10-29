@@ -9,10 +9,13 @@
 // Metni değiştirip sürümü aynı bırakmak, kullanıcının onaylamadığı bir metne
 // onay vermiş görünmesine yol açar — KVKK açısından kanıt değeri sıfırdır.
 //
-// Metinler ALPSOY YAZILIM tarafından iletildiği ŞEKLİYLE, birebir durur.
+// Metinler Alpsoy Yazılım tarafından iletildiği ŞEKLİYLE, birebir durur.
 // Yazım/ifade düzeltmesi yapılmaz; hukuki metin paraphrase edilmez.
 
-const COMPANY = 'ALPSOY YAZILIM ARGE MÜHENDİSLİK LİMİTED ŞİRKETİ';
+// Unvan küçük harfle yazılır (Yusuf'un isteği, 29.10.2026: tamamı büyük harf
+// "çok çirkin duruyor"). Harf büyüklüğü unvanı değiştirmez; metnin anlamı aynı
+// kaldığı için sürüm yükseltilmedi, kullanıcılardan yeniden rıza istenmez.
+const COMPANY = 'Alpsoy Yazılım Arge Mühendislik Limited Şirketi';
 const SUPPORT_EMAIL = 'destek@musubi.app';
 
 // Metinlerin dili Türkçedir. İngilizce sürümü YOKTUR ve makine çevirisi

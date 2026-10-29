@@ -4368,7 +4368,7 @@ describe('Hukuki metinler', () => {
         assert.equal(kvkk.status, 200);
         assert.equal(kvkk.json.data.sections.length, 6);
         assert.match(kvkk.json.data.intro, /6698 sayılı/);
-        assert.match(kvkk.json.data.company, /ALPSOY/);
+        assert.match(kvkk.json.data.company, /^Alpsoy Yazılım/);
 
         // Aynı metin HTML sayfada da görünmeli — iki kopya değil, tek kaynak
         const page = await pageGet('/legal/kvkk');

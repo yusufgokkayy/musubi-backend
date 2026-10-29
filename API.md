@@ -511,7 +511,7 @@ Hepsi **oturumsuz** çalışır: kullanıcı kayıt olmadan önce okuyabilmeli.
   "data": {
     "key": "kvkk", "version": "1.0", "effectiveDate": "2026-08-04",
     "title": "KVKK Aydınlatma ve Açık Rıza Metni",
-    "lang": "tr", "company": "ALPSOY YAZILIM ARGE MÜHENDİSLİK LİMİTED ŞİRKETİ",
+    "lang": "tr", "company": "Alpsoy Yazılım Arge Mühendislik Limited Şirketi",
     "intro": "İşbu Aydınlatma Metni, 6698 sayılı ...",
     "sections": [ { "heading": "1. Veri Sorumlusu", "body": "..." } ],
     "url": "/legal/kvkk"
