@@ -4374,7 +4374,7 @@ describe('Hukuki metinler', () => {
         const page = await pageGet('/legal/kvkk');
         assert.equal(page.status, 200);
         assert.ok(page.text.includes('Haklarınız (KVKK m. 11)'));
-        assert.ok(page.text.includes('destek@musubi.app'));
+        assert.ok(page.text.includes('destek@alpsoysoft.com'));
 
         const yok = await api('GET', '/legal/olmayan');
         assert.equal(yok.status, 404);
