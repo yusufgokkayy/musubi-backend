@@ -382,6 +382,8 @@ Hatalar: `401 "Şifreniz yanlış. Lütfen tekrar deneyin."` (ekrandaki hata met
 ```
 Hatalar: `401 "Şifreniz yanlış. Lütfen tekrar deneyin."` · `INVALID_PASSWORD`, `400 "Yeni şifre eski şifrenle aynı olamaz"` · `SAME_PASSWORD`.
 
+Şifre değişince hesabın adresine **"Musubi şifren değiştirildi"** bilgi maili gider (butonsuz; "bunu sen yapmadıysan şifreni sıfırla" uyarısı ve değişiklik zamanı). Mail gönderilemezse değişiklik yine geçerlidir. Aynı mail şifre sıfırlamada da gider.
+
 ### GET /auth/verification-status 🔒
 "E-postanı Doğrula" bekleme ekranının sorduğu durum ucu. ✉️ **YOK** — tam da
 doğrulanmamış kullanıcı için var.
@@ -540,6 +542,8 @@ adres sahipliğini kanıtlar.
 Hatalar: `400 "Bağlantının süresi dolmuş ya da geçersiz."` · `LINK_INVALID` (link 1 saat geçerli), `400 "Yeni şifre
 eski şifrenle aynı olamaz"` (aynı-şifre 400'ü token'ı TÜKETMEZ; kullanıcı aynı
 linkle farklı şifre deneyebilir).
+
+Başarılı sıfırlamadan sonra hesabın adresine **"Musubi şifren değiştirildi"** bilgi maili gider (gönderilemezse sıfırlama yine geçerlidir).
 
 ### POST /auth/verify-email
 ```jsonc

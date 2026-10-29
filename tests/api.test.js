@@ -831,7 +831,7 @@ describe('E-posta akışları', () => {
 
         const mail = sendEmail.outbox.at(-1);
         assert.equal(mail.to, 'posta@test.com');
-        assert.match(mail.subject, /Musubi - E-posta Doğrulama/);
+        assert.match(mail.subject, /^E-postanı doğrula/);
         const verificationToken = lastVerificationToken();
 
         // Yan kayıtlar oluşmuş olmalı
@@ -912,7 +912,7 @@ describe('E-posta akışları', () => {
 
         const mail = sendEmail.outbox.at(-1);
         assert.equal(mail.to, 'sifirla@test.com');
-        assert.match(mail.subject, /Şifre Sıfırlama/);
+        assert.match(mail.subject, /şifreni sıfırla/);
         const resetToken = lastResetToken();
 
         const rp = await api('POST', '/auth/reset-password', {
@@ -1045,7 +1045,7 @@ describe('E-posta akışları', () => {
         await api('POST', '/auth/forgot-password', { body: { email: 'ingilizce@test.com' } });
 
         const mail = sendEmail.outbox.at(-1);
-        assert.match(mail.subject, /Password Reset/, 'konu İngilizce olmalı');
+        assert.match(mail.subject, /Reset your Musubi password/, 'konu İngilizce olmalı');
         assert.ok(mail.html.includes('Reset My Password'), 'buton İngilizce olmalı');
         assert.ok(mail.html.includes('?lang=en'),
             'link dili taşımalı — mail İngilizce, açılan sayfa Türkçe olmasın');
@@ -1054,7 +1054,7 @@ describe('E-posta akışları', () => {
         await createVerifiedUser('turkce@test.com');
         await api('POST', '/auth/forgot-password', { body: { email: 'turkce@test.com' } });
         const trMail = sendEmail.outbox.at(-1);
-        assert.match(trMail.subject, /Şifre Sıfırlama/);
+        assert.match(trMail.subject, /şifreni sıfırla/);
         assert.ok(trMail.html.includes('?lang=tr'));
     });
 
@@ -1065,7 +1065,7 @@ describe('E-posta akışları', () => {
         });
         const user = await User.findOne({ email });
         assert.equal(user.preferences.language, 'en');
-        assert.match(sendEmail.outbox.at(-1).subject, /Verify Your Email/,
+        assert.match(sendEmail.outbox.at(-1).subject, /^Verify your email/,
             'kayıt maili de seçilen dilde gitmeli');
 
         // Logo public/ altında değil: production'da da servis edilmeli
@@ -5036,5 +5036,67 @@ describe('Uygulamaya dönüş ve /indir (27.10.2026)', () => {
             assert.match(html, /Google Play&#39;den indir|Google Play'den indir/);
             assert.doesNotMatch(html, /Çok yakında/);
         });
+    });
+});
+
+describe('Mail tasarımı (29.10.2026)', () => {
+    // "Sade" şablon: önizleme metni, alıcı adresi, AlpsoySoft alt bilgisi;
+    // şifre değişince butonsuz bilgi maili
+    const mailTo = (email) => sendEmail.outbox.filter(m => m.to === email);
+
+    it('doğrulama maili: yeni konu, önizleme metni, alıcı adresi, buton ve alt bilgi', async () => {
+        await createVerifiedUser('tasarim-dogrulama@test.com', { isEmailVerified: false });
+        await api('POST', '/auth/resend-verification-email', { body: { email: 'tasarim-dogrulama@test.com' } });
+        const mail = sendEmail.outbox.at(-1);
+        assert.equal(mail.subject, "E-postanı doğrula, Musubi'ye bir adım kaldı");
+        assert.match(mail.html, /display:none[^>]*>Hesabını tek dokunuşla etkinleştir/, 'gizli önizleme metni');
+        assert.match(mail.html, /<b style="[^"]*">tasarim-dogrulama@test\.com<\/b>/, 'alıcı adresi kalın');
+        assert.match(mail.html, /href="[^"]*\/verify-email\/[a-f0-9]{40}\?lang=tr"[^>]*>E-postamı Doğrula/);
+        assert.match(mail.html, /Musubi · AlpsoySoft · <a href="[^"]*\/legal\/privacy\?lang=tr"/);
+        assert.doesNotMatch(mail.html, /ALPSOY|Kelime Ezberlemenin/, 'eski kırmızı bant ve büyük harfli unvan yok');
+    });
+
+    it('şifre sıfırlanınca "şifren değiştirildi" maili gider; butonsuzdur, zamanı yazar', async () => {
+        await createVerifiedUser('tasarim-sifirla@test.com');
+        await api('POST', '/auth/forgot-password', { body: { email: 'tasarim-sifirla@test.com' } });
+        const res = await api('POST', '/auth/reset-password', {
+            body: { token: lastResetToken(), password: 'Yenisifre123!' }
+        });
+        assert.equal(res.status, 200);
+        const mail = sendEmail.outbox.at(-1);
+        assert.equal(mail.to, 'tasarim-sifirla@test.com');
+        assert.equal(mail.subject, 'Musubi şifren değiştirildi');
+        assert.match(mail.html, /Şifremi Unuttum/);
+        assert.match(mail.html, /\(\d{1,2} \S+ \d{4} \d{2}:\d{2}\)/, 'değişiklik zamanı yazılı');
+        assert.doesNotMatch(mail.html, /reset-password|verify-email|bu bağlantıyı/, 'bilgi mailinde buton/link yok');
+    });
+
+    it('Ayarlar\'dan şifre değişince de bildirim gider; gönderilemezse değişiklik yine geçerli', async () => {
+        await createVerifiedUser('tasarim-degistir@test.com');
+        const { accessToken } = await login('tasarim-degistir@test.com');
+        const once = mailTo('tasarim-degistir@test.com').length;
+
+        sendEmail.failNextSend();
+        const res = await api('PUT', '/auth/change-password', {
+            token: accessToken, body: { oldPassword: 'Testsifre123!', newPassword: 'Yenisifre123!' }
+        });
+        assert.equal(res.status, 200, 'mail gitmese de şifre değişikliği başarılı');
+        const yeni = await api('POST', '/auth/login', { body: { email: 'tasarim-degistir@test.com', password: 'Yenisifre123!' } });
+        assert.equal(yeni.status, 200);
+        assert.equal(mailTo('tasarim-degistir@test.com').length, once, 'başarısız gönderim outbox\'a düşmez');
+
+        await api('PUT', '/auth/change-password', {
+            token: yeni.json.accessToken, body: { oldPassword: 'Yenisifre123!', newPassword: 'Ucuncusifre123!' }
+        });
+        assert.equal(mailTo('tasarim-degistir@test.com').at(-1).subject, 'Musubi şifren değiştirildi');
+    });
+
+    it('İngilizce kullanıcıya mail İngilizce gider', async () => {
+        await createVerifiedUser('tasarim-en@test.com', { preferences: { language: 'en' } });
+        await api('POST', '/auth/forgot-password', { body: { email: 'tasarim-en@test.com' } });
+        const mail = sendEmail.outbox.at(-1);
+        assert.equal(mail.subject, 'Reset your Musubi password');
+        assert.match(mail.html, /Musubi · AlpsoySoft · <a [^>]*>Privacy<\/a>/);
+        assert.match(mail.html, /reset-password\/[a-f0-9]{40}\?lang=en/);
     });
 });
