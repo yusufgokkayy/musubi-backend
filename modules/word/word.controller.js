@@ -17,13 +17,6 @@ const WordController = {
         res.status(200).json({ success: true, data: word });
     }),
 
-    searchWords: catchAsync(async (req, res) => {
-        const { q } = req.query;
-        if (!q) throw new AppError('Please provide a search query', 400);
-        const words = await WordService.searchWords(q);
-        res.status(200).json({ success: true, data: words });
-    }),
-
     // Toplu ses yükleme (yalnızca admin). `items` multipart alanı JSON METNİ
     // olarak gelir; ayrıştırılamıyorsa hiçbir dosya yazılmadan 400 döner.
     uploadAudio: catchAsync(async (req, res) => {

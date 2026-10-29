@@ -569,7 +569,7 @@ describe('Auth', () => {
         // Yeni bir modül eklenip listeye yazılmazsa bu test onu yakalamaz —
         // ama mount seviyesindeki koruma sayesinde yeni modül zaten korumalı doğar.
         const korumali = [
-            ['GET', '/words'], ['GET', '/words/search?q=a'],
+            ['GET', '/words'], ['GET', '/words?q=a'],
             ['GET', '/userwords/stats'], ['GET', '/userwords/list'],
             ['GET', '/sessions/today'], ['GET', '/sessions/history'],
             ['GET', '/progress'],
@@ -1560,13 +1560,13 @@ describe('Öğrenme döngüsü (SRS)', () => {
         const today = await api('GET', '/userwords/today', { token });
         assert.ok(!today.json.data.newWords.some(w => w.kanji === '非核'));
 
-        const search = await api('GET', '/words/search?q=non-core', { token });
+        const search = await api('GET', '/words?q=non-core', { token });
         assert.equal(search.status, 200);
-        assert.equal(search.json.data.length, 0);
+        assert.equal(search.json.data.total, 0);
     });
 
     it('regex injection içeren arama 500 vermez', async () => {
-        const res = await api('GET', '/words/search?q=' + encodeURIComponent('(a+)+$*['), { token });
+        const res = await api('GET', '/words?q=' + encodeURIComponent('(a+)+$*['), { token });
         assert.equal(res.status, 200);
     });
 
@@ -3934,6 +3934,42 @@ describe('Kütüphane (liste, arama, sayfalama)', () => {
         assert.deepEqual(n3.json.data.words.map(w => w.kanji), ['医者', '看護師', '外科医']);
     });
 
+    // Seviyeler sırayla gelmeli (N5 → N1); seviye içinde müfredat sırası.
+    // Eskiden yalnızca frequencyRank'e bakılıyordu: 傾向 (N2, sıra 1) "Tümü"
+    // listesinde N5 kelimelerinin arasına giriyordu.
+    const SEVIYE_SIRASI = ['N5', 'N4', 'N3', 'N2', 'N1'];
+    const tumSayfalar = async (sorgu) => {
+        const words = [];
+        for (let p = 1; ; p++) {
+            const d = (await api('GET', `/words?${sorgu}page=${p}&limit=100`, { token })).json.data;
+            words.push(...d.words);
+            if (p >= d.totalPages) return words;
+        }
+    };
+    const seviyeSirali = (words) => words.every((w, i) =>
+        i === 0 || SEVIYE_SIRASI.indexOf(words[i - 1].jlptLevel) <= SEVIYE_SIRASI.indexOf(w.jlptLevel));
+
+    it('"Tümü" listesi seviye sırasıyla gelir: önce bütün N5, en son N1', async () => {
+        const words = await tumSayfalar('');
+        assert.equal(words[0].jlptLevel, 'N5', 'liste N5 ile açılmalı');
+        assert.ok(seviyeSirali(words), 'seviyeler iç içe geçmemeli');
+
+        const n5 = words.filter(w => w.jlptLevel === 'N5').map(w => w.kanji);
+        assert.ok(n5.indexOf('電車') < n5.indexOf('駅'), 'seviye içinde müfredat sırası korunmalı');
+    });
+
+    it('aramada alakası eşit sonuçlar da seviye sırasıyla gelir', async () => {
+        // Dolgu kelimelerinin hepsinin anlamı "meaning n5 3" gibi başlar: alaka eşit
+        const words = await tumSayfalar('q=meaning&');
+        assert.ok(new Set(words.map(w => w.jlptLevel)).size >= 4, 'test birden çok seviyeyi kapsamalı');
+        assert.ok(seviyeSirali(words));
+    });
+
+    it('eski /words/search ucu kaldırıldı', async () => {
+        const res = await api('GET', '/words/search?q=eki', { token });
+        assert.equal(res.status, 400, '/:id ucuna düşer, geçersiz kimlik');
+    });
+
     it('detayda her iki anlam da döner — dili istemci seçer', async () => {
         const liste = await api('GET', '/words?q=densha', { token });
         const id = liste.json.data.words[0]._id;
@@ -3943,7 +3979,7 @@ describe('Kütüphane (liste, arama, sayfalama)', () => {
         assert.equal(res.json.data.meaning, 'train');
         assert.equal(res.json.data.meaningTr, 'tren');
         assert.equal(res.json.data.exampleFurigana, '毎朝[まいあさ]**電車[でんしゃ]**で学校[がっこう]へ行[い]きます。');
-        assert.equal(res.json.data.example, '毎朝**電車**で学校へ行きます。', 'example işaretlemesiz kalmalı');
+        assert.equal(res.json.data.example, '毎朝**電車**で学校へ行きます。', 'example furigana taşımaz, yalnızca ** vurgusu');
     });
 });
 
@@ -5965,7 +6001,7 @@ describe('Hata kodları (27.10.2026)', () => {
     it('kodu olmayan hata eskisi gibi { success, message } döner', async () => {
         await createVerifiedUser('kod-yok-alan@test.com');
         const { accessToken: token } = await login('kod-yok-alan@test.com');
-        const res = await api('GET', '/words/search', { token });
+        const res = await api('GET', '/words/gecersiz-id', { token });
         assert.equal(res.status, 400);
         assert.equal(res.json.code, undefined);
         assert.ok(res.json.message);

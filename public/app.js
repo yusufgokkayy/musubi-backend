@@ -29,7 +29,7 @@ const state = {
   home: null,
   lesson: null,
   quiz: null,
-  library: { page: 1, totalPages: 1, level: '', q: '' },
+  library: { page: 1, totalPages: 1, level: '', q: '', seq: 0, busy: false },
   memory: null,
   // v2 önizleme (geliştirici paneli): backend'i henüz olmayan v2 ekranlarını
   // ÖRNEK VERİYLE gösterir — bkz. "v2 ÖNİZLEME" bölümü
@@ -251,16 +251,27 @@ function wordRow(w, { right, tail, click } = {}) {
   </button>`;
 }
 
-// Ses: "Yavaş" ayrı bir dosya DEĞİL, aynı sesin düşük hızda çalınmasıdır
-// (13.10.2026 kararı — ayrı yavaş dosya üretilmeyecek).
-function audioRow(url) {
-  if (!url) return '';
+// Ses: "Yavaş" ayrı bir dosya değil, aynı sesin düşük hızda çalınmasıdır.
+// ttsText verilirse ses dosyası yokken butonlar yine görünür ve metni
+// tarayıcının Japonca sesi okur — telefondaki uygulama da cihaz TTS'ine düşüyor.
+function audioRow(url, ttsText) {
+  if (!url && !ttsText) return '';
+  const src = url ? `data-audio="${esc(url)}"` : `data-tts="${esc(ttsText)}"`;
   return `<div class="pillbtns gap-16">
-    <button class="pillbtn" data-audio="${esc(url)}">${I.wave}<span>Dinle</span></button>
-    <button class="pillbtn" data-audio="${esc(url)}" data-slow="1">${I.snail}<span>Yavaş</span></button>
+    <button class="pillbtn" ${src}>${I.wave}<span>Dinle</span></button>
+    <button class="pillbtn" ${src} data-slow="1">${I.snail}<span>Yavaş</span></button>
   </div>`;
 }
+function speak(text, slow) {
+  if (!('speechSynthesis' in window)) return toast('Bu tarayıcı sesli okumayı desteklemiyor', 'err');
+  speechSynthesis.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.lang = 'ja-JP';
+  if (slow) u.rate = 0.6;
+  speechSynthesis.speak(u);
+}
 function wireAudio() {
+  $$('[data-tts]').forEach(b => b.addEventListener('click', () => speak(b.dataset.tts, b.dataset.slow)));
   $$('[data-audio]').forEach(b => b.addEventListener('click', () => {
     const a = new Audio(b.dataset.audio);
     if (b.dataset.slow) a.playbackRate = 0.6;
@@ -280,12 +291,14 @@ function furigana(src, plain) {
 
 function exampleBlock(w) {
   if (!w.example && !w.exampleFurigana) return '';
+  // Cümlenin kendi sesi yoksa tarayıcı okur; ** vurgusu okunacak metne girmez
+  const plain = (w.example || '').replace(/\*\*/g, '');
+  const src = w.exampleAudioUrl ? `data-audio="${esc(w.exampleAudioUrl)}"` : plain ? `data-tts="${esc(plain)}"` : '';
   return `<div class="row between gap-24" style="margin-bottom:8px">
       <span class="slabel">Örnek Kullanım</span>
-      ${w.exampleAudioUrl ? `<button class="bell" data-audio="${esc(w.exampleAudioUrl)}" style="width:22px;height:22px">${I.speaker}</button>` : ''}
+      ${src ? `<button class="bell ex-speaker" ${src} aria-label="Cümleyi dinle">${I.speaker}</button>` : ''}
     </div>
-    <div class="example">${furigana(w.exampleFurigana, w.example)}</div>
-    ${w.exampleTr ? `<p class="tiny gap-8">${esc(w.exampleTr)}</p>` : ''}`;
+    <div class="example">${furigana(w.exampleFurigana, w.example)}${w.exampleTr ? `<p class="tr">${esc(w.exampleTr)}</p>` : ''}</div>`;
 }
 
 function pwScore(pw) {
@@ -1641,19 +1654,16 @@ function showQuizResult() {
 // ═══════════════════════════════════════════════════════════════
 function showLibrary() {
   const L = state.library;
-  paint(`<div class="pad">
+  paint(`<div class="pad" id="lib-pad">
       ${pagehead('図書館', 'Kütüphane', { unread: state.home?.unreadNotifications > 0 })}
       <div class="searchbar">${I.search}<input id="lib-q" placeholder="Bir kelime ara..." value="${esc(L.q)}"></div>
       <div class="filters">
         <button class="filterchip ${L.level === '' ? 'on' : ''}" data-level="">Tümü</button>
         ${JLPT.map(l => `<button class="filterchip ${L.level === l ? 'on' : ''}" data-level="${l}">${l}</button>`).join('')}
       </div>
+      <p class="tiny" id="lib-count" style="margin:-6px 0 14px" hidden></p>
       <div id="lib-list"><div class="loading" style="padding:40px 0"><div class="spinner"></div></div></div>
-      <div class="pager" id="lib-pager" hidden>
-        <button class="btn btn-outline btn-sm" id="lib-prev">${I.chevL}</button>
-        <span class="pg" id="lib-page"></span>
-        <button class="btn btn-outline btn-sm" id="lib-next">${I.chevR}</button>
-      </div>
+      <div id="lib-more" hidden><div class="loading" style="padding:18px 0"><div class="spinner"></div></div></div>
     </div>`);
   $('#lib-q').addEventListener('input', debounce(() => { L.q = $('#lib-q').value.trim(); loadLibrary(1); }, 320));
   $$('.filterchip').forEach(c => c.addEventListener('click', () => {
@@ -1661,35 +1671,58 @@ function showLibrary() {
     L.level = c.dataset.level;
     loadLibrary(1);
   }));
+  // Satırlar sayfa sayfa eklendiği için tıklama listede tek yerden dinlenir
+  $('#lib-list').addEventListener('click', e => {
+    const row = e.target.closest('[data-word]');
+    if (row) go('word-detail', { id: row.dataset.word });
+  });
+  // Tasarımda sayfa düğmesi yok: liste kaydırıldıkça sonraki sayfa gelir
+  $('#lib-pad').addEventListener('scroll', loadMoreIfNeeded);
   loadLibrary(1);
+}
+
+function loadMoreIfNeeded() {
+  const L = state.library, pad = $('#lib-pad');
+  if (!pad || L.busy || L.page >= L.totalPages) return;
+  if (pad.scrollTop + pad.clientHeight > pad.scrollHeight - 300) loadLibrary(L.page + 1);
 }
 
 async function loadLibrary(page) {
   const tk = activeToken;
   const L = state.library;
-  // Arama ve listeleme AYNI uçtan: /words?q= sayfalıdır, eski /words/search
-  // sabit 20 sonuç döndürüp sessizce eksik liste gösteriyordu.
-  const qs = `page=${page}&limit=15${L.level ? '&jlptLevel=' + L.level : ''}${L.q ? '&q=' + encodeURIComponent(L.q) : ''}`;
+  // Yeni arama/filtre, yolda olan eski isteğin yanıtını geçersiz kılar
+  const seq = ++L.seq;
+  L.busy = true;
+  if (page === 1) $('#lib-pad').scrollTop = 0;
+  else $('#lib-more').hidden = false;
+  // Arama ve listeleme AYNI uçtan: /words?q= sayfalıdır
+  const qs = `page=${page}&limit=30${L.level ? '&jlptLevel=' + L.level : ''}${L.q ? '&q=' + encodeURIComponent(L.q) : ''}`;
   const res = await api('GET', '/words?' + qs);
-  if (stale(tk)) return;
+  if (stale(tk) || seq !== L.seq) return;
+  L.busy = false;
   const box = $('#lib-list');
   if (!box) return;
-  if (!res.ok) { box.innerHTML = `<div class="empty">${I.search}<div>Liste yüklenemedi.</div></div>`; return; }
-  const { words, total, totalPages } = res.json.data;
-  L.page = page; L.totalPages = totalPages;
-  if (total === 0) {
-    box.innerHTML = `<div class="empty">${I.search}<div>${L.q ? 'Aramanla eşleşen kelime yok.' : 'Kelime bulunamadı — <code>npm run seed</code> çalıştırıldı mı?'}</div></div>`;
-    $('#lib-pager').hidden = true;
+  $('#lib-more').hidden = true;
+  if (!res.ok) {
+    if (page > 1) return toast('Liste yüklenemedi', 'err');
+    box.innerHTML = `<div class="empty">${I.search}<div>Liste yüklenemedi.</div></div>`;
+    $('#lib-count').hidden = true;
     return;
   }
-  box.innerHTML = `<div class="wordlist">${words.map(w => wordRow(w, { click: true, tail: badge(w.jlptLevel) })).join('')}</div>`;
-  wireWordRows();
-  $('#lib-pager').hidden = totalPages <= 1;
-  $('#lib-page').textContent = `${page} / ${totalPages}`;
-  $('#lib-prev').disabled = page <= 1;
-  $('#lib-next').disabled = page >= totalPages;
-  $('#lib-prev').onclick = () => loadLibrary(L.page - 1);
-  $('#lib-next').onclick = () => loadLibrary(L.page + 1);
+  const { words, total, totalPages } = res.json.data;
+  L.page = page; L.totalPages = totalPages;
+  // Sayı sayfadakiler değil, filtreye uyan bütün kelimeler (tasarımdaki "5805 Sonuç")
+  $('#lib-count').textContent = `${total} Sonuç`;
+  $('#lib-count').hidden = false;
+  if (total === 0) {
+    box.innerHTML = `<div class="empty">${I.search}<div>${L.q ? 'Aramanla eşleşen kelime yok.' : 'Kelime bulunamadı — <code>npm run seed</code> çalıştırıldı mı?'}</div></div>`;
+    return;
+  }
+  const rows = words.map(w => wordRow(w, { click: true, tail: badge(w.jlptLevel) })).join('');
+  if (page === 1) box.innerHTML = `<div class="wordlist">${rows}</div>`;
+  else box.querySelector('.wordlist').insertAdjacentHTML('beforeend', rows);
+  // Uzun ekranda liste kaydırılacak kadar dolmamış olabilir — o zaman scroll hiç gelmez
+  loadMoreIfNeeded();
 }
 
 async function showWordDetail({ id }) {
@@ -1704,13 +1737,12 @@ async function showWordDetail({ id }) {
       <div class="wordcard">
         <div class="type">${esc(w.type || '')}</div>
         <div class="kanji">${esc(w.kanji)}</div>
-        <div class="kana">${esc(w.kana || w.romaji || '')}</div>
+        ${w.isKana ? '' : `<div class="kana">${esc(w.kana || w.romaji || '')}</div>`}
       </div>
-      ${audioRow(w.audioUrl)}
+      ${audioRow(w.audioUrl, w.kana || w.kanji)}
       <div class="slabel gap-24">Anlamı</div>
       <div class="card fill gap-8" style="font-size:17px;font-weight:650">${esc(w.meaningTr || w.meaning)}</div>
-      ${w.meaningTr && w.meaning && w.meaningTr !== w.meaning ? `<p class="tiny gap-8">İngilizce: ${esc(w.meaning)}</p>` : ''}
-      <div class="gap-24">${exampleBlock(w) || `<div class="empty">${I.bookOpen}<div>Örnek cümle henüz eklenmemiş.</div></div>`}</div>
+      <div class="gap-24">${exampleBlock(w)}</div>
     </div>`);
   wireAudio();
 }
