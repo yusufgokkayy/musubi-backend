@@ -163,7 +163,7 @@ const MemoryService = {
         });
     },
 
-    // GET /memory/words — "Zayıf Kutusundakiler" listesi ve "Tümünü Gör".
+    // GET /memory/words — "Zayıf Seviye Kelimeler" listesi ve "Tümünü Gör".
     async getBoxWords(userId, { box, jlptLevel, page = 1, limit = 20 } = {}) {
         const boxDef = boxByKey.get(box);
         if (!boxDef) throw new AppError(`box: ${BOX_KEYS.join(', ')} olmalı`, 400);
