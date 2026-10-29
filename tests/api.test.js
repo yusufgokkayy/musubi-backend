@@ -5050,7 +5050,8 @@ describe('Mail tasarımı (29.10.2026)', () => {
         const mail = sendEmail.outbox.at(-1);
         assert.equal(mail.subject, "E-postanı doğrula, Musubi'ye bir adım kaldı");
         assert.match(mail.html, /display:none[^>]*>Hesabını tek dokunuşla etkinleştir/, 'gizli önizleme metni');
-        assert.match(mail.html, /<b style="[^"]*">tasarim-dogrulama@test\.com<\/b>/, 'alıcı adresi kalın');
+        assert.match(mail.html, /<a href="mailto:tasarim-dogrulama@test\.com" style="[^"]*font-weight:700;text-decoration:none;">tasarim-dogrulama@test\.com<\/a>/,
+            'alıcı adresi kalın; Gmail mavi link yapmasın diye rengi belirli');
         assert.match(mail.html, /href="[^"]*\/verify-email\/[a-f0-9]{40}\?lang=tr"[^>]*>E-postamı Doğrula/);
         assert.match(mail.html, /Musubi · AlpsoySoft · <a href="[^"]*\/legal\/privacy\?lang=tr"/);
         assert.doesNotMatch(mail.html, /ALPSOY|Kelime Ezberlemenin/, 'eski kırmızı bant ve büyük harfli unvan yok');
