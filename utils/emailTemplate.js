@@ -145,7 +145,7 @@ ${cta}
 ${row('34px 24px 0', p(13, MUTED, esc(o.note)) + fallback)}
 ${row('44px 24px 0', `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" border="0" style="width:100%;"><tr><td class="m-line" align="center" style="border-top:1px solid ${LINE};padding-top:22px;">
   ${p(12, MUTED, esc(o.reason))}
-  ${p(12, MUTED, `Musubi · AlpsoySoft · <a class="m-muted" href="${esc(o.privacyUrl)}" style="color:${MUTED};text-decoration:underline;">${esc(s.mailPrivacy)}</a>`, '4px 0 0')}
+  ${p(12, MUTED, `Musubi · Alpsoy Yazılım · <a class="m-muted" href="${esc(o.privacyUrl)}" style="color:${MUTED};text-decoration:underline;">${esc(s.mailPrivacy)}</a>`, '4px 0 0')}
 </td></tr></table>`)}
 </table>
 </td></tr>

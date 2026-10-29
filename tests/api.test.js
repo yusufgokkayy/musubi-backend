@@ -5042,7 +5042,7 @@ describe('Uygulamaya dönüş ve /indir (27.10.2026)', () => {
 });
 
 describe('Mail tasarımı (29.10.2026)', () => {
-    // "Sade" şablon: önizleme metni, alıcı adresi, AlpsoySoft alt bilgisi;
+    // "Sade" şablon: önizleme metni, alıcı adresi, Alpsoy Yazılım alt bilgisi;
     // şifre değişince butonsuz bilgi maili
     const mailTo = (email) => sendEmail.outbox.filter(m => m.to === email);
 
@@ -5055,7 +5055,7 @@ describe('Mail tasarımı (29.10.2026)', () => {
         assert.match(mail.html, /<a class="m-ink" href="mailto:tasarim-dogrulama@test\.com" style="[^"]*font-weight:700;text-decoration:none;">tasarim-dogrulama@test\.com<\/a>/,
             'alıcı adresi kalın; Gmail mavi link yapmasın diye rengi belirli');
         assert.match(mail.html, /href="[^"]*\/verify-email\/[a-f0-9]{40}\?lang=tr"[^>]*>E-postamı Doğrula/);
-        assert.match(mail.html, /Musubi · AlpsoySoft · <a class="m-muted" href="[^"]*\/legal\/privacy\?lang=tr"/);
+        assert.match(mail.html, /Musubi · Alpsoy Yazılım · <a class="m-muted" href="[^"]*\/legal\/privacy\?lang=tr"/);
         // Cihaz karanlık temadaysa uygulamanın karanlık renkleri (Apple Mail,
         // Outlook); inline stiller açık tema olarak kalır
         assert.match(mail.html, /<meta name="color-scheme" content="light dark">/);
@@ -5105,7 +5105,7 @@ describe('Mail tasarımı (29.10.2026)', () => {
         await api('POST', '/auth/forgot-password', { body: { email: 'tasarim-en@test.com' } });
         const mail = sendEmail.outbox.at(-1);
         assert.equal(mail.subject, 'Reset your Musubi password');
-        assert.match(mail.html, /Musubi · AlpsoySoft · <a [^>]*>Privacy<\/a>/);
+        assert.match(mail.html, /Musubi · Alpsoy Yazılım · <a [^>]*>Privacy<\/a>/);
         assert.match(mail.html, /reset-password\/[a-f0-9]{40}\?lang=en/);
     });
 });
