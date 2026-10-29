@@ -315,7 +315,7 @@ Push token'ını siler. Kullanıcı bildirim iznini işletim sisteminden kapatt�
     "isEmailVerified": true,
     "dailyGoal": 20,
     "activeLevel": "N5",       // günlük dersin çekildiği seviye — PUT /progress/active-level ile değişir
-    "notificationSettings": { "dailyReminder": true, "dailyWord": true, "reminderTime": "10:00", "streakReminder": true, "wordLevelDown": true },
+    "notificationSettings": { "dailyReminder": true, "dailyWord": true, "reminderTime": "14:00", "streakReminder": true, "wordLevelDown": true },
     "consents": { "terms": "1.0", "privacy": "1.0", "kvkk": "1.0", "acceptedAt": "2026-08-04T09:12:00.000Z" },
     "preferences": { "language": "tr", "theme": "light", "fontSize": "medium" },
     "isPremium": false,        // "Reklamları Kaldır" durumu — yalnızca satın alma doğrulaması değiştirir
@@ -1775,11 +1775,12 @@ sorgularla birlikte kaldırıldılar.
   "type": "streak_warning",   // daily_task | word_level_down | streak_warning | streak_reminder | daily_word
   "title": "Serini Kaybedeceksin",
   "body": "1 saat sonra serini kaybedeceksin. Acele et, dersini kaçırma...",
-  // tipe göre değişir; push deep-link için de aynı içerik gider:
+  // tipe göre değişir; push'ta da aynı içerik + { type, notificationId } gider:
   //   daily_task       → { remaining, dailyGoal }
   //   daily_word       → { wordId, kanji }
   //   streak_*         → { currentStreak }
   //   word_level_down  → { source: "decay", count } · tek kelimede ayrıca { wordId, kanji, newLevel }
+  //                      · çok kelimede ayrıca { sampleWordId } (BİLEREK wordId değil)
   "data": { "currentStreak": 12 },
   "read": false,
   "createdAt": "2026-07-10T20:00:00.000Z"
@@ -1793,9 +1794,13 @@ Otomatik üretim (kullanıcının KENDİ saat diliminde):
 | `reminderTime` | `daily_word` | "Günlük Kelime — Bugünün günlük kelimesi; 危ない (abunai) = tehlikeli" (`data.wordId` ile detaya gidilir) |
 | 19:00 | `streak_reminder` | "12 Günlük Seri! — Serini devam ettirmeyi unutma." (yalnızca serisi olup o gün çalışmamışsa) |
 | 23:00 | `streak_warning` | "Serini Kaybedeceksin — 1 saat sonra serini kaybedeceksin. Acele et, dersini kaçırma..." |
-| 03:00 UTC (decay) | `word_level_down` | tek kelime: "Kelimenin Seviyesi Düştü — 危ない (abunai) kelimesinin seviyesi 3. seviyeye düştü. Uygulamaya gir tekrar hatırla!" · çok kelime: "Kelimeler tazelenmek istiyor 🌱 — … seni bekliyor." |
+| 03:00 UTC (decay) | `word_level_down` | tek kelime: "Kelimenin Seviyesi Düştü — 危ない (abunai) kelimesinin seviyesi 3. seviyeye düştü. Uygulamaya gir tekrar hatırla!" · çok kelime: "Kelimelerin Seviyesi Düştü — 危ない (abunai) ve 4 kelime daha seviye kaybetti. Uygulamaya gir tekrar hatırla!" |
 
-`reminderTime` kullanıcı tercihidir (`notificationSettings.reminderTime`, varsayılan `10:00`). Üretim cron'u çeyrek saatte bir çalışır; hatırlatma, seçilen saatten sonraki **2 saat** içinde bir kez gönderilir (cron kaçırılırsa bir sonraki tur yakalar, ama gece yarısına sarkmaz). Günün son turu (23:45) gün sonuna ayarlanmış saatleri de üstlenir, yani `23:50` gibi bir seçim kaybolmaz. Aynı gün ikinci kez üretilmez. Hatırlatma saati 19:00/23:00 seçilirse günlük **ve** seri bildirimleri aynı turda üretilir.
+**Metinler kullanıcının dilindedir (`preferences.language`) ve OKUNDUĞU ANDA üretilir.** Kayıtta asıl olan `type` + `data`'dır; `GET /notifications` ve `PUT /:id/read` `title`/`body`'yi kullanıcının o anki diliyle yeniden yazar, yani dilini değiştiren kullanıcı eski bildirimlerini de yeni dilde görür. Push gönderildiği anki dilde gider. Şimdilik TR + EN var; çevirisi olmayan dil İngilizceye düşer (`modules/notification/notification.texts.js`). Günlük kelimenin anlamı da bu dilde: Türkçede `meaningTr`, diğerlerinde `meaning`. Kelime kullanıcının çalıştığı seviyeden (`activeLevel`) seçilir.
+
+**Push `data`'sı:** yukarıdaki alanlar + `type` + `notificationId` (FCM gereği hepsi string). Push'a dokununca `type`'a göre yönlendir, `notificationId` ile `PUT /notifications/:id/read` gönder.
+
+`reminderTime` kullanıcı tercihidir (`notificationSettings.reminderTime`, varsayılan `14:00` — Figma'daki saat seçicinin başlangıç değeri). Üretim cron'u çeyrek saatte bir çalışır; hatırlatma, seçilen saatten sonraki **2 saat** içinde bir kez gönderilir (cron kaçırılırsa bir sonraki tur yakalar, ama gece yarısına sarkmaz). Günün son turu (23:45) gün sonuna ayarlanmış saatleri de üstlenir, yani `23:50` gibi bir seçim kaybolmaz. Aynı gün ikinci kez üretilmez. Hatırlatma saati 19:00/23:00 seçilirse günlük **ve** seri bildirimleri aynı turda üretilir.
 
 **`daily_task` yalnızca gerçekten iş kaldıysa gider.** Gövdedeki sayı hedef değil **kalan** kelimedir (havuz toplamı − bugün cevaplanan); hedefini bitiren kullanıcıya bildirim hiç oluşmaz. Tek üreticisi bu cron'dur — günün havuzu kurulurken ayrıca üretilmez (kullanıcı o an zaten uygulamanın içindedir).
 

@@ -244,7 +244,7 @@ const AuthService = {
     // Onboarding tek "Kayıt Ol" ile biter: e-posta/ad/şifre adımlarının yanında
     // hatırlatma saati ve günlük hedef ekranlarının seçimleri de buraya gelir.
     // Hepsi opsiyoneldir — "Şimdilik Geç" diyen kullanıcı bunları göndermez ve
-    // şema varsayılanlarıyla (10:00 / 20 kelime) devam eder.
+    // şema varsayılanlarıyla (14:00 / 20 kelime) devam eder.
     async register({ name, surname, email, password, deviceName, dailyGoal, timezone, reminderTime, dailyReminder, language, consents, ip, userAgent }) {
         validatePassword(password);
 
