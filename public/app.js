@@ -77,6 +77,7 @@ const I = {
   eyeOff: '<svg viewBox="0 0 24 24"><path d="M10 5.7A9.9 9.9 0 0 1 12 5.5C18.2 5.5 22 12 22 12a17 17 0 0 1-3 3.8M6.3 7.9A17 17 0 0 0 2 12s3.8 6.5 10 6.5a9.6 9.6 0 0 0 4-.8"/><path d="M3 3l18 18"/></svg>',
   search: '<svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m15.5 15.5 5 5"/></svg>',
   pencil: '<svg viewBox="0 0 24 24"><path d="M16.4 4.6a2.3 2.3 0 0 1 3.3 3.3L8.2 19.4 3.5 20.5l1.1-4.7z"/></svg>',
+  checks: '<svg viewBox="0 0 24 24"><path d="M18 6 7 17l-5-5"/><path d="m22 10-7.5 7.5L13 16"/></svg>',
   check: '<svg viewBox="0 0 14 14"><path d="M2 7.4 5.3 10.7 12 4"/></svg>',
   checkCircle: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="m7.8 12.2 2.9 2.9 5.6-6"/></svg>',
   xCircle: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="m9 9 6 6M15 9l-6 6"/></svg>',
@@ -1164,12 +1165,15 @@ async function showHome() {
   const d = sumRes.json.data;
   state.home = d;
   const stories = storyRes.ok ? storyRes.json.data : [];
-  const pct = d.goal > 0 ? d.today.completedWords / d.goal : 0;
+  const pct = d.goal > 0 ? Math.min(1, d.today.completedWords / d.goal) : 0;
+  const pendPct = d.goal > 0 ? Math.min(1 - pct, d.today.emptyCount / d.goal) : 0;
+  const left = Math.max(0, d.goal - d.today.completedWords);
   // Uygulamayla aynı: ertelenenler de dokunulmuş sayılır, buton metni ona bakar
   const touched = Math.min(d.goal, d.today.completedWords + d.today.emptyCount);
-  const lessonLabel = touched <= 0 ? 'Başla' : touched >= d.goal ? 'Tekrar Çöz' : 'Devam';
-  // Çipler bir önizleme (en fazla 8); sığmayanlar son çipte "+N" olur
-  const moreMistakes = d.todayMistakeCount - d.todayMistakes.length;
+  const lessonLabel = touched <= 0 ? 'Başla' : touched >= d.goal ? 'Tekrar Çöz' : 'Devam Et';
+  // Tasarımda tek satır: en fazla 5 kelime, sığmayanlar sonda "+N"
+  const shown = d.todayMistakes.slice(0, 5);
+  const moreMistakes = d.todayMistakeCount - shown.length;
 
   paint(`<div class="pad">
       ${pagehead(d.greeting, `Merhaba ${d.name}`, { unread: d.unreadNotifications > 0 })}
@@ -1188,31 +1192,26 @@ async function showHome() {
         <button id="b-advance">Şimdi Geç</button>
       </div>` : ''}
 
-      <div class="card gap-16 today-card">
-        <div class="miniring">
-          ${ringSvg(pct, { size: 52, stroke: 5, second: d.goal > 0 ? d.today.emptyCount / d.goal : 0 })}
-          <span class="v">%${Math.round(pct * 100)}</span>
-        </div>
-        <div class="txt">
-          <b>Bugünün Çalışması</b>
-          <span>${d.today.completedWords}/${d.goal} tamamlandı.${d.today.extra ? ` +${d.today.extra}` : ''}</span>
-          ${d.today.emptyCount ? `<span class="postponed">${d.today.emptyCount} kelime ertelendi</span>` : ''}
-        </div>
-        <button class="btn btn-primary btn-sm" id="b-lesson">${lessonLabel}</button>
-      </div>
+      <section class="home-today">
+        <p class="lbl">Bugünün Çalışması</p>
+        <div class="count"><span><b>${d.today.completedWords}</b>/${d.goal}</span>
+          <small>${left > 0 ? `${left} kart kaldı` : d.today.extra ? `+${d.today.extra} ekstra` : 'Tamamlandı'}</small></div>
+        <div class="bar"><i style="width:${pct * 100}%"></i>${pendPct > 0 ? `<i class="pending" style="width:${pendPct * 100}%"></i>` : ''}</div>
+        <button class="btn btn-primary" id="b-lesson">${lessonLabel}</button>
+      </section>
 
-      <section class="homesec streaksec">
-        <div class="hd">${I.flame}<b>${d.streak.current > 0 ? `${d.streak.current} Günlük Seri` : 'Serin Yok'}</b>
-          <span class="best">En iyi: ${d.streak.longest}</span></div>
+      <section class="home-sec">
+        <div class="hd"><span>${d.streak.current > 0 ? `${d.streak.current} Günlük Seri` : 'Serin Yok'}</span>
+          <span class="best">En iyi ${d.streak.longest}</span></div>
         <div class="days">${d.streak.week.map((w, i) => `
           <div class="day ${w.isToday ? 'today' : ''}"><span>${WEEKDAYS[i]}</span>
-            <span class="weekdot ${w.isToday || w.studied ? 'done' : ''}" title="${esc(w.date)}">${w.isToday ? I.flame : w.studied ? I.check : ''}</span>
+            <span class="dot ${w.studied ? 'done' : ''}" title="${esc(w.date)}">${w.studied ? I.checks : ''}</span>
           </div>`).join('')}</div>
       </section>
 
-      <section class="homesec mistakesec">
-        <div class="hd">${I.xCircle}<b>Bugünün Hataları</b>${d.todayMistakeCount > 0 ? `<button class="n" data-nav="mistakes">${d.todayMistakeCount} Hata</button>` : ''}</div>
-        ${d.todayMistakeCount > 0 ? `<div class="chips">${d.todayMistakes.map(m => `<button class="chip" data-word="${esc(m.id)}">${esc(m.kanji)}</button>`).join('')}${moreMistakes > 0 ? `<button class="chip" data-nav="mistakes">+${moreMistakes}</button>` : ''}</div>`
+      <section class="home-sec">
+        <div class="hd"><span>Hatalar</span>${d.todayMistakeCount > 0 ? `<button class="more" data-nav="mistakes">Tümü</button>` : ''}</div>
+        ${d.todayMistakeCount > 0 ? `<div class="words ${shown.length + (moreMistakes > 0) >= 5 ? 'full' : ''}">${shown.map(m => `<button data-word="${esc(m.id)}">${esc(m.kanji)}</button>`).join('')}${moreMistakes > 0 ? `<button data-nav="mistakes">+${moreMistakes}</button>` : ''}</div>`
           : '<p class="empty-line">Bugün hiç hatan yok. Harika gidiyorsun!</p>'}
       </section>
     </div>`);
