@@ -415,21 +415,6 @@ select.select {
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
 
-.today-card { display: flex; align-items: center; gap: 14px; }
-.card.today-card { background: var(--surface); gap: 10px; padding: 16px 14px; }
-.card.today-card .txt b { font-size: 15px; font-weight: 650; }
-.card.today-card .btn { flex: none; }
-.today-card .txt { flex: 1; min-width: 0; }
-.today-card .txt b { display: block; font-size: 16.5px; font-weight: 750; letter-spacing: -.015em; }
-.today-card .txt span { display: block; font-size: 13.5px; color: var(--muted); margin-top: 2px; }
-
-.miniring { position: relative; flex: none; width: 52px; height: 52px; }
-.miniring svg { transform: rotate(-90deg); }
-.miniring .v {
-  position: absolute; inset: 0; display: grid; place-items: center;
-  font-size: 12.5px; font-weight: 750; font-variant-numeric: tabular-nums;
-}
-
 .weekdot {
   width: 25px; height: 25px; border-radius: 50%; display: grid; place-items: center;
   border: 1.5px dashed var(--line-2);
@@ -439,28 +424,31 @@ select.select {
 .weekdot.today { border-style: solid; border-color: var(--brand); }
 .weekdot.today.done { border: 0; }
 
-/* Anasayfa bölümleri: kartın altındaki seri ve hata alanları kartsız,
-   aralarında kenardan kenara ince çizgi (Figma 1484:11514) */
-.homesec { margin: 16px -20px 0; padding: 16px 20px 0; border-top: 1px solid var(--line); }
-.homesec .hd { display: flex; align-items: center; gap: 8px; }
-.homesec .hd b { flex: 1; font-size: 16px; font-weight: 750; letter-spacing: -.015em; }
-.streaksec .hd svg { width: 20px; height: 20px; flex: none; fill: var(--brand); }
-.streaksec .best { font-size: 14px; font-weight: 650; color: var(--brand); }
-.streaksec .days { display: flex; justify-content: space-between; margin-top: 16px; }
-.streaksec .day { display: flex; flex-direction: column; align-items: center; gap: 9px; font-size: 11.5px; color: var(--muted-2); }
-.streaksec .day.today { color: var(--brand); font-weight: 650; }
-.streaksec .weekdot { width: 32px; height: 32px; background: var(--surface-2); border-color: var(--muted-2); border-width: 1px; }
-.streaksec .weekdot.done { background: var(--brand); }
-.streaksec .weekdot.done svg { width: 13px; height: 13px; }
-.streaksec .weekdot.done svg[viewBox="0 0 24 24"] { width: 16px; height: 16px; fill: #fff; stroke: none; }
-.today-card .txt .postponed { display: flex; align-items: center; gap: 5px; font-size: 12px; }
-.today-card .txt .postponed::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: var(--warn); }
-.mistakesec .hd svg { width: 20px; height: 20px; flex: none; fill: var(--brand); stroke: #fff; stroke-width: 2; }
-.mistakesec .hd svg circle { stroke: var(--brand); }
-.mistakesec .hd .n { border: 0; background: none; padding: 0; cursor: pointer; font: inherit; font-size: 14px; font-weight: 650; color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
-.mistakesec .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 14px; }
-.mistakesec .chip { cursor: pointer; background: var(--brand-soft); border-color: color-mix(in srgb, var(--brand) 22%, transparent); color: var(--brand); }
-.mistakesec .empty-line { margin: 12px 0 0; font-size: 14px; color: var(--muted); }
+/* Anasayfa (Figma 1490:11851): bölümler kartsız ve çizgisiz; başlıklar gri */
+.home-today { margin-top: 16px; }
+.home-today .lbl { margin: 0 0 9px; font-size: 14px; color: var(--muted); letter-spacing: -.004em; }
+.home-today .count { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; }
+.home-today .count span { font-size: 32px; line-height: 40px; font-weight: 500; color: color-mix(in srgb, var(--ink) 66%, var(--bg)); letter-spacing: -.004em; font-variant-numeric: tabular-nums; }
+.home-today .count b { font-size: 40px; font-weight: 500; color: var(--ink); }
+.home-today .count small { font-size: 14px; line-height: 14px; color: var(--muted); white-space: nowrap; }
+.home-today .bar { display: flex; height: 10px; margin: 16px 0; border-radius: var(--r-pill); background: color-mix(in srgb, var(--ink) 15%, var(--bg)); overflow: hidden; }
+.home-today .bar i { display: block; height: 100%; background: var(--brand); border-radius: var(--r-pill); }
+.home-today .bar i.pending { background: var(--warn); border-radius: 0 var(--r-pill) var(--r-pill) 0; }
+.home-today .btn { border-radius: var(--r-xs); }
+.home-sec { margin-top: 20px; }
+.home-sec .hd { display: flex; align-items: flex-start; justify-content: space-between; font-size: 15px; line-height: 16px; color: var(--muted); letter-spacing: -.004em; }
+.home-sec .best, .home-sec .more { border: 0; background: none; padding: 0; font: inherit; font-size: 14px; font-weight: 500; color: var(--brand); text-decoration: underline; text-underline-offset: 3px; }
+.home-sec .more { cursor: pointer; }
+.home-sec .days { display: flex; justify-content: space-between; margin-top: 16px; }
+.home-sec .day { display: flex; flex-direction: column; align-items: center; gap: 8px; width: 34px; font-size: 10px; line-height: 12px; font-weight: 500; color: var(--muted); }
+.home-sec .day.today { color: var(--brand); }
+.home-sec .dot { width: 32px; height: 32px; border-radius: 50%; display: grid; place-items: center; background: var(--line); border: 1px dashed var(--muted); }
+.home-sec .dot.done { background: var(--brand); border: 1px solid var(--brand-press); }
+.home-sec .dot svg { width: 14px; height: 14px; fill: none; stroke: #fff; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.home-sec .words { display: flex; flex-wrap: wrap; gap: 0 4px; margin: 8px -8px 0; }
+.home-sec .words.full { justify-content: space-between; }
+.home-sec .words button { border: 0; background: none; padding: 8px; cursor: pointer; font-family: var(--jp); font-size: 16px; line-height: 16px; font-weight: 500; color: var(--ink-2); }
+.home-sec .empty-line { margin: 12px 0 0; font-size: 14px; color: var(--muted); }
 
 .unlock-card { position: relative; background: linear-gradient(150deg, var(--brand) 0%, #8E0022 100%); color: #fff; border-radius: var(--r-lg); padding: 17px; }
 .unlock-card .toggle { position: absolute; z-index: 1; top: 12px; right: 12px; width: 32px; height: 32px; min-height: 0; display: grid; place-items: center; border: 0; background: none; cursor: pointer; }
