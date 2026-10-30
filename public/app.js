@@ -89,7 +89,10 @@ const I = {
   pause: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><path d="M10 9v6M14 9v6"/></svg>',
   close: '<svg viewBox="0 0 20 20"><path d="m4 4 12 12M16 4 4 16"/></svg>',
   user: '<svg viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="4"/><path d="M4.5 20.5a7.5 7.5 0 0 1 15 0"/></svg>',
-  levels: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>'
+  levels: '<svg viewBox="0 0 24 24"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>',
+  gauge: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.2"/><circle cx="12" cy="13" r="1.8"/><path d="m13.3 11.7 3.2-3.7"/></svg>',
+  signature: '<svg viewBox="0 0 24 24"><path d="M3 20.5h18"/><path d="M4 16.5c2.5-3 4.5-8 4.5-10.5a2 2 0 0 0-4 0c0 3.5 3 9 6 9 1.5 0 2-1.5 2.5-3 .4 1.5 1.3 2.5 2.5 2.5s2-1 3.5-1"/></svg>',
+  folderLock: '<svg viewBox="0 0 24 24"><path d="M11 19.5H4.5a2 2 0 0 1-2-2v-11a2 2 0 0 1 2-2h4.2l2 2.5h8.8a2 2 0 0 1 2 2v2.5"/><rect x="14" y="15" width="7.5" height="5.5" rx="1.2"/><path d="M15.8 15v-1.5a2 2 0 0 1 4 0V15"/></svg>'
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -206,7 +209,9 @@ function avatarHtml() {
   return url ? `<img class="avatar" src="${esc(url)}" alt="">` : `<div class="avatar" data-tab="settings">${esc(initial)}</div>`;
 }
 
-function sheet(html) { $('#sheet-slot').innerHTML = `<div class="overlay" data-overlay><div class="sheet">${html}</div></div>`; }
+// cls = 'tall': Figma'daki ekranın üçte ikisini kaplayan alt sayfa (Şifre Girin,
+// Emin Misin?, Son Onay) — butonlar altta sabit, içerik üstte
+function sheet(html, cls = '') { $('#sheet-slot').innerHTML = `<div class="overlay" data-overlay><div class="sheet ${cls}">${html}</div></div>`; }
 function closeSheet() { $('#sheet-slot').innerHTML = ''; }
 
 document.addEventListener('click', (e) => {
@@ -369,7 +374,7 @@ function dialog({ icon, title, body, buttons, dismissable = true }) {
   $('#sheet-slot').innerHTML = `<div class="overlay center" ${dismissable ? 'data-overlay' : ''}><div class="dialog">
       <div class="blob">${icon}</div>
       <h3>${esc(title)}</h3>
-      <p>${esc(body)}</p>
+      ${body ? `<p>${esc(body)}</p>` : ''}
       <div class="btnrow">${buttons.map((b, i) => `<button class="btn ${b.outline ? 'btn-outline' : 'btn-primary'}" data-dlg="${i}">${esc(b.label)}</button>`).join('')}</div>
     </div></div>`;
   buttons.forEach((b, i) => $(`[data-dlg="${i}"]`).addEventListener('click', b.onClick));
@@ -985,6 +990,12 @@ async function showHome() {
     tgl.innerHTML = state.unlockCollapsed ? I.chevD : I.chevU;
   });
   $$('[data-story]').forEach(b => b.addEventListener('click', () => openStory(stories, stories.findIndex(s => String(s.id) === b.dataset.story))));
+
+  // Ayarlar'dan seviye değiştirilip gelindiyse (Figma 881:1845)
+  if (state.levelUpdated) {
+    state.levelUpdated = false;
+    return levelUpdatedSheet(d);
+  }
 
   // "Seviyeni Öğrenelim Mi?" — oturum başına bir kez, ayrı istek gerekmiyor
   if (d.placementPrompt && !state.promptedPlacement) {
@@ -1763,50 +1774,53 @@ async function showMemoryBox({ box }) {
 // ═══════════════════════════════════════════════════════════════
 const THEME_LABEL = { light: 'Açık', dark: 'Koyu', system: 'Sistem' };
 const FONT_LABEL = { small: 'Küçük', medium: 'Orta', large: 'Büyük' };
+const LANG_LABEL = { tr: 'Türkçe', en: 'English' };
 
+// Figma › Ayarlar (5:691): HESAP (şifre, bildirim, hesap silme), UYGULAMA
+// ve başlıksız son grup (Hakkında, Çıkış Yap). Açılır seçimli satırlarda
+// (Dil/Tema/Font) değer + aşağı ok, diğerlerinde ok yok.
 function showSettings() {
   const me = state.me || {};
   const p = me.preferences || {};
+  const pick = (id, icon, label, value) => `<button class="row-item" id="${id}"><span class="ic">${icon}</span><span class="lbl">${label}</span><span class="val">${esc(value)}</span><span class="chev down">${I.chevD}</span></button>`;
   paint(`<div class="pad">
       ${pagehead('設定', 'Ayarlar', { unread: state.home?.unreadNotifications > 0 })}
 
       <div class="grouplabel" style="margin-top:6px">Hesap</div>
       <div class="group">
-        <button class="row-item" data-nav="settings-password"><span class="ic">${I.key}</span><span class="lbl">Şifreyi Değiştir</span><span class="chev">${I.chevR}</span></button>
-        <button class="row-item" data-nav="settings-notifications"><span class="ic">${I.bellRing}</span><span class="lbl">Bildirim Ayarları</span><span class="chev">${I.chevR}</span></button>
+        <button class="row-item" id="st-password"><span class="ic">${I.key}</span><span class="lbl">Şifreyi Değiştir</span></button>
+        <button class="row-item" data-nav="settings-notifications"><span class="ic">${I.bellRing}</span><span class="lbl">Bildirim Ayarları</span></button>
+        <button class="row-item danger" id="st-delete"><span class="ic">${I.trash}</span><span class="lbl">Hesabını Sil</span></button>
       </div>
 
       <div class="grouplabel">Uygulama</div>
       <div class="group">
-        <button class="row-item" id="st-lang"><span class="ic">${I.translate}</span><span class="lbl">Dil Ayarları</span><span class="val">Türkçe</span><span class="chev">${I.chevR}</span></button>
-        <button class="row-item" id="st-theme"><span class="ic">${I.palette}</span><span class="lbl">Tema Değiştir</span><span class="val">${THEME_LABEL[p.theme] || 'Açık'}</span><span class="chev">${I.chevR}</span></button>
-        <button class="row-item" data-nav="settings-level"><span class="ic">${I.levels}</span><span class="lbl">Öğrenme Seviyeni Değiştir</span><span class="val accent">${esc(me.activeLevel || 'N5')}</span><span class="chev">${I.chevR}</span></button>
-        <button class="row-item" data-nav="quiz-intro"><span class="ic">${I.bookOpen}</span><span class="lbl">Seviye Tespit Sınavına Gir</span><span class="chev">${I.chevR}</span></button>
-        <button class="row-item" id="st-font"><span class="ic">${I.typeface}</span><span class="lbl">Kanji Font Boyutu</span><span class="val">${FONT_LABEL[p.fontSize] || 'Orta'}</span><span class="chev">${I.chevR}</span></button>
-        <button class="row-item" data-nav="settings-goal"><span class="ic">${I.target}</span><span class="lbl">Günlük Kelime Hedefi</span><span class="val accent">${me.dailyGoal ?? 20} Kelime</span><span class="chev">${I.chevR}</span></button>
+        ${pick('st-lang', I.translate, 'Dil Ayarları', LANG_LABEL[p.language] || 'Türkçe')}
+        ${pick('st-theme', I.palette, 'Tema Değiştir', THEME_LABEL[p.theme] || 'Açık')}
+        <button class="row-item" data-nav="settings-level"><span class="ic">${I.gauge}</span><span class="lbl">Öğrenme Seviyeni Değiştir</span></button>
+        <button class="row-item" data-nav="quiz-intro"><span class="ic">${I.bookOpen}</span><span class="lbl">Seviye Tespit Sınavına Gir</span></button>
+        ${pick('st-font', I.typeface, 'Kanji Font Boyutu', FONT_LABEL[p.fontSize] || 'Orta')}
+        <button class="row-item" data-nav="settings-goal"><span class="ic">${I.target}</span><span class="lbl">Günlük Kelime Hedefi</span><span class="val accent">${me.dailyGoal ?? 20} Kelime</span></button>
       </div>
 
-      <div class="grouplabel">Diğer</div>
-      <div class="group">
-        <button class="row-item" data-nav="settings-legal"><span class="ic">${I.doc}</span><span class="lbl">Hakkında</span><span class="chev">${I.chevR}</span></button>
-        <button class="row-item danger" id="st-logout"><span class="ic">${I.logout}</span><span class="lbl">Çıkış Yap</span><span class="chev">${I.chevR}</span></button>
-        <button class="row-item danger" data-nav="settings-delete"><span class="ic">${I.trash}</span><span class="lbl">Hesabı Sil</span><span class="chev">${I.chevR}</span></button>
+      <div class="group gap-16">
+        <button class="row-item" data-nav="settings-legal"><span class="ic">${I.doc}</span><span class="lbl">Hakkında</span></button>
+        <button class="row-item danger" id="st-logout"><span class="ic">${I.logout}</span><span class="lbl">Çıkış Yap</span></button>
       </div>
-
-      <p class="tiny gap-24" style="text-align:center">Musubi · Sürüm 1.0.0<br>${esc(me.email || '')}</p>
     </div>`);
 
-  $('#st-lang').addEventListener('click', () => toast('Şu an yalnızca Türkçe destekleniyor', ''));
+  // Dil yalnızca kaydedilir (sunucunun ürettiği metinler — bildirimler,
+  // seviye adları, sınav — bu dile döner); simülatörün kendi arayüzü Türkçe kalır
+  $('#st-lang').addEventListener('click', () => pickPref('language', ['tr', 'en'], LANG_LABEL, 'Dil Ayarları'));
   $('#st-theme').addEventListener('click', () => pickPref('theme', ['light', 'dark', 'system'], THEME_LABEL, 'Tema Değiştir'));
   $('#st-font').addEventListener('click', () => pickPref('fontSize', ['small', 'medium', 'large'], FONT_LABEL, 'Kanji Font Boyutu'));
-  $('#st-logout').addEventListener('click', () => {
-    sheet(`<div class="grab"></div><h3>Çıkış Yap</h3>
-      <p>Bu cihazdan çıkış yapmak istediğine emin misin?</p>
-      <button class="btn btn-primary" id="sh-yes">Çıkış Yap</button>
-      <button class="btn btn-ghost" id="sh-no">Vazgeç</button>`);
-    $('#sh-yes').addEventListener('click', doLogout);
-    $('#sh-no').addEventListener('click', closeSheet);
-  });
+  $('#st-password').addEventListener('click', () => passwordSheet(pw => { state.verifiedPassword = pw; go('settings-password-new'); }));
+  $('#st-delete').addEventListener('click', deleteAccountFlow);
+  // Figma 882:2454: ortada modal, İptal | Çıkış Yap
+  $('#st-logout').addEventListener('click', () => dialog({
+    icon: I.qCircle, title: 'Çıkış yapmak istediğine emin misin?',
+    buttons: [{ label: 'İptal', outline: true, onClick: closeSheet }, { label: 'Çıkış Yap', onClick: doLogout }]
+  }));
 }
 
 function pickPref(key, values, labels, title) {
@@ -1824,105 +1838,36 @@ function pickPref(key, values, labels, title) {
   }));
 }
 
-function showSettingsGoal() {
-  const cur = state.me?.dailyGoal ?? 20;
-  paint(topbar() + `<div class="pad">
-      <h1 class="title-xl">Günlük Kelime Hedefi</h1>
-      <p class="lead">Günde kaç kelime çalışacaksın?</p>
-      ${goalChoices(cur)}
-      <p class="tiny gap-16">Hedefini gün içinde artırırsan havuz aynı gün genişler; azaltırsan yeni hedef yarın geçerli olur.</p>
-    </div>
-    <div class="footer"><button class="btn btn-primary" id="b-save">Kaydet</button></div>`);
-  let picked = cur;
-  $$('[data-goal]').forEach(b => b.addEventListener('click', () => {
-    picked = Number(b.dataset.goal);
-    $$('[data-goal]').forEach(x => x.classList.toggle('on', x === b));
-  }));
-  $('#b-save').addEventListener('click', async () => {
-    const res = await api('PUT', '/auth/update-info', { dailyGoal: picked });
-    if (guard(res, 'Günlük hedefin güncellendi')) { state.me = res.json.data; back(); }
-  });
-}
-
-// Öğrenme Seviyeni Değiştir — kilit AÇMA değil, açık seviyeler arasında SEÇİM
-async function showSettingsLevel() {
-  const tk = activeToken;
-  loading(topbar());
-  const res = await api('GET', '/progress');
-  if (stale(tk)) return;
-  if (!guard(res)) return back();
-  render(res.json.data);
-
-  function render(d) {
-    const STATE_TAG = {
-      locked: '<span class="tag plain">Kilitli</span>',
-      active: '<span class="tag bad">Şu anki seviyen</span>',
-      completed: '<span class="tag ok">Tamamlandı</span>',
-      available: ''
-    };
-    paint(topbar() + `<div class="pad">
-        <h1 class="title-xl">Öğrenme Seviyen</h1>
-        <p class="lead">Günlük dersin bu seviyeden gelir. İlerlemen kaybolmaz — dilediğin an geri dönebilirsin.</p>
-        <div class="wordlist">
-          ${d.levels.map(l => `
-            <div class="wordrow" style="cursor:default;align-items:flex-start;gap:14px;${l.state === 'locked' ? 'opacity:.6' : ''}">
-              ${badge(l.jlptLevel, l.state === 'locked' ? 'ghost' : '')}
-              <span class="jp" style="flex:1">
-                <b style="font-family:inherit;font-size:15.5px">${esc(l.jlptLevel)} • ${esc(l.label)}</b>
-                <span>${l.state === 'locked' ? esc(l.unlockHint || '') : `${l.totalWords} kelime · %${l.completionRate} ilerleme`}</span>
-                ${l.state !== 'locked' ? `<span class="meter" style="height:6px;margin-top:8px;display:block"><i style="width:${l.completionRate}%"></i></span>` : ''}
-              </span>
-              ${l.canSelect ? `<button class="link" data-pick="${l.jlptLevel}">Geç</button>` : STATE_TAG[l.state]}
-            </div>`).join('')}
-        </div>
-        <div class="card soft gap-16" style="display:flex;gap:10px;align-items:flex-start">
-          ${I.info}<p style="margin:0;font-size:13px;line-height:1.55;color:var(--brand)">Bir sonraki seviyenin kilidi, listeyi %${d.completionThreshold} oranında tamamlayınca açılır.</p>
-        </div>
-      </div>`);
-    $$('[data-pick]').forEach(b => b.addEventListener('click', () => {
-      const lvl = d.levels.find(x => x.jlptLevel === b.dataset.pick);
-      sheet(`<div class="grab"></div><h3>${esc(lvl.jlptLevel)} • ${esc(lvl.label)} seviyesine geçilsin mi?</h3>
-        <p>İlerlemen kaybolmaz, serilerin bozulmaz. Günlük dersin bundan sonra bu seviyeden gelir.</p>
-        <button class="btn btn-primary" id="sh-yes">Onayla</button>
-        <button class="btn btn-ghost" id="sh-no">Vazgeç</button>`);
-      $('#sh-no').addEventListener('click', closeSheet);
-      $('#sh-yes').addEventListener('click', async () => {
-        const r = await api('PUT', '/progress/active-level', { jlptLevel: lvl.jlptLevel });
-        closeSheet();
-        if (!guard(r, 'Seviyen güncellendi')) return;
-        // Yanıt GET /progress ile aynı gövde — ikinci istek atılmaz
-        if (state.me) state.me.activeLevel = lvl.jlptLevel;
-        if (state.home) state.home.activeLevel = lvl.jlptLevel;
-        render(r.json.data);
-      });
-    }));
-  }
-}
-
-function showSettingsPassword() {
-  formScreen({
-    title: 'Şifre Girin', lead: 'Lütfen mevcut şifrenizi giriniz.', action: 'Devam Et',
-    body: `<div class="input" id="w-pw">${I.key}<input id="in-pw" type="password" placeholder="Şifreniz">
-             <button type="button" class="eye" data-eye="in-pw">${I.eye}</button></div>
-           <div class="errline" id="err"></div>`
-  });
+// Figma › "Şifre Girin" alt sayfası (829:2488 / 829:2620). Şifre değiştirme
+// ve hesap silme aynı adımı kullanır: şifre burada doğrulanır, yanlışsa hata
+// alanın altında çıkar ve kullanıcı sonraki ekrana geçmez.
+function passwordSheet(onVerified) {
+  sheet(`<div class="grab"></div>
+    <h3>Şifre Girin</h3>
+    <p>Lütfen mevcut şifrenizi giriniz.</p>
+    ${pwField('sh-pw')}
+    <div class="errline" id="sh-err"></div>
+    <div class="grow"></div>
+    <button class="btn btn-primary" id="sh-go" disabled>Devam Et</button>`, 'tall');
   wireEyes();
-  $('#f-action').addEventListener('click', async () => {
-    const password = $('#in-pw').value;
+  const input = $('#sh-pw'), wrap = $('#w-sh-pw'), err = $('#sh-err'), go_ = $('#sh-go');
+  input.setAttribute('autocomplete', 'current-password');
+  input.addEventListener('input', () => { go_.disabled = !input.value; clearFieldError(wrap, err); });
+  go_.addEventListener('click', async () => {
+    const password = input.value;
+    go_.disabled = true;
     const res = await api('POST', '/auth/verify-password', { password });
-    if (!res.ok) {
-      $('#w-pw').classList.add('bad');
-      $('#err').textContent = res.json.message || 'Şifreniz yanlış. Lütfen tekrar deneyin.';
-      return;
-    }
-    state.verifiedPassword = password;
-    go('settings-password-new');
+    go_.disabled = false;
+    // Şifresiz sosyal hesapta (SOCIAL_ACCOUNT) da mesaj aynı yerde görünür
+    if (!res.ok) return fieldError(wrap, err, esc(res.json.message || 'Şifreniz yanlış. Lütfen tekrar deneyin.'));
+    closeSheet();
+    onVerified(password);
   });
 }
 
 function showSettingsPasswordNew() {
   formScreen({
-    title: 'Yeni Şifre Oluştur', lead: 'Lütfen şifreni gir ve doğrula.', action: 'Şifreyi Değiştir',
+    title: 'Yeni Şifre Oluştur', lead: 'Lütfen şifreni gir ve doğrula.', action: 'Devam Et',
     body: pwPair()
   });
   wireEyes();
@@ -1936,19 +1881,139 @@ function showSettingsPasswordNew() {
     // Değişiklik TÜM oturumları kapatır; bu cihaz için taze token çifti döner
     setTokens(res.json.data.accessToken, res.json.data.refreshToken);
     state.verifiedPassword = null;
-    reset('settings-password-success');
+    // Figma 937:2437: modal yeni şifre ekranının üstünde açılır
+    dialog({
+      icon: I.key, title: 'Şifreniz Değiştirildi', dismissable: false,
+      body: 'Şifreniz başarıyla değiştirildi. Artık yeni şifreniz ile hesabınıza giriş yapabilirsiniz.',
+      buttons: [{ label: 'Ayarlara Dön', onClick: () => { closeSheet(); reset('settings'); } }]
+    });
   });
 }
 
-function showSettingsPasswordSuccess() {
-  statusScreen({
-    title: 'Şifren Değiştirildi',
-    body: 'İşlemin başarıyla tamamlandı. Öğrenmeye kaldığın yerden devam edebilirsin!',
-    primary: { label: 'Ana Sayfaya Dön', onClick: () => reset('home') }
+function showSettingsGoal() {
+  const cur = state.me?.dailyGoal ?? 20;
+  paint(topbar() + `<div class="pad">
+      <h1 class="title-xl">Günlük Kelime Hedefi</h1>
+      <p class="lead">Günde kaç kelime çalışacaksın?</p>
+      ${goalChoices(cur)}
+    </div>
+    <div class="footer"><button class="btn btn-primary" id="b-save">Kaydet</button></div>`);
+  let picked = cur;
+  $$('[data-goal]').forEach(b => b.addEventListener('click', () => {
+    picked = Number(b.dataset.goal);
+    $$('[data-goal]').forEach(x => x.classList.toggle('on', x === b));
+  }));
+  $('#b-save').addEventListener('click', async () => {
+    const res = await api('PUT', '/auth/update-info', { dailyGoal: picked });
+    if (guard(res, 'Günlük hedefin güncellendi')) { state.me = res.json.data; back(); }
   });
 }
 
-// Figma › Ayarlar › Bildirim Ayarları: dört satır. Anahtarlar dokununca
+// Figma › Öğrenme Seviyen (830:2622) — kilit AÇMA değil, açık seviyeler
+// arasında SEÇİM. Liste açık seviyeler + sıradaki ilk kilitli seviyedir
+// (sunucu 5 satırı da verir; ötesindeki kilitliler tasarımda gösterilmiyor).
+const LEVEL_SWITCH_NOTE = 'Seviyeni değiştirdiğinde ana sayfa, klipler ve günlük çalışma o seviyeye göre yeniden düzenlenir. İlerlemen kaybolmaz — dilediğin an geri dönebilirsin.';
+
+async function showSettingsLevel() {
+  const tk = activeToken;
+  loading(topbar());
+  const res = await api('GET', '/progress');
+  if (stale(tk)) return;
+  if (!guard(res)) return back();
+  const d = res.json.data;
+
+  // Liste N1→N5 sıralı; kilitlilerin sonuncusu açık seviyelere en yakın olanı
+  const nextLocked = d.levels.filter(l => l.state === 'locked').at(-1);
+  const visible = d.levels.filter(l => l.state !== 'locked' || l === nextLocked);
+  const sub = (l) => l.state === 'locked' ? esc(l.unlockHint || '')
+    : l.state === 'active' ? `Şu anki seviyen • %${l.completionRate} ilerleme`
+    : l.state === 'completed' ? 'Tamamlandı'
+    : `%${l.completionRate} ilerleme`;
+  const tail = (l) => l.state === 'locked' ? `<span class="lv-ic">${I.lock}</span>`
+    : l.state === 'active' ? `<span class="lv-ic on">${I.check}</span>`
+    : l.canSelect ? `<button class="link" data-pick="${l.jlptLevel}">Geç</button>` : '';
+
+  paint(topbar() + `<div class="pad">
+      <h1 class="title-xl">Öğrenme Seviyen</h1>
+      <div class="notice gap-8">${I.info}<p>${LEVEL_SWITCH_NOTE}</p></div>
+      <div class="group levels gap-16">
+        ${visible.map(l => `<div class="row-item lv ${l.state}">
+          ${badge(l.jlptLevel, l.state === 'locked' ? 'ghost' : '')}
+          <span class="lbl"><b>${esc(l.jlptLevel)} • ${esc(l.label)}</b><span>${sub(l)}</span></span>
+          ${tail(l)}
+        </div>`).join('')}
+      </div>
+    </div>`);
+
+  // Figma 830:2984 "Emin Misin?" → 881:1062 "Yeni Seviyen Yükleniyor" →
+  // 881:1845 anasayfada "Seviyen Güncellendi!"
+  $$('[data-pick]').forEach(b => b.addEventListener('click', () => {
+    sheet(`<div class="grab"></div>
+      <div class="centered">
+        <div class="blob">${I.qCircle}</div>
+        <h3>Emin Misin?</h3>
+        <p class="brand">${LEVEL_SWITCH_NOTE}</p>
+      </div>
+      <div class="grow"></div>
+      <button class="btn btn-primary" id="sh-yes">Onayla</button>
+      <button class="btn btn-outline" id="sh-no">İptal</button>`, 'tall');
+    $('#sh-no').addEventListener('click', closeSheet);
+    $('#sh-yes').addEventListener('click', () => { closeSheet(); switchLevel(b.dataset.pick); });
+  }));
+}
+
+// Sunucuda geçiş anlıktır; yükleme ekranı tasarımdaki ara adımdır. İstek
+// ile çubuk birlikte koşar, ekran en az ~1,2 sn görünür.
+async function switchLevel(jlptLevel) {
+  paint(`<div class="center-scr levelload">
+      <div class="gaugewrap">${ringSvg(0.7, { size: 150, stroke: 12 })}<span class="ic">${I.gauge}</span></div>
+      <h2>Yeni Seviyen Yükleniyor</h2>
+      <p>Lütfen bekleyiniz...</p>
+      <div class="meter"><i id="ll-bar" style="width:0%"></i></div>
+      <span class="tiny" id="ll-pct">%0</span>
+      <div class="tipcard">
+        <b>${I.bulb}İpucu</b>
+        <p>İstersen eski seviyene tekrar dönebilir ve kaldığın yerden devam edebilirsin. Seviye geçişleri sırasında serilerin asla bozulmaz.</p>
+      </div>
+    </div>`);
+  const bar = $('#ll-bar'), pct = $('#ll-pct');
+  let p = 0;
+  const timer = setInterval(() => {
+    p = Math.min(p + 6, 90);
+    bar.style.width = p + '%'; pct.textContent = '%' + p;
+  }, 60);
+  const [res] = await Promise.all([
+    api('PUT', '/progress/active-level', { jlptLevel }),
+    new Promise(r => setTimeout(r, 1200))
+  ]);
+  clearInterval(timer);
+  if (!guard(res)) return renderCurrent();
+  bar.style.width = '100%'; pct.textContent = '%100';
+  if (state.me) state.me.activeLevel = jlptLevel;
+  state.levelUpdated = true;
+  setTimeout(() => reset('home'), 250);
+}
+
+// Anasayfanın üstünde açılır. İki buton da yalnızca kapatır (Figma'daki
+// İptal'in tanımlı bir anlamı yok — Emirhan'a not edildi).
+function levelUpdatedSheet(home) {
+  // Tasarımda yok: derse bugün başlandıysa yeni seviye yarın başlar
+  const tomorrow = home.levelStartsTomorrow
+    ? ` Bugünkü dersine başladığın için ${home.activeLevel} yarın başlayacak.` : '';
+  sheet(`<div class="grab"></div>
+    <div class="centered">
+      <div class="blob">${I.qCircle}</div>
+      <h3>Seviyen Güncellendi!</h3>
+      <p class="brand">İstersen eski seviyene tekrar dönebilir ve kaldığın yerden devam edebilirsin. Seviye geçişleri sırasında serilerin asla bozulmaz. Ayarlar kısmından tekrar seviyeni güncelleyebilirsin!${esc(tomorrow)}</p>
+    </div>
+    <div class="grow"></div>
+    <button class="btn btn-primary" id="sh-ok">Onayla</button>
+    <button class="btn btn-outline" id="sh-cancel">İptal</button>`, 'tall');
+  $('#sh-ok').addEventListener('click', closeSheet);
+  $('#sh-cancel').addEventListener('click', closeSheet);
+}
+
+// Figma › Bildirim Ayarları: dört satır. Anahtarlar dokununca
 // kaydedilir (tasarımda Kaydet yok); "Pratik Anımsatıcısı" anahtar değil,
 // saati ya da "Kapalı" yazar ve ayrı Hatırlatma Bildirimi ekranını açar.
 function showSettingsNotifications() {
@@ -2001,8 +2066,10 @@ function showSettingsReminder() {
   $('#b-off').addEventListener('click', () => save({ dailyReminder: false }, 'Anımsatıcı kapatıldı'));
 }
 
-// Hukuki metinler backend'den gelir (uygulamaya gömülü DEĞİL) — düzeltme
-// mağaza onayı beklemeden yayına girsin diye
+// Figma › Hakkında (88:1533). Hukuki metinler backend'den gelir (uygulamaya
+// gömülü DEĞİL) — düzeltme mağaza onayı beklemeden yayına girsin diye.
+const LEGAL_ICON = { terms: 'signature', privacy: 'folderLock', kvkk: 'doc' };
+
 async function showSettingsLegal() {
   const tk = activeToken;
   loading(topbar());
@@ -2010,16 +2077,15 @@ async function showSettingsLegal() {
   if (stale(tk)) return;
   if (!guard(res)) return back();
   // GET /api/legal → { lang, company, docs: [...] } — dizi DEĞİL
-  const { docs = [], company = '' } = res.json.data;
+  const { docs = [] } = res.json.data;
   paint(topbar() + `<div class="pad">
       <h1 class="title-xl">Hakkında</h1>
       <div class="group gap-16">
         ${docs.map(d => `<button class="row-item" data-doc="${esc(d.key)}">
-          <span class="ic">${I.doc}</span>
-          <span class="lbl">${esc(d.title)}<span style="display:block;font-size:12px;color:var(--muted);margin-top:2px">Sürüm ${esc(d.version)} · ${esc(d.effectiveDate)}</span></span>
-          <span class="chev">${I.chevR}</span></button>`).join('')}
+          <span class="ic">${I[LEGAL_ICON[d.key]] || I.doc}</span>
+          <span class="lbl">${esc(d.title)}</span></button>`).join('')}
       </div>
-      <p class="tiny gap-24" style="text-align:center">Uygulama Sürümü 1.0.0<br>${esc(company)}</p>
+      <p class="tiny gap-24" style="text-align:center;line-height:2">Uygulama Versiyonu 1.0.0<br>© 2026 Alpsoy Yazılım</p>
     </div>`);
   $$('[data-doc]').forEach(b => b.addEventListener('click', () => go('legal-doc', { key: b.dataset.doc })));
 }
@@ -2033,39 +2099,45 @@ async function showLegalDoc({ key }) {
   const d = res.json.data;
   paint(topbar() + `<div class="pad prose">
       <h1 class="title-xl">${esc(d.title)}</h1>
-      <p class="tiny">Sürüm ${esc(d.version)} · Yürürlük ${esc(d.effectiveDate)}</p>
       <p class="gap-16">${esc(d.intro)}</p>
       ${d.sections.map(s => `<h3>${esc(s.heading)}</h3><p>${esc(s.body)}</p>`).join('')}
     </div>`);
 }
 
-function showSettingsDelete() {
-  formScreen({
-    title: 'Hesabını Sil',
-    lead: 'Bu işlem geri alınamaz. Tüm ilerlemen, kelimelerin ve istatistiklerin kalıcı olarak silinir.',
-    action: 'Hesabı Kalıcı Olarak Sil',
-    body: `<div class="field"><label>Şifren</label>${pwField('in-pw', 'Onaylamak için şifreni gir')}</div>
-           <div class="errline" id="err"></div>`
+// Figma › Hesabını Sil: onay modalı (1436:3780) → Şifre Girin (1437:3976) →
+// Son Onay (1437:4127, "Onaylıyorum" yazılınca açılır) → giriş ekranı
+const DELETE_WORD = 'Onaylıyorum';
+
+function deleteAccountFlow() {
+  dialog({
+    icon: I.trash, title: 'Hesabınızı silmek istediğinize emin misiniz?', body: 'Bu işlem geri alınamaz.',
+    buttons: [
+      { label: 'İptal', outline: true, onClick: closeSheet },
+      { label: 'Devam Et', onClick: () => passwordSheet(finalDeleteSheet) }
+    ]
   });
-  wireEyes();
-  $('#f-action').addEventListener('click', () => {
-    const password = $('#in-pw').value;
-    if (!password) { $('#err').textContent = 'Şifre gerekli'; return; }
-    sheet(`<div class="grab"></div>
-      <div class="blob">${I.trash}</div>
-      <h3>Hesabın silinsin mi?</h3>
-      <p>Bu işlem geri alınamaz ve tüm verilerin (KVKK gereği) kalıcı olarak silinir.</p>
-      <button class="btn btn-primary" id="sh-yes">Evet, Hesabımı Sil</button>
-      <button class="btn btn-ghost" id="sh-no">Vazgeç</button>`);
-    $('#sh-no').addEventListener('click', closeSheet);
-    $('#sh-yes').addEventListener('click', async () => {
-      const res = await api('DELETE', '/auth/delete-account', { password });
-      closeSheet();
-      if (!res.ok) { $('#err').textContent = res.json.message || 'Silinemedi'; return; }
-      setTokens(null, null); state.me = null; state.home = null;
-      toast('Hesabın silindi', 'ok');
-      reset('welcome');
-    });
+}
+
+function finalDeleteSheet(password) {
+  sheet(`<div class="grab"></div>
+    <h3>Son Onay</h3>
+    <p>Devam etmek için <b class="brand">“${DELETE_WORD}”</b> yazın. Bu işlem bir daha geri alınamaz. Bu işlemden sonra girişe yönlendirileceksiniz.</p>
+    <div class="input"><input id="sh-confirm" placeholder="${DELETE_WORD}" autocomplete="off"></div>
+    <div class="errline" id="sh-err"></div>
+    <div class="grow"></div>
+    <button class="btn btn-primary" id="sh-go" disabled>Devam Et</button>`, 'tall');
+  const input = $('#sh-confirm'), go_ = $('#sh-go');
+  input.addEventListener('input', () => {
+    go_.disabled = input.value.trim().toLocaleLowerCase('tr') !== DELETE_WORD.toLocaleLowerCase('tr');
+  });
+  go_.addEventListener('click', async () => {
+    go_.disabled = true;
+    const res = await api('DELETE', '/auth/delete-account', { password });
+    if (!res.ok) { go_.disabled = false; $('#sh-err').textContent = res.json.message || 'Hesap silinemedi'; return; }
+    closeSheet();
+    setTokens(null, null); state.me = null; state.home = null;
+    toast('Hesabın silindi', 'ok');
+    reset('login');
   });
 }
 
@@ -2085,11 +2157,10 @@ const SHOW = {
   memory: showMemory, 'memory-box': showMemoryBox,
 
   settings: showSettings, 'settings-goal': showSettingsGoal, 'settings-level': showSettingsLevel,
-  'settings-password': showSettingsPassword, 'settings-password-new': showSettingsPasswordNew,
-  'settings-password-success': showSettingsPasswordSuccess,
+  'settings-password-new': showSettingsPasswordNew,
   'settings-notifications': showSettingsNotifications,
   'settings-reminder': showSettingsReminder,
-  'settings-legal': showSettingsLegal, 'legal-doc': showLegalDoc, 'settings-delete': showSettingsDelete
+  'settings-legal': showSettingsLegal, 'legal-doc': showLegalDoc
 };
 
 // ═══════════════════════════════════════════════════════════════

@@ -211,6 +211,11 @@ h2.sec:first-child { margin-top: 6px; }
 .card { background: var(--bg); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 16px; }
 .card + .card { margin-top: 12px; }
 .card.fill { background: var(--surface); border-color: transparent; }
+/* Yatay satır (anasayfa "Bugün hiç hata yok"). Kuralı yoktu; ikon boyutsuz
+   kalınca kartın içinde dev siyah bir daire çiziliyordu */
+.row { display: flex; align-items: center; }
+.row.center { justify-content: center; }
+.row svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .card.soft { background: var(--brand-soft); border-color: transparent; }
 
 .group { background: var(--surface); border-radius: var(--r-lg); overflow: hidden; }
@@ -756,3 +761,43 @@ ruby rt { font-size: .48em; color: var(--muted); font-weight: 400; }
   .stage { flex-direction: column; gap: 24px; padding: 16px; }
   .stage-side { width: 100%; max-width: 390px; }
 }
+
+/* ─────────────────── Ayarlar (Figma 38:780) ─────────────────── */
+/* Dil/Tema/Font satırlarındaki aşağı ok */
+.row-item .chev.down { display: flex; width: 12px; height: 7px; }
+.row-item .chev.down svg { width: 12px; height: 7px; }
+
+/* Uzun alt sayfa: Şifre Girin, Emin Misin?, Son Onay — butonlar altta */
+.sheet.tall { min-height: 68%; display: flex; flex-direction: column; }
+.sheet.tall .grow { flex: 1; min-height: 24px; }
+.sheet.tall .btn + .btn { margin-top: 10px; }
+.sheet .centered { text-align: center; }
+.sheet .centered h3 { font-size: 24px; }
+.sheet p.brand, .sheet .brand { color: var(--brand); }
+
+/* Kırmızı çerçeveli bilgi kutusu (Öğrenme Seviyen, STS ön ekranı) */
+.notice { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px; border: 1px solid var(--brand); border-radius: var(--r); background: var(--brand-soft); }
+.notice svg { flex: none; width: 17px; height: 17px; margin-top: 1px; fill: none; stroke: var(--brand); stroke-width: 1.7; }
+.notice p { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--brand); }
+
+/* Öğrenme Seviyen satırları */
+.group.levels .row-item.lv { cursor: default; gap: 14px; }
+.row-item.lv .lbl b { display: block; font-size: 15.5px; font-weight: 650; }
+.row-item.lv .lbl span { display: block; font-size: 13px; color: var(--brand); margin-top: 2px; }
+.row-item.lv.locked .lbl b, .row-item.lv.locked .lbl span { color: var(--muted); }
+.row-item.lv.active { background: var(--brand-soft); }
+.row-item.lv .lv-ic svg { width: 20px; height: 20px; fill: none; stroke: var(--muted); stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.row-item.lv .lv-ic.on svg { stroke: var(--brand); stroke-width: 2; }
+.row-item.lv .link { font-size: 14.5px; text-decoration: underline; }
+
+/* Yeni Seviyen Yükleniyor */
+.levelload .gaugewrap { position: relative; width: 150px; height: 150px; margin-bottom: 26px; }
+.levelload .gaugewrap .ic { position: absolute; inset: 0; display: grid; place-items: center; }
+.levelload .gaugewrap .ic svg { width: 64px; height: 64px; fill: none; stroke: var(--brand); stroke-width: 1.5; }
+.levelload .meter { width: 100%; max-width: 300px; height: 8px; background: var(--line); }
+.levelload .meter i { transition: width .12s linear; }
+.levelload #ll-pct { margin: 10px 0 36px; }
+.tipcard { width: 100%; text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: var(--r); padding: 12px 14px; }
+.tipcard b { display: flex; align-items: center; gap: 6px; color: var(--brand); font-size: 15px; font-weight: 650; }
+.tipcard b svg { width: 17px; height: 17px; fill: none; stroke: var(--brand); stroke-width: 1.6; }
+.tipcard p { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); max-width: none; }
