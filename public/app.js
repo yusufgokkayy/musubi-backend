@@ -58,6 +58,7 @@ const I = {
   bookOpen: '<svg viewBox="0 0 24 24"><path d="M12 6.5S10 4.5 3.5 4.5v13C10 17.5 12 19.5 12 19.5s2-2 8.5-2v-13C14 4.5 12 6.5 12 6.5z"/><path d="M12 6.5v13"/></svg>',
   typeface: '<svg viewBox="0 0 24 24"><path d="M2.5 18 7 6l4.5 12"/><path d="M4 14.2h6"/><path d="M14 18l3.5-8L21 18"/><path d="M15.2 15.4h4.6"/></svg>',
   doc: '<svg viewBox="0 0 24 24"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M8.5 13h7M8.5 16.5h5"/></svg>',
+  door: '<svg viewBox="0 0 24 24"><path d="M4 21h16"/><path d="M6 21V4.5a1.5 1.5 0 0 1 1.5-1.5h9A1.5 1.5 0 0 1 18 4.5V21"/><path d="M6 3.4 13.2 5a1 1 0 0 1 .8 1v15"/><path d="M11.2 12.5v.5"/></svg>',
   logout: '<svg viewBox="0 0 24 24"><path d="M14 20.5H6a2 2 0 0 1-2-2v-13a2 2 0 0 1 2-2h8"/><path d="M15.5 16.5 20 12l-4.5-4.5"/><path d="M20 12H9"/></svg>',
   trash: '<svg viewBox="0 0 24 24"><path d="M4 6.5h16"/><path d="M9 6.5V4.5h6v2"/><path d="M6.5 6.5 7.4 20a1.5 1.5 0 0 0 1.5 1.4h6.2a1.5 1.5 0 0 0 1.5-1.4l.9-13.5"/><path d="M10.5 10.5v7M13.5 10.5v7"/></svg>',
   mail: '<svg viewBox="0 0 24 24"><rect x="2.5" y="5" width="19" height="14" rx="2.5"/><path d="m3.5 7 8.5 6 8.5-6"/></svg>',
@@ -1147,13 +1148,40 @@ async function startLesson() {
   state.lesson = { level, queue: [], idx: 0, streak: 0, phase: 'loading', done: 0, total: 0, pending: 0 };
   go('lesson');
   const tk = activeToken;
-  await api('POST', '/sessions/start', { jlptLevel: level });
-  const res = await api('GET', '/userwords/today');
+  // Figma 601:3711: "Testiniz Oluşturuluyor". Sunucu kuyruğu anında verir;
+  // ekran tasarımdaki ara adımdır, istekle birlikte koşar ve en az ~1,2 sn görünür
+  const stop = lessonPrepScreen();
+  const [res] = await Promise.all([
+    api('POST', '/sessions/start', { jlptLevel: level }).then(() => api('GET', '/userwords/today')),
+    new Promise(r => setTimeout(r, 1200))
+  ]);
+  stop();
   if (stale(tk)) return;
   if (!guard(res)) return back();
   applyTodayPayload(res.json.data);
   state.lesson.phase = state.lesson.queue.length ? 'question' : 'empty';
   renderLesson();
+}
+
+function lessonPrepScreen() {
+  paint(`<div class="center-scr levelload">
+      <div class="gaugewrap">${ringSvg(0.7, { size: 150, stroke: 12 })}<span class="ic">${I.target}</span></div>
+      <h2>Testiniz Oluşturuluyor</h2>
+      <p>Kelimeler Seçiliyor...</p>
+      <div class="meter"><i id="ll-bar" style="width:0%"></i></div>
+      <span class="tiny" id="ll-pct">%0</span>
+      <div class="tipcard">
+        <b>${I.bulb}İpucu</b>
+        <p>Cevabından emin değilsen soruyu boş bırakabilirsin. Unutma, boş bırakmak kelimelerin seviyelerini direkt düşürmez.</p>
+      </div>
+    </div>`);
+  const bar = $('#ll-bar'), pct = $('#ll-pct');
+  let p = 0;
+  const timer = setInterval(() => {
+    p = Math.min(p + 6, 90);
+    bar.style.width = p + '%'; pct.textContent = '%' + p;
+  }, 60);
+  return () => clearInterval(timer);
 }
 
 function applyTodayPayload(d) {
@@ -1211,22 +1239,24 @@ function lessonHead() {
     </div>`;
 }
 
+// Figma 936:2217: ortada modal. Cevaplar her cevapta sunucuya yazıldığı için
+// çıkmak hiçbir şey kaybettirmez; kuyruk ve sayaçlar kaldığı yerden döner
 function wireExit() {
-  $('#b-exit').addEventListener('click', () => {
-    sheet(`<div class="grab"></div>
-      <div class="blob">${I.pause}</div>
-      <h3>Çıkmak istediğine emin misin?</h3>
-      <p>Cevapladığın kelimeler kaydedildi — kaldığın yerden istediğin zaman devam edebilirsin.</p>
-      <button class="btn btn-primary" id="sh-stay">Derse Devam Et</button>
-      <button class="btn btn-ghost" id="sh-leave">Çık</button>`);
-    $('#sh-stay').addEventListener('click', closeSheet);
-    $('#sh-leave').addEventListener('click', () => { closeSheet(); reset('home'); });
-  });
+  $('#b-exit').addEventListener('click', () => dialog({
+    icon: I.door, title: 'Çıkmak İstiyor Musun?',
+    body: 'Tekrar girdiğinde kaldığın yerden devam edersin.',
+    buttons: [
+      { label: 'Çıkış Yap', outline: true, onClick: () => { closeSheet(); reset('home'); } },
+      { label: 'Devam Et', onClick: closeSheet }
+    ]
+  }));
 }
 
 function renderQuestion() {
   const L = state.lesson;
   L.busy = false;
+  // Bitiş ekranındaki "Süre" ve tekrar geçmişi bu süreyi kullanır
+  L.shownAt = Date.now();
   const w = L.queue[L.idx].word;
   paint(lessonHead() + `
     <div class="pad">
@@ -1260,7 +1290,10 @@ async function submitAnswer(payload) {
 
   const tk = activeToken;
   const item = L.queue[L.idx];
-  const res = await api('POST', '/userwords/answer', { wordId: item.id, ...payload });
+  const res = await api('POST', '/userwords/answer', {
+    wordId: item.id, ...payload,
+    ...(L.shownAt && { durationMs: Math.min(Date.now() - L.shownAt, 600000) })
+  });
   if (stale(tk)) return;
   L.busy = false;
   if (!guard(res)) {
@@ -1275,7 +1308,10 @@ async function submitAnswer(payload) {
   L.done = d.progress.completed;
   L.total = d.progress.total;
   L.pending = d.progress.postponed;
-  L.streak = (d.result === 'correct' || d.result === 'easy') ? L.streak + 1 : 0;
+  // "Üst üste" ekranı sunucunun sayacından açılır: uygulama kapanıp açılsa da
+  // seri kaybolmaz, tekrar çözme turundaki nötr cevaplar seriyi büyütmez
+  L.streak = d.combo?.current ?? 0;
+  L.milestone = d.combo?.milestone ?? null;
 
   const tone = d.result === 'wrong' ? 'bad' : d.result === 'empty' ? 'warn' : 'good';
   const icon = d.result === 'wrong' ? I.xCircle : d.result === 'empty' ? I.qCircle : I.checkCircle;
@@ -1308,7 +1344,7 @@ async function submitAnswer(payload) {
 
 function advance() {
   const L = state.lesson;
-  if (L.streak > 0 && L.streak % 5 === 0) { L.phase = 'streak'; return renderLesson(); }
+  if (L.milestone) { L.phase = 'streak'; return renderLesson(); }
   nextWord();
 }
 
@@ -1337,15 +1373,22 @@ async function refreshQueueOrFinish() {
   finishLesson();
 }
 
+// Figma 612:5470: butonsuz, kısa bir süre sonra kendiliğinden sıradaki kelimeye
+// geçer. Sayı sunucunun combo.milestone'udur (istemci sayaç tutmaz)
+const COMBO_SPLASH_MS = 1800;
 function renderStreakSplash() {
   const L = state.lesson;
-  paint(`<div class="center-scr">
+  const tk = activeToken;
+  paint(`<div class="center-scr combo">
       <div class="blob">${I.flame}</div>
-      <h2>${L.streak} Kere Üstüste!</h2>
+      <h2>${L.milestone} Kere Üstüste!</h2>
       <p>Harika gidiyorsun. Böyle devam et!</p>
-      <button class="btn btn-primary" id="b-go" style="max-width:260px">Devam Et</button>
     </div>`);
-  $('#b-go').addEventListener('click', nextWord);
+  setTimeout(() => {
+    if (stale(tk) || state.lesson !== L || L.phase !== 'streak') return;
+    L.milestone = null;
+    nextWord();
+  }, COMBO_SPLASH_MS);
 }
 
 async function finishLesson() {
@@ -1363,23 +1406,37 @@ async function finishLesson() {
 function renderLessonResult() {
   const r = state.lesson.result;
   const s = r.summary;
-  const mins = Math.floor((r.duration || 0));
+  // Üç kutu DERSİN sayılarıdır (lesson); oturumun alanları günün toplamıdır
+  const ders = r.lesson || {};
+  const sure = `${Math.floor((ders.durationSeconds || 0) / 60)}:${String((ders.durationSeconds || 0) % 60).padStart(2, '0')}`;
   paint(`<div class="center-scr">
       <div class="bigring">${ringSvg(1, { size: 168, stroke: 13 })}
-        <span class="v"><b>${r.totalWords}/${r.totalWords}</b><span>Tamamlandı</span></span></div>
+        <span class="v"><b>${state.lesson.total}/${state.lesson.total}</b><span>Tamamlandı</span></span></div>
       <h2>Tebrikler! 🎉</h2>
       <p>Dersi başarıyla bitirdin! Bugünkü dersin analizine anasayfadan ulaşabilirsin.</p>
       <div class="tiles">
-        <div class="tile"><div class="ic">${I.target}</div><div class="v">%${r.accuracy ?? 0}</div><div class="k">Doğruluk</div></div>
-        <div class="tile"><div class="ic">${I.target}</div><div class="v">${mins} dk</div><div class="k">Süre</div></div>
-        <div class="tile"><div class="ic"><span class="jp">結</span></div><div class="v">+${r.correctCount ?? 0}</div><div class="k">Doğru</div></div>
+        <div class="tile"><div class="ic">${I.target}</div><div class="v">%${ders.accuracy ?? 0}</div><div class="k">Doğruluk</div></div>
+        <div class="tile"><div class="ic">${I.target}</div><div class="v">${sure}</div><div class="k">Süre</div></div>
+        <div class="tile"><div class="ic"><span class="jp">結</span></div><div class="v">+${ders.correctWords ?? 0}</div><div class="k">Kanji</div></div>
       </div>
       <button class="btn btn-primary gap-24" id="b-next" style="max-width:300px">Devam Et</button>
     </div>`);
   $('#b-next').addEventListener('click', () => {
-    if (s?.streak?.current > 0) { state.lesson.phase = 'streakday'; return renderLesson(); }
+    if (s?.streak?.current > 0 && !streakShownToday()) { state.lesson.phase = 'streakday'; return renderLesson(); }
     reset('home');
   });
+}
+
+// Seri ekranı günde bir kez (uygulamayla aynı): ikinci dersin sonunda yeniden
+// açılmaz. Yalnızca bu tarayıcıda tutulur; okunamazsa ekran yine gösterilir
+function streakShownToday() {
+  const key = `musubi.streakShown.${state.me?._id || ''}`;
+  const day = new Date().toDateString();
+  try {
+    if (localStorage.getItem(key) === day) return true;
+    localStorage.setItem(key, day);
+  } catch {}
+  return false;
 }
 
 function renderStreakDay() {
@@ -1390,7 +1447,7 @@ function renderStreakDay() {
       <p>Derslerine her gün devam et.</p>
       <div class="weekstrip">${s.streak.week.map((w, i) => `
         <div class="d"><span>${WEEKDAYS[i]}</span>
-          <span class="weekdot ${w.studied ? 'done' : ''} ${w.isToday ? 'today' : ''}" style="margin:0 auto">${w.studied ? I.check : (w.isToday ? I.flame : '')}</span>
+          <span class="weekdot ${w.isToday || w.studied ? 'done' : ''}">${w.isToday ? I.flame : w.studied ? I.check : ''}</span>
         </div>`).join('')}</div>
       <button class="btn btn-primary gap-24" id="b-home" style="max-width:300px">Ana Sayfaya Dön</button>
     </div>`);

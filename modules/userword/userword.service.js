@@ -30,6 +30,117 @@ const qualityMap = {
 // sayılır — kelime gün içinde yeniden sorulabilir ve ilk gerçek cevabı sayılır
 const FINAL_RESULTS = ['correct', 'easy', 'wrong'];
 
+// Bundan uzun süre bir sorunun süresi değildir (uygulama arka planda kalmıştır);
+// geçersiz durationMs yok sayılır
+const MAX_ANSWER_DURATION_MS = 10 * 60 * 1000;
+const validDuration = (durationMs) =>
+    Number.isInteger(durationMs) && durationMs >= 0 && durationMs <= MAX_ANSWER_DURATION_MS;
+
+// ——— DERS İSTATİSTİKLERİ (bitiş ekranı + "üst üste" ekranı) ———
+//
+// Tek bir cevabın ders süresine katabileceği en fazla süre. Bitiş ekranındaki
+// "Süre" aktif çalışma süresidir: dersi yarıda bırakıp akşam dönen kullanıcının
+// molası da, bir soruda telefonu bırakıp giden kullanıcının bekleyişi de buraya
+// yazılmamalı. Eskiden süre "günün oturumu açıldığı andan bitişe kadar" ölçülüyor,
+// sabah başlayıp akşam bitiren kullanıcıda saatler çıkıyordu.
+const ACTIVE_TIME_CAP_MS = 60 * 1000;
+// "5 Kere Üstüste!" ekranı serinin bu sayının katlarına ulaştığı cevapta açılır
+const COMBO_MILESTONE_STEP = 5;
+
+// Bir kelimenin günün havuzlarından hangisinde olduğu. Tekrar kelimeleri
+// havuzda UserWord id'siyle, yeni kelimeler Word id'siyle durur.
+const poolOfWord = (pools, wordId, userWordId) => pools.find(p =>
+    p.newWordIds.some(id => String(id) === String(wordId)) ||
+    (userWordId && p.reviewWordIds.some(id => String(id) === String(userWordId)))
+);
+
+// Bir cevabı havuzun ders istatistiklerine işler ve GÜNCEL havuzu döner.
+//
+// Tek ve ATOMİK güncelleme (aggregation pipeline): seri "oku → hesapla → yaz"
+// ile tutulsaydı aynı anda gelen iki cevap birbirinin artışını ezerdi; günün
+// sayaçlarında yaşanan "sayılar bazen tutmuyor" hatasının aynısı.
+//
+//   SÜRE   → her cevapta büyür (ertelenen ve nötr tekrar dahil: kullanıcı o
+//            kelimenin başında gerçekten vakit geçirdi).
+//   SAYAÇ  → yalnızca günün NİHAİ cevabında (counted) oynar.
+//   SERİ   → doğru +1, yanlış 0; "Şimdilik Geç" ve nötr tekrar dokunmaz.
+const recordLessonActivity = async (pool, { now, durationMs, result, counted }) => {
+    if (!pool) return null;
+
+    const field = (name) => ({ $ifNull: [`$${name}`, 0] });
+    // İstemci süreyi gönderdiyse o, göndermediyse bir önceki cevaptan bu yana
+    // geçen süre. İlk cevapta dayanak yoktur (dersin ekrana geldiği an
+    // bilinmiyor) — uydurmak yerine 0 yazılır.
+    const elapsed = validDuration(durationMs)
+        ? Math.min(durationMs, ACTIVE_TIME_CAP_MS)
+        : {
+            $max: [0, {
+                $min: [ACTIVE_TIME_CAP_MS, { $subtract: [now, { $ifNull: ['$lastAnswerAt', now] }] }]
+            }]
+        };
+
+    const set = {
+        activeMs: { $add: [field('activeMs'), elapsed] },
+        lastAnswerAt: now
+    };
+
+    if (counted && (result === 'correct' || result === 'easy')) {
+        const next = { $add: [field('combo'), 1] };
+        set.correctCount = { $add: [field('correctCount'), 1] };
+        set.combo = next;
+        set.bestCombo = { $max: [field('bestCombo'), next] };
+    } else if (counted && result === 'wrong') {
+        set.wrongCount = { $add: [field('wrongCount'), 1] };
+        set.combo = 0;
+    }
+
+    try {
+        return await DailyWordPool.findOneAndUpdate(
+            { _id: pool._id },
+            [{ $set: set }],
+            { returnDocument: 'after', updatePipeline: true }
+        );
+    } catch (err) {
+        // Cevap bu noktada UserWord'e ve günün sayaçlarına işlenmiştir; istatistik
+        // yazılamadı diye isteği düşürmek istemciyi yeniden denemeye iter ve
+        // ikinci deneme "bugün zaten cevaplandı" dalına düşerdi.
+        console.error(`[ders-istatistik] yazılamadı (havuz ${pool._id}):`, err.message);
+        return pool;
+    }
+};
+
+// Bitiş ekranının üç kutusu + serinin en iyisi. Kapsamı HAVUZDUR (bkz.
+// DailyWordPool'daki not): ikinci havuzun bitiş ekranı birincinin sayılarını
+// taşımaz.
+const lessonShape = (pool) => {
+    const correct = pool?.correctCount || 0;
+    const wrong = pool?.wrongCount || 0;
+    const answered = correct + wrong;
+    return {
+        poolNo: pool?.poolNo ?? null,
+        // "+12 Kanji": bu derste doğru cevaplanan kelime sayısı
+        correctWords: correct,
+        wrongWords: wrong,
+        // "Şimdilik Geç" paydaya girmez — ertelemek doğruluk oranını düşürmemeli
+        accuracy: answered > 0 ? Math.round((correct / answered) * 100) : 0,
+        // "4:15": ekranda geçen aktif süre, saniye
+        durationSeconds: Math.round((pool?.activeMs || 0) / 1000),
+        bestCombo: pool?.bestCombo || 0
+    };
+};
+
+// "Üst üste" ekranının verisi. milestone yalnızca seriyi BU CEVAP bir eşiğe
+// taşıdıysa doludur (5, 10, 15…): ekran aynı seri için ikinci kez açılmasın.
+const comboShape = (pool, { advanced = false } = {}) => {
+    const current = pool?.combo || 0;
+    return {
+        current,
+        best: pool?.bestCombo || 0,
+        milestone: advanced && current > 0 && current % COMBO_MILESTONE_STEP === 0 ? current : null
+    };
+};
+
+
 const sm2 = (userWord, quality) => {
     // quality: 0-5 arası (0-2 yanlış, 3-5 doğru)
     let { easeFactor, interval, repetitions } = userWord;
@@ -275,6 +386,9 @@ const decorateTodayWords = async (userId, today, pool, reviewWordsRaw, newWordsR
         reviewWords,
         newWords,
         ...poolState,   // queue, postponedIds, completedIds, progress, canFinish, canOpenNextPool
+        // Derse geri dönen istemci seriyi ve bitiş ekranı sayılarını buradan alır
+        combo: comboShape(pool),
+        lesson: lessonShape(pool),
         ...dayShape     // goal, today
     };
 };
@@ -633,11 +747,14 @@ const UserWordService = {
             progress: state.progress,
             canFinish: state.canFinish,
             canOpenNextPool: state.canOpenNextPool,
+            combo: comboShape(pool),
+            // Bitiş ekranının sayıları — PUT /sessions/complete de bunu döner
+            lesson: lessonShape(pool),
             ...dayShape
         };
     },
 
-    async submitAnswer(userId, wordId, result, answer) {
+    async submitAnswer(userId, wordId, result, answer, { durationMs } = {}) {
         // wordId gerçekten var mı kontrol et
         const wordExists = await Word.findById(wordId);
         if (!wordExists) throw new AppError('Word not found', 404);
@@ -721,7 +838,17 @@ const UserWordService = {
         //   goal/today → GÜNÜN durumu (anasayfa çemberi bunu okur)
         // Her dönüşte taze okunur (retry sırasında başka bir isteğin
         // güncellediği durumu da doğru yansıtır).
-        const dayShape = async () => {
+        // Ders istatistikleri AKTİF havuzundur (ekrandaki ders). Cevap işlenince
+        // recordLessonActivity'nin döndürdüğü güncel havuzla değiştirilir.
+        let lessonPool = activePool;
+        const applyActivity = async (userWord, activity) => {
+            const updated = await recordLessonActivity(
+                poolOfWord(pools, wordId, userWord._id), activity
+            );
+            if (updated && String(updated._id) === String(activePool._id)) lessonPool = updated;
+        };
+
+        const dayShape = async ({ comboAdvanced = false } = {}) => {
             const [state, day] = await Promise.all([
                 activePool ? readPoolState(userId, activePool, today) : null,
                 readDayShape(userId, today, activeLevel)
@@ -732,6 +859,10 @@ const UserWordService = {
                     : { total: 0, completed: 0, postponed: 0, remaining: 0, touched: 0 },
                 canFinish: state ? state.canFinish : false,
                 canOpenNextPool: state ? state.canOpenNextPool : false,
+                // "5 Kere Üstüste!" ekranı: milestone doluysa göster
+                combo: comboShape(lessonPool, { advanced: comboAdvanced }),
+                // Bitiş ekranının sayıları (PUT /sessions/complete ile aynı blok)
+                lesson: lessonShape(lessonPool),
                 ...day
             };
         };
@@ -801,6 +932,8 @@ const UserWordService = {
                 logEvent(userId, 'answer_submitted', {
                     wordId, jlptLevel: wordExists.jlptLevel, result, practice: true
                 });
+                // Nötr cevap seriye ve sayaçlara dokunmaz, yalnızca süreye yazılır
+                await applyActivity(userWord, { now: new Date(), durationMs, result, counted: false });
                 return {
                     ...baseResponse(),
                     levelDropped: false,
@@ -826,6 +959,9 @@ const UserWordService = {
                     logEvent(userId, 'answer_submitted', {
                         wordId, jlptLevel: wordExists.jlptLevel, result: 'empty'
                     });
+                    // Erteleme seriyi BOZMAZ ve büyütmez; kelime aynı derste
+                    // geri gelecek, yanlışsa seri o zaman sıfırlanır
+                    await applyActivity(userWord, { now: new Date(), durationMs, result, counted: false });
                     return {
                         ...baseResponse(),
                         levelDropped: false,
@@ -897,12 +1033,15 @@ const UserWordService = {
                     levelDropped
                 });
 
+                // Dersin sayaçları, süresi ve serisi (bitiş + "üst üste" ekranı)
+                await applyActivity(userWord, { now: new Date(), durationMs, result, counted: true });
+
                 return {
                     ...baseResponse(),
                     levelDropped,
                     previousLevel,
                     counted: true,
-                    ...(await dayShape())
+                    ...(await dayShape({ comboAdvanced: quality >= 3 }))
                 };
             } catch (err) {
                 if (err.name === 'VersionError') continue; // eşzamanlı yazış kazandı, taze oku

@@ -816,3 +816,13 @@ ruby rt { font-size: .48em; color: var(--muted); font-weight: 400; }
 .tipcard b { display: flex; align-items: center; gap: 6px; color: var(--brand); font-size: 15px; font-weight: 650; }
 .tipcard b svg { width: 17px; height: 17px; fill: none; stroke: var(--brand); stroke-width: 1.6; }
 .tipcard p { margin: 6px 0 0; font-size: 13px; line-height: 1.5; color: var(--muted); max-width: none; }
+
+/* ─────────────────── Ders akışı (Figma 38:775) ─────────────────── */
+/* "5 Kere Üstüste!" (612:5470): butonsuz, başlık kırmızı */
+.center-scr.combo .blob { width: 100px; height: 100px; }
+.center-scr.combo .blob svg { width: 48px; height: 48px; }
+.center-scr.combo h2 { color: var(--brand); }
+/* Seri ekranı (609:5181): bugün alevli dolu daire, çalışılan gün tikli */
+.weekstrip .d .weekdot { display: grid; width: 36px; height: 36px; margin: 0 auto; }
+.weekstrip .weekdot.done svg { width: 15px; height: 15px; }
+.weekstrip .weekdot.done svg[viewBox="0 0 24 24"] { width: 18px; height: 18px; fill: #fff; stroke: none; }
