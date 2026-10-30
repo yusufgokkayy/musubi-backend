@@ -1712,6 +1712,19 @@ describe('Öğrenme seviyesi (Ayarlar > Öğrenme Seviyeni Değiştir)', () => {
         assert.equal(byLevel.N3.unlockHint, "N4'ün %75'i ile açılır");
     });
 
+    it('İngilizce kullanıcıya seviye adları ve kilit ipucu İngilizce döner', async () => {
+        await User.updateOne({ _id: userId }, { 'preferences.language': 'en' });
+        try {
+            const res = await api('GET', '/progress', { token });
+            const byLevel = Object.fromEntries(res.json.data.levels.map(l => [l.jlptLevel, l]));
+            assert.equal(byLevel.N5.label, 'Beginner');
+            assert.equal(byLevel.N1.label, 'Expert');
+            assert.equal(byLevel.N4.unlockHint, 'Unlocks at 75% of N5');
+        } finally {
+            await User.updateOne({ _id: userId }, { 'preferences.language': 'tr' });
+        }
+    });
+
     it('kilitli seviyeye geçilemez (403); geçersiz seviye 400', async () => {
         const locked = await api('PUT', '/progress/active-level', { token, body: { jlptLevel: 'N4' } });
         assert.equal(locked.status, 403);
@@ -1935,6 +1948,21 @@ describe('Quiz', () => {
         assert.equal(result.correctCount, 0);
         assert.deepEqual(result.unlockedLevels, [], 'N5 zaten açıktı, yeni kilit açılmadı');
         assert.equal((await User.findById(user._id)).activeLevel, 'N5');
+    });
+
+    it('İngilizce kullanıcıya sınav önü listesi ve sonuç İngilizce döner', async () => {
+        const user = await createVerifiedUser('sts-en@test.com');
+        await User.updateOne({ _id: user._id }, { 'preferences.language': 'en' });
+        const t = (await login('sts-en@test.com')).accessToken;
+
+        const status = await api('GET', '/quiz/status', { token: t });
+        assert.deepEqual(status.json.data.distribution.map(x => x.label),
+            ['Expert', 'Advanced', 'Intermediate', 'Elementary', 'Beginner']);
+
+        const res = await api('POST', '/quiz/start', { token: t, body: { type: 'placement' } });
+        const result = (await answerByLevel(res.json.data.quizId, [], t)).json.data.result;
+        assert.equal(result.levelLabel, 'Beginner');
+        assert.match(result.levelDescription, /^You /);
     });
 
     it('tekrar giriş 14 gün sonra; kilitler geri KAPANMAZ', async () => {

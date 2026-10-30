@@ -42,11 +42,20 @@ const EXPIRY_MINUTES = 30;
 
 // "Seviyen Belirlendi" ekranındaki tek cümlelik seviye açıklaması
 const LEVEL_DESCRIPTIONS = {
-    N5: 'Temel selamlaşmaları ve günlük basit kelimeleri tanıyabilecek düzeydesin.',
-    N4: 'Günlük konuşmaları ve temel kalıpları anlayabilecek düzeydesin.',
-    N3: 'Günlük hayatta geçen konuşmaların çoğunu takip edebilecek düzeydesin.',
-    N2: 'Gündelik konuların yanında haber ve makale diline de hakimsin.',
-    N1: 'Soyut ve akademik metinleri anlayabilecek ileri düzeydesin.'
+    tr: {
+        N5: 'Temel selamlaşmaları ve günlük basit kelimeleri tanıyabilecek düzeydesin.',
+        N4: 'Günlük konuşmaları ve temel kalıpları anlayabilecek düzeydesin.',
+        N3: 'Günlük hayatta geçen konuşmaların çoğunu takip edebilecek düzeydesin.',
+        N2: 'Gündelik konuların yanında haber ve makale diline de hakimsin.',
+        N1: 'Soyut ve akademik metinleri anlayabilecek ileri düzeydesin.'
+    },
+    en: {
+        N5: 'You can recognize basic greetings and simple everyday words.',
+        N4: 'You can understand everyday conversations and basic patterns.',
+        N3: 'You can follow most conversations you meet in daily life.',
+        N2: 'Beyond everyday topics, you can handle the language of news and articles.',
+        N1: 'You can understand abstract and academic texts at an advanced level.'
+    }
 };
 
 const shuffle = (arr) => {
@@ -554,6 +563,7 @@ const QuizService = {
     // bir seviyedir, bir yargı değil.
     async finalizeAttempt(userId, attempt) {
         const correctCount = attempt.questions.filter(q => q.isCorrect).length;
+        const lang = await userLang(userId);
         const score = Math.round((correctCount / attempt.questions.length) * 100);
         const determinedLevel = QuizService.determineLevel(attempt.questions);
 
@@ -594,8 +604,8 @@ const QuizService = {
         const response = {
             // "Seviyen Belirlendi" ekranının tamamı
             determinedLevel,
-            levelLabel: ProgressService.LEVEL_LABELS[determinedLevel],
-            levelDescription: LEVEL_DESCRIPTIONS[determinedLevel],
+            levelLabel: ProgressService.levelLabel(determinedLevel, lang),
+            levelDescription: (LEVEL_DESCRIPTIONS[lang] || LEVEL_DESCRIPTIONS.tr)[determinedLevel],
             totalQuestions: attempt.questions.length,
             correctCount,
             wrongCount: attempt.questions.length - correctCount, // boş geçilenler dahil
@@ -650,7 +660,10 @@ const QuizService = {
     // yalnızca cooldown'daysa geri sayım gösterilir.
     async getStatus(userId) {
         const { available, nextAllowedAt, hasTaken } = await QuizService.placementAvailability(userId);
-        const inProgress = await QuizService.resolveInProgress(userId);
+        const [inProgress, lang] = await Promise.all([
+            QuizService.resolveInProgress(userId),
+            userLang(userId)
+        ]);
 
         return {
             placementAvailable: available,
@@ -662,7 +675,7 @@ const QuizService = {
             secondsPerQuestion: SECONDS_PER_QUESTION,
             distribution: [...LEVELS].reverse().map(level => ({
                 jlptLevel: level,
-                label: ProgressService.LEVEL_LABELS[level],
+                label: ProgressService.levelLabel(level, lang),
                 questionCount: PLACEMENT_DISTRIBUTION[level]
             })),
             // Yarım kalmış sınav: istemci "devam et mi, baştan mı" diye sormaz —
