@@ -18,6 +18,8 @@ const TAB_ROOTS = ['home', 'library', 'memory', 'settings'];
 // Seviye adının belirtme (-i) hâli, okunuşuna göre: beş → N5'i, dört → N4'ü,
 // üç → N3'ü, iki → N2'yi, bir → N1'i. "N5'i sağlam öğrendin."
 const LEVEL_ACC = { N5: "N5'i", N4: "N4'ü", N3: "N3'ü", N2: "N2'yi", N1: "N1'i" };
+// streak.week hep Pazartesi'den başlar (weekday 1 … 7)
+const WEEKDAYS = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
 const BOX_COLOR = { new: 'var(--box-new)', weak: 'var(--box-weak)', medium: 'var(--box-medium)', good: 'var(--box-good)', mastered: 'var(--box-mastered)' };
 
 const state = {
@@ -930,6 +932,11 @@ async function showHome() {
   state.home = d;
   const stories = storyRes.ok ? storyRes.json.data : [];
   const pct = d.goal > 0 ? d.today.completedWords / d.goal : 0;
+  // Uygulamayla aynı: ertelenenler de dokunulmuş sayılır, buton metni ona bakar
+  const touched = Math.min(d.goal, d.today.completedWords + d.today.emptyCount);
+  const lessonLabel = touched <= 0 ? 'Başla' : touched >= d.goal ? 'Tekrar Çöz' : 'Devam';
+  // Çipler bir önizleme (en fazla 8); sığmayanlar son çipte "+N" olur
+  const moreMistakes = d.todayMistakeCount - d.todayMistakes.length;
 
   paint(`<div class="pad">
       ${pagehead(d.greeting, `Merhaba ${d.name}`, { unread: d.unreadNotifications > 0 })}
@@ -948,40 +955,39 @@ async function showHome() {
         <button id="b-advance">Şimdi Geç</button>
       </div>` : ''}
 
-      <div class="card gap-16">
-        <div class="today-card">
-          <div class="miniring">
-            ${ringSvg(pct, { size: 52, stroke: 5, second: d.goal > 0 ? d.today.emptyCount / d.goal : 0 })}
-            <span class="v">%${Math.round(pct * 100)}</span>
-          </div>
-          <div class="txt">
-            <b>Bugünün Çalışması</b>
-            <span>${d.today.completedWords}/${d.goal} tamamlandı${d.today.emptyCount ? ` · ${d.today.emptyCount} ertelendi` : ''}</span>
-          </div>
-          <button class="btn btn-primary btn-sm" id="b-lesson">${d.today.completedWords >= d.goal ? 'Tekrar Et' : 'Devam'}</button>
+      <div class="card gap-16 today-card">
+        <div class="miniring">
+          ${ringSvg(pct, { size: 52, stroke: 5, second: d.goal > 0 ? d.today.emptyCount / d.goal : 0 })}
+          <span class="v">%${Math.round(pct * 100)}</span>
         </div>
-        <div class="streakline">
-          <span class="flame">${I.flame}${d.streak.current} Gün</span>
-          <div class="weekdots">${d.streak.week.map(w => `
-            <span class="weekdot ${w.studied ? 'done' : ''} ${w.isToday ? 'today' : ''}" title="${esc(w.date)}">${w.studied ? I.check : ''}</span>`).join('')}</div>
+        <div class="txt">
+          <b>Bugünün Çalışması</b>
+          <span>${d.today.completedWords}/${d.goal} tamamlandı.${d.today.extra ? ` +${d.today.extra}` : ''}</span>
+          ${d.today.emptyCount ? `<span class="postponed">${d.today.emptyCount} kelime ertelendi</span>` : ''}
         </div>
+        <button class="btn btn-primary btn-sm" id="b-lesson">${lessonLabel}</button>
       </div>
 
-      ${d.todayMistakeCount > 0 ? `<div class="mistake-card gap-16">
-        <div class="hd">${I.xCircle}<b>Bugünün Hataları</b><button class="n" data-nav="mistakes">${d.todayMistakeCount} Hata</button></div>
-        <div class="chips">${d.todayMistakes.map(m => `<span class="chip">${esc(m.kanji)}</span>`).join('')}</div>
-        <button class="btn btn-outline" data-nav="mistakes">Detaya Git</button>
-      </div>` : `<div class="card fill gap-16" style="text-align:center;padding:22px">
-        <div class="row center" style="gap:8px;color:var(--ok)">${I.checkCircle}<b style="font-size:15px">Bugün hiç hata yok</b></div>
-        <p class="tiny gap-8" style="margin:0">Böyle devam! Hatalı kelimelerin burada listelenir.</p>
-      </div>`}
+      <section class="homesec streaksec">
+        <div class="hd">${I.flame}<b>${d.streak.current > 0 ? `${d.streak.current} Günlük Seri` : 'Serin Yok'}</b>
+          <span class="best">En iyi: ${d.streak.longest}</span></div>
+        <div class="days">${d.streak.week.map((w, i) => `
+          <div class="day ${w.isToday ? 'today' : ''}"><span>${WEEKDAYS[i]}</span>
+            <span class="weekdot ${w.isToday || w.studied ? 'done' : ''}" title="${esc(w.date)}">${w.isToday ? I.flame : w.studied ? I.check : ''}</span>
+          </div>`).join('')}</div>
+      </section>
 
-      <div class="tiny gap-24" style="text-align:center">Aktif seviyen ${esc(d.activeLevel)} • ${esc(d.activeLevelLabel)}</div>
+      <section class="homesec mistakesec">
+        <div class="hd">${I.xCircle}<b>Bugünün Hataları</b>${d.todayMistakeCount > 0 ? `<button class="n" data-nav="mistakes">${d.todayMistakeCount} Hata</button>` : ''}</div>
+        ${d.todayMistakeCount > 0 ? `<div class="chips">${d.todayMistakes.map(m => `<button class="chip" data-word="${esc(m.id)}">${esc(m.kanji)}</button>`).join('')}${moreMistakes > 0 ? `<button class="chip" data-nav="mistakes">+${moreMistakes}</button>` : ''}</div>`
+          : '<p class="empty-line">Bugün hiç hatan yok. Harika gidiyorsun!</p>'}
+      </section>
     </div>`);
 
   $('#b-lesson').addEventListener('click', startLesson);
+  wireWordRows();
   const adv = $('#b-advance');
-  if (adv) adv.addEventListener('click', () => confirmLevelSwitch(d.advanceableLevel));
+  if (adv) adv.addEventListener('click', () => advanceLevel(adv, d.advanceableLevel));
   // Figma'da kart iki hâlli: açık (açıklama + Şimdi Geç) ve tek satırlık kapalı bant
   const tgl = $('#b-unlock-toggle');
   if (tgl) tgl.addEventListener('click', () => {
@@ -1019,19 +1025,15 @@ function placementSheet() {
   });
 }
 
-async function confirmLevelSwitch(level) {
-  sheet(`<div class="grab"></div>
-    <div class="blob">${I.unlock}</div>
-    <h3>${esc(level.jlptLevel)} • ${esc(level.label)} seviyesine geçilsin mi?</h3>
-    <p>İlerlemen kaybolmaz — dilediğin an eski seviyene geri dönebilirsin. Serilerin de bozulmaz.</p>
-    <button class="btn btn-primary" id="sh-yes">Evet, Geç</button>
-    <button class="btn btn-ghost" id="sh-no">Vazgeç</button>`);
-  $('#sh-no').addEventListener('click', closeSheet);
-  $('#sh-yes').addEventListener('click', async () => {
-    const res = await api('PUT', '/progress/active-level', { jlptLevel: level.jlptLevel });
-    closeSheet();
-    if (guard(res, `Seviyen ${level.jlptLevel} olarak güncellendi`)) showHome();
-  });
+// "Şimdi Geç" onay sormaz — buton zaten onaydır (uygulamayla aynı). Emirhan
+// ileride araya bir "Emin Misin?" ekranı koyup aynı ucu oradan çağıracak.
+async function advanceLevel(btn, level) {
+  btn.disabled = true;
+  btn.textContent = 'Geçiliyor...';
+  const res = await api('PUT', '/progress/active-level', { jlptLevel: level.jlptLevel });
+  if (guard(res, `Seviyen güncellendi. Artık ${level.jlptLevel} • ${level.label} seviyesinden çalışıyorsun.`)) return showHome();
+  btn.disabled = false;
+  btn.textContent = 'Şimdi Geç';
 }
 
 // ─────────────────── Bugünün hataları (tam liste) ───────────────────
@@ -1044,9 +1046,8 @@ async function showMistakes() {
   const { mistakes, total } = res.json.data;
   paint(topbar() + `<div class="pad">
       <h1 class="title-xl">Bugünün Hataları</h1>
-      <p class="lead">${total} kelimeyi bugün yanlış cevapladın. Yarınki tekrarda bunlar öncelikli gelecek.</p>
       ${total === 0 ? `<div class="empty">${I.checkCircle}<div>Bugün hiç hatan yok.</div></div>`
-        : `<div class="wordlist">${mistakes.filter(m => m.word).map(m => wordRow(m.word, { click: true, tail: badge(m.word.jlptLevel) })).join('')}</div>`}
+        : `<div class="wordlist gap-16">${mistakes.filter(m => m.word).map(m => wordRow(m.word, { click: true, tail: badge(m.word.jlptLevel) })).join('')}</div>`}
     </div>`);
   wireWordRows();
 }
@@ -1383,13 +1384,12 @@ function renderLessonResult() {
 
 function renderStreakDay() {
   const s = state.lesson.result.summary;
-  const dayNames = ['Pzt', 'Sal', 'Çar', 'Per', 'Cum', 'Cmt', 'Paz'];
   paint(`<div class="center-scr">
       <div class="blob">${I.flame}<span class="count">${s.streak.current}</span></div>
       <h2 style="margin-top:14px">${s.streak.current} Günlük Seridesin!</h2>
       <p>Derslerine her gün devam et.</p>
       <div class="weekstrip">${s.streak.week.map((w, i) => `
-        <div class="d"><span>${dayNames[i]}</span>
+        <div class="d"><span>${WEEKDAYS[i]}</span>
           <span class="weekdot ${w.studied ? 'done' : ''} ${w.isToday ? 'today' : ''}" style="margin:0 auto">${w.studied ? I.check : (w.isToday ? I.flame : '')}</span>
         </div>`).join('')}</div>
       <button class="btn btn-primary gap-24" id="b-home" style="max-width:300px">Ana Sayfaya Dön</button>
