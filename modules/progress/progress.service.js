@@ -32,8 +32,8 @@ const LEVEL_LABELS = {
     N1: 'Uzman'
 };
 
-// Hafıza kartı ve anasayfadaki "Kilit Açıldı" kartı adı kullanıcının dilinde
-// (preferences.language) döndürür; diğer ekranlar şimdilik LEVEL_LABELS'ı okur.
+// Seviye adını gösteren her ekran (Öğrenme Seviyen, Hafıza, anasayfa bandı,
+// STS) adı kullanıcının dilinde (preferences.language) döndürür.
 const LEVEL_LABELS_I18N = {
     tr: LEVEL_LABELS,
     en: { N5: 'Beginner', N4: 'Elementary', N3: 'Intermediate', N2: 'Advanced', N1: 'Expert' }
@@ -48,9 +48,12 @@ const LEVEL_GENITIVE = { N5: "N5'in", N4: "N4'ün", N3: "N3'ün", N2: "N2'nin", 
 // Kilitli satırın açıklaması: bir seviye, KENDİNDEN ÖNCEKİ seviyenin eşiği
 // aşılınca açılır (checkAndUnlockNextLevel ile aynı kural). N5 hiç kilitli
 // olmadığı için buraya düşmez.
-const unlockHintFor = (jlptLevel) => {
+const unlockHintFor = (jlptLevel, lang) => {
     const prev = LEVELS[LEVELS.indexOf(jlptLevel) - 1];
-    return prev ? `${LEVEL_GENITIVE[prev]} %${COMPLETION_THRESHOLD}'i ile açılır` : null;
+    if (!prev) return null;
+    return lang === 'en'
+        ? `Unlocks at ${COMPLETION_THRESHOLD}% of ${prev}`
+        : `${LEVEL_GENITIVE[prev]} %${COMPLETION_THRESHOLD}'i ile açılır`;
 };
 
 // 5 seviye kaydını yazar; YALNIZCA eksik olan doğar ($setOnInsert), var olan
@@ -119,9 +122,10 @@ const ProgressService = {
     async getProgress(userId) {
         const [found, user] = await Promise.all([
             Progress.find({ user: userId }).sort({ jlptLevel: 1 }),
-            User.findById(userId).select('activeLevel')
+            User.findById(userId).select('activeLevel preferences.language')
         ]);
         const activeLevel = user?.activeLevel || 'N5';
+        const lang = user?.preferences?.language;
         // Eksik kayıt varsa liste boş dönerdi; onarım burada (bkz. ensureProgress)
         const progress = await ProgressService.ensureProgress(userId, found);
 
@@ -132,7 +136,7 @@ const ProgressService = {
 
                 return {
                     jlptLevel: p.jlptLevel,
-                    label: LEVEL_LABELS[p.jlptLevel],
+                    label: levelLabel(p.jlptLevel, lang),
                     isUnlocked: p.isUnlocked,
                     completionRate: p.completionRate,
                     totalWords,
@@ -149,7 +153,7 @@ const ProgressService = {
                     // eski seviyesine dönebilir).
                     canSelect: p.isUnlocked && !isActive,
                     // Kilitli satırın altındaki "N4'ün %75'i ile açılır"
-                    unlockHint: p.isUnlocked ? null : unlockHintFor(p.jlptLevel)
+                    unlockHint: p.isUnlocked ? null : unlockHintFor(p.jlptLevel, lang)
                 };
             })
         );

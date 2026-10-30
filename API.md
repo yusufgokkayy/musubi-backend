@@ -1223,6 +1223,9 @@ liste sırası: kilitli üstte, tamamlanan altta).
   }
 }
 ```
+**Dil:** `label` ve `unlockHint` kullanıcının `preferences.language` değerine
+göre döner (`en`: "Beginner" … "Expert", "Unlocks at 75% of N4").
+
 `levels` **her zaman 5 satırdır** — sunucu eksik seviye kayıtlarını okuma anında
 tamamlar (yalnızca eksik olan doğar, var olan ilerlemeye dokunulmaz). İstemci
 boş liste ihtimalini hesaba katmamalıdır.
@@ -1468,6 +1471,9 @@ Sınav önü ekranının (Ayarlar > "Seviye Tespit Sınavına Gir") tamamı.
   }
 }
 ```
+`distribution[].label` ve sınav sonucundaki `levelLabel` + `levelDescription`
+kullanıcının dilindedir (`preferences.language`, tr | en).
+
 Ayarlardaki satır **koşulsuz görünür**: sınav tekrar girilebilir olduğu için
 gizlenmesi/pasifleşmesi gereken bir durum yok, cooldown'da yalnızca geri sayım
 gösterilir.
