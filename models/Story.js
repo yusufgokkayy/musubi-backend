@@ -20,10 +20,18 @@ const StorySchema = new mongoose.Schema({
         type: String,
         required: [true, 'Kapak görseli zorunlu']
     },
+    // Koyu tema hâlleri İSTEĞE BAĞLI. Uygulamanın teması "system" olabildiği
+    // için hangisinin gösterileceğini sunucu bilemez — ikisi de gönderilir,
+    // telefon seçer. Koyu hâli olmayan görselde açık olan kullanılır.
+    coverDarkKey: {
+        type: String,
+        default: null
+    },
     slides: {
         type: [{
             _id: false,
-            imageKey: { type: String, required: true }
+            imageKey: { type: String, required: true },
+            darkImageKey: { type: String, default: null }
         }],
         validate: {
             validator: (v) => Array.isArray(v) && v.length > 0,
@@ -57,7 +65,8 @@ const StorySchema = new mongoose.Schema({
     // KULLANILAMAZ: onu sıralama (bulkWrite), yayından kaldırma, başlık düzeltme
     // gibi içerikle ilgisi olmayan her işlem ilerletiyor ve hikâye herkese
     // yeniden "yeni" görünüyordu (ölçüldü). Bu alan YALNIZCA kapak veya
-    // slaytlar gerçekten değişince güncellenir.
+    // slaytlar gerçekten değişince güncellenir. Koyu hâller bu hesaba GİRMEZ:
+    // açık hâlini görmüş kullanıcı içeriği görmüştür.
     contentUpdatedAt: {
         type: Date,
         default: Date.now

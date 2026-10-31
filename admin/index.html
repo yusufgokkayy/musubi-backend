@@ -105,10 +105,28 @@
       </div>
 
       <div class="field">
+        <span>Koyu tema kapağı <em>isteğe bağlı · yoksa koyu temada da yukarıdaki kullanılır</em></span>
+        <div class="cover-row">
+          <div class="cover-ring dark" id="cover-dark-preview"><span>koyu yok</span></div>
+          <div class="cover-actions">
+            <button type="button" class="btn btn-soft" id="cover-dark-pick">Koyu Kapak Seç</button>
+            <button type="button" class="btn btn-ghost" id="cover-dark-remove" hidden>Kaldır</button>
+          </div>
+        </div>
+        <input type="file" id="cover-dark-input" accept="image/jpeg,image/png,image/webp" hidden>
+      </div>
+
+      <div class="field">
         <span>Slaytlar <em>sürükleyerek sırala, dikey (9:16) görseller en iyi görünür</em></span>
         <div class="slide-list" id="slide-list"></div>
-        <button type="button" class="btn btn-soft" id="slide-pick">+ Slayt Ekle</button>
+        <div class="slide-actions">
+          <button type="button" class="btn btn-soft" id="slide-pick">+ Slayt Ekle</button>
+          <button type="button" class="btn btn-soft" id="slide-dark-bulk" hidden>☾ Koyu Hâlleri Yükle</button>
+        </div>
+        <p class="hint">☾ ile tek slaytın koyu tema hâlini yükle. Toplu yüklemede dosyalar seçim sırasıyla 1. slayttan başlayarak eşlenir.</p>
         <input type="file" id="slide-input" accept="image/jpeg,image/png,image/webp" multiple hidden>
+        <input type="file" id="slide-dark-input" accept="image/jpeg,image/png,image/webp" hidden>
+        <input type="file" id="slide-dark-bulk-input" accept="image/jpeg,image/png,image/webp" multiple hidden>
       </div>
 
       <label class="switch-row">
@@ -139,8 +157,12 @@
         <button type="button" data-mode="home" aria-pressed="true">Anasayfa</button>
         <button type="button" data-mode="slide" aria-pressed="false">Slayt</button>
       </div>
+      <div class="pv-modes" id="pv-themes" role="group" aria-label="Uygulama teması">
+        <button type="button" data-theme="light" aria-pressed="true">Açık</button>
+        <button type="button" data-theme="dark" aria-pressed="false">Koyu</button>
+      </div>
 
-      <div class="phone-frame">
+      <div class="phone-frame" id="phone-frame">
         <div class="phone-notch"></div>
         <div class="phone-screen">
           <!-- Anasayfa modu: hikâye şeridi bağlamıyla birlikte -->

@@ -2348,14 +2348,17 @@ Anasayfanın üstündeki daire şeridi ("bilgi kutucukları"). İçerik adminler
   "id": "66b1f2...",
   "title": "Sakura",                                    // dairenin ALTINDAKİ etiket, en fazla 24 karakter
   "coverUrl": "https://<backend>/uploads/story-covers/....webp",
+  "coverDarkUrl": "https://<backend>/uploads/story-covers/....webp", // koyu tema kapağı
   "seen": false,                                        // false → halka kırmızı, true → gri
   "isPinned": true,                                     // sabitlenmiş: şeridin başında durur
   "slides": [
-    { "url": "https://<backend>/uploads/stories/....webp" },
-    { "url": "https://<backend>/uploads/stories/....webp" }
+    { "url": "https://<backend>/uploads/stories/....webp", "darkUrl": "https://<backend>/uploads/stories/....webp" },
+    { "url": "https://<backend>/uploads/stories/....webp", "darkUrl": "https://<backend>/uploads/stories/....webp" }
   ]
 }
 ```
+
+> **Koyu tema.** Her görselin bir açık (`coverUrl`, `url`) bir de koyu (`coverDarkUrl`, `darkUrl`) adresi vardır; ikisi de **her zaman doludur**. Koyu hâli yüklenmemiş görselde koyu adres açık olanla aynıdır, yani istemcinin null kontrolü yapması gerekmez. Hangisinin gösterileceğini **istemci** seçer, çünkü `preferences.theme` `"system"` olabilir ve telefonun o anki temasını sunucu bilemez: `theme` `"dark"` ise koyu, `"light"` ise açık, `"system"` ise cihazın parlaklık ayarına göre (Flutter: `MediaQuery.platformBrightnessOf`). Tema hikâye açıkken değişirse görsel de değişebilir. Bu alanlar eklentidir: onları okumayan eski sürüm yalnızca açık hâli gösterir, bozulmaz.
 
 ### GET /stories 🔒✉️
 Yayında olan ve süresi geçmemiş hikâyeler, gösterim sırasında.
@@ -2385,7 +2388,7 @@ Hata: `404 "Hikâye bulunamadı"` — hikâye izlenirken admin silmiş olabilir;
 
 > **İkisi birden gönderilmeli.** `opened` açılışta, `seen` yalnızca sonuna kadar izlenirse. Yarıda çıkan kullanıcı yalnızca `opened` üretir; ikisinin farkı "kaç kişi açtı, kaçı bitirdi" ölçümünü verir ve admin panelinde gösterilir. `seen`'i açılışta göndermek bu ölçümü anlamsızlaştırır.
 
-> **`seen` ne zaman sıfırlanır:** yalnızca **görsel içerik** değişince — kapak değiştirilirse veya slaytlar eklenir/çıkarılır/sıralanırsa `seen` o kullanıcı için tekrar `false` olur ve halka yeniden yanar. Başlık düzeltmesi, yayından kaldırıp geri alma, bitiş tarihini uzatma ve hikâyelerin panelden yeniden sıralanması `seen`'i **bozmaz**. İstemci tarafında `seen`'i önbelleğe almayın, her `GET /stories`'te gelen değeri kullanın.
+> **`seen` ne zaman sıfırlanır:** yalnızca **görsel içerik** değişince — kapak değiştirilirse veya slaytlar eklenir/çıkarılır/sıralanırsa `seen` o kullanıcı için tekrar `false` olur ve halka yeniden yanar. Başlık düzeltmesi, yayından kaldırıp geri alma, bitiş tarihini uzatma ve hikâyelerin panelden yeniden sıralanması ve koyu tema hâllerinin eklenmesi `seen`'i **bozmaz**. İstemci tarafında `seen`'i önbelleğe almayın, her `GET /stories`'te gelen değeri kullanın.
 
 ### Yönetim uçları 🔒✉️ (yalnızca admin)
 Mobil uygulamanın kullanması gerekmez; `/admin` paneli bunları çağırır.
@@ -2393,12 +2396,14 @@ Mobil uygulamanın kullanması gerekmez; `/admin` paneli bunları çağırır.
 | Metot | Yol | Gövde |
 |---|---|---|
 | GET | `/stories/admin` | — (pasif + süresi dolmuşlar dahil hepsi; `openCount`, `completedCount`, `completionRate` ile) |
-| POST | `/stories` | `{ title, coverKey, slides: [key], isActive?, expiresAt? }` → `201 { data: { id } }` |
+| POST | `/stories` | `{ title, coverKey, coverDarkKey?, slides: [key \| { imageKey, darkImageKey? }], isActive?, expiresAt? }` → `201 { data: { id } }` |
 | PUT | `/stories/:id` | Aynı alanlar, kısmi gönderilebilir |
 | PUT | `/stories/order` | `{ pinnedIds: [...], normalIds: [...] }` — aşağıya bakın |
 | DELETE | `/stories/:id` | — (hikâye + görüntülenme kayıtları + başka hikâyede kullanılmayan görseller silinir) |
 
-`coverKey` ve `slides` elemanları `POST /api/uploads`'un döndüğü **key**'lerdir, URL değil. Biçime uymayan bir değer `400 "Geçersiz görsel anahtarı (...)"` döner. `expiresAt` boş/`null` ise hikâye süresizdir; tarih geçince hikâye gizlenir ama **silinmez** (admin tarihi uzatıp yeniden yayına alabilir).
+`coverKey` ve `slides` elemanları `POST /api/uploads`'un döndüğü **key**'lerdir, URL değil.
+
+**Koyu hâller** isteğe bağlıdır: `coverDarkKey` (preset `storyCover`) ve slayt başına `darkImageKey` (preset `story`). Slayt düz key olarak gönderilirse ya da `darkImageKey` alanı hiç yoksa, aynı görsel o hikâyede zaten kayıtlıysa koyu hâli **korunur**. Kaldırmak için açıkça `null` gönderilir (`coverDarkKey: null` da aynı şekilde). Koyu hâl eklemek, değiştirmek veya kaldırmak `seen`'i **bozmaz**: halkayı yalnızca açık hâllerin değişmesi yeniden yakar. `GET /stories/admin` yanıtında koyu alanlar (`coverDarkKey`, `coverDarkUrl`, slaytlarda `darkImageKey`, `darkUrl`) eksikse `null` gelir. Kullanıcı görünümünde ise açık olana düşer, böylece panel hangi koyu hâlin eksik olduğunu görebilir. Biçime uymayan bir değer `400 "Geçersiz görsel anahtarı (...)"` döner. `expiresAt` boş/`null` ise hikâye süresizdir; tarih geçince hikâye gizlenir ama **silinmez** (admin tarihi uzatıp yeniden yayına alabilir).
 
 Tipik akış: `POST /api/uploads` (preset `storyCover`) → kapak key'i · `POST /api/uploads` (preset `story`) × N → slayt key'leri · `POST /api/stories`.
 
