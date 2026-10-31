@@ -18,17 +18,39 @@ const assertValidKey = (key, alan) => {
 // eşitlik bozucu (aynı order'a düşen kayıtlar rastgele sıralanmasın).
 const SIRALAMA = { isPinned: -1, order: 1, createdAt: 1 };
 
-const normalizeSlides = (slides) => {
+// Slayt düz key olarak da {imageKey, darkImageKey} olarak da gelebilir.
+// darkImageKey hiç gönderilmemişse (düz key ya da alan yok) ve aynı görsel bu
+// hikâyede zaten kayıtlıysa koyu hâli KORUNUR: koyu hâlden habersiz bir
+// istemcinin her kaydı onları sessizce silmesin. Kaldırmak için açıkça null.
+const normalizeSlides = (slides, mevcut = []) => {
     if (!Array.isArray(slides) || slides.length === 0) {
         throw new AppError('En az bir slayt gerekli', 400);
     }
+    const mevcutKoyu = new Map(mevcut.map(sl => [sl.imageKey, sl.darkImageKey]));
     return slides.map((s, i) => {
-        // Panel düz key dizisi gönderiyor; {imageKey} nesnesi de kabul edilir
         const key = typeof s === 'string' ? s : s?.imageKey;
         assertValidKey(key, `slayt ${i + 1}`);
-        return { imageKey: key };
+        const darkKey = typeof s === 'string' || s.darkImageKey === undefined
+            ? mevcutKoyu.get(key) ?? null
+            : s.darkImageKey || null;
+        if (darkKey) assertValidKey(darkKey, `slayt ${i + 1} koyu`);
+        return { imageKey: key, darkImageKey: darkKey };
     });
 };
+
+const parseDarkCover = (value) => {
+    if (value === undefined) return undefined;
+    if (value === null || value === '') return null;
+    assertValidKey(value, 'koyu kapak');
+    return value;
+};
+
+// Hikâyenin diske dokunan bütün görselleri: silme ve temizlik için
+const allKeys = (story) => [
+    story.coverKey,
+    story.coverDarkKey,
+    ...story.slides.flatMap(sl => [sl.imageKey, sl.darkImageKey])
+].filter(Boolean);
 
 const parseExpiresAt = (value) => {
     if (value === undefined) return undefined;
@@ -45,7 +67,10 @@ const parseExpiresAt = (value) => {
 const removeUnusedImages = async (keys) => {
     for (const key of [...new Set(keys)]) {
         const stillUsed = await Story.exists({
-            $or: [{ coverKey: key }, { 'slides.imageKey': key }]
+            $or: [
+                { coverKey: key }, { coverDarkKey: key },
+                { 'slides.imageKey': key }, { 'slides.darkImageKey': key }
+            ]
         });
         if (!stillUsed) await UploadService.deleteImage(key);
     }
@@ -81,11 +106,17 @@ const StoryService = {
                 id: s._id,
                 title: s.title,
                 coverUrl: UploadService.urlFor(s.coverKey),
+                // Koyu hâli yoksa açık olanın adresi — istemci yalnızca temaya
+                // göre alan seçer, null kontrolü yapmak zorunda kalmaz
+                coverDarkUrl: UploadService.urlFor(s.coverDarkKey || s.coverKey),
                 seen: Boolean(viewedAt) && viewedAt >= contentAt,
                 // Liste zaten sıralı geliyor; bu alan istemci isterse rozet
                 // göstersin diye ve sıranın nedenini belgelemek için var
                 isPinned: Boolean(s.isPinned),
-                slides: s.slides.map(sl => ({ url: UploadService.urlFor(sl.imageKey) }))
+                slides: s.slides.map(sl => ({
+                    url: UploadService.urlFor(sl.imageKey),
+                    darkUrl: UploadService.urlFor(sl.darkImageKey || sl.imageKey)
+                }))
             };
         });
     },
@@ -164,9 +195,15 @@ const StoryService = {
             title: s.title,
             coverKey: s.coverKey,
             coverUrl: UploadService.urlFor(s.coverKey),
+            // Panelde kullanıcı görünümünün tersine boşluk null kalır: admin
+            // hangi görselin koyu hâlinin EKSİK olduğunu görebilmeli
+            coverDarkKey: s.coverDarkKey || null,
+            coverDarkUrl: s.coverDarkKey ? UploadService.urlFor(s.coverDarkKey) : null,
             slides: s.slides.map(sl => ({
                 imageKey: sl.imageKey,
-                url: UploadService.urlFor(sl.imageKey)
+                url: UploadService.urlFor(sl.imageKey),
+                darkImageKey: sl.darkImageKey || null,
+                darkUrl: sl.darkImageKey ? UploadService.urlFor(sl.darkImageKey) : null
             })),
             isActive: s.isActive,
             isPinned: Boolean(s.isPinned),
@@ -188,7 +225,7 @@ const StoryService = {
         }));
     },
 
-    async createStory({ title, coverKey, slides, isActive, expiresAt }, adminId) {
+    async createStory({ title, coverKey, coverDarkKey, slides, isActive, expiresAt }, adminId) {
         assertValidKey(coverKey, 'kapak');
 
         // Yeni hikâye sabitlenmemiş grubun SONUNA eklenir: mevcut sıralama
@@ -199,6 +236,7 @@ const StoryService = {
         const story = await Story.create({
             title,
             coverKey,
+            coverDarkKey: parseDarkCover(coverDarkKey) ?? null,
             slides: normalizeSlides(slides),
             isActive: isActive !== undefined ? Boolean(isActive) : true,
             expiresAt: parseExpiresAt(expiresAt) ?? null,
@@ -209,18 +247,20 @@ const StoryService = {
         return story._id;
     },
 
-    async updateStory(id, { title, coverKey, slides, isActive, expiresAt }) {
+    async updateStory(id, { title, coverKey, coverDarkKey, slides, isActive, expiresAt }) {
         const story = await Story.findById(id);
         if (!story) throw new AppError('Hikâye bulunamadı', 404);
 
         const eskiKeyler = [story.coverKey, ...story.slides.map(s => s.imageKey)];
+        const eskiTumKeyler = allKeys(story);
 
         if (title !== undefined) story.title = title;
         if (coverKey !== undefined) {
             assertValidKey(coverKey, 'kapak');
             story.coverKey = coverKey;
         }
-        if (slides !== undefined) story.slides = normalizeSlides(slides);
+        if (coverDarkKey !== undefined) story.coverDarkKey = parseDarkCover(coverDarkKey);
+        if (slides !== undefined) story.slides = normalizeSlides(slides, story.slides);
         if (isActive !== undefined) story.isActive = Boolean(isActive);
         if (expiresAt !== undefined) story.expiresAt = parseExpiresAt(expiresAt);
 
@@ -228,6 +268,8 @@ const StoryService = {
         // kaydetmede tüm alanları gönderdiği için "alan gönderildi mi" yetmez,
         // değerin gerçekten değişip değişmediğine bakılır — aksi halde başlıktaki
         // bir yazım düzeltmesi de hikâyeyi herkese yeniden "yeni" gösterirdi.
+        // Yalnızca AÇIK hâller karşılaştırılır: var olan hikâyeye koyu hâl
+        // eklemek onu herkese yeniden "yeni" göstermemeli.
         const yeniKeyDizisi = [story.coverKey, ...story.slides.map(s => s.imageKey)];
         const icerikDegisti =
             eskiKeyler.length !== yeniKeyDizisi.length ||
@@ -237,15 +279,15 @@ const StoryService = {
         await story.save();
 
         // Değişiklikten sonra artık hiçbir hikâyede geçmeyen görselleri temizle
-        const yeniKeyler = new Set([story.coverKey, ...story.slides.map(s => s.imageKey)]);
-        await removeUnusedImages(eskiKeyler.filter(k => !yeniKeyler.has(k)));
+        const yeniKeyler = new Set(allKeys(story));
+        await removeUnusedImages(eskiTumKeyler.filter(k => !yeniKeyler.has(k)));
     },
 
     async deleteStory(id) {
         const story = await Story.findById(id);
         if (!story) throw new AppError('Hikâye bulunamadı', 404);
 
-        const keys = [story.coverKey, ...story.slides.map(s => s.imageKey)];
+        const keys = allKeys(story);
 
         await story.deleteOne();
         await StoryView.deleteMany({ story: id });

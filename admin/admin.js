@@ -201,6 +201,12 @@
         return `${s.openCount} açılma · %${oran} tamamlandı`;
     };
 
+    // Koyu hâli hiç yoksa sessiz; varsa kaçında olduğu görünsün ki eksik kalan fark edilsin
+    const koyuOzeti = (s) => {
+        const koyu = s.slides.filter(sl => sl.darkImageKey).length;
+        return koyu || s.coverDarkKey ? ` · ☾ ${koyu}/${s.slides.length}` : '';
+    };
+
     const cardHtml = (s) => {
         const st = statusOf(s);
         return `
@@ -212,7 +218,7 @@
             <div class="story-cover" style="background-image:url('${esc(imgUrl(s.coverKey))}')"></div>
             <span class="badge ${st.cls}">${st.label}</span>
             <h3>${esc(s.title)}</h3>
-            <p class="story-meta">${s.slides.length} slayt</p>
+            <p class="story-meta">${s.slides.length} slayt${koyuOzeti(s)}</p>
             <p class="story-stat">${istatistik(s)}</p>
             <button class="edit-link" data-edit="${s.id}">Düzenle</button>
           </article>`;
@@ -368,8 +374,8 @@
     }
 
     // ---- düzenleyici --------------------------------------------------------
-    // form.slides key dizisidir; görseller seçilir seçilmez yüklenir, kaydetme
-    // anında yalnızca key'ler gönderilir.
+    // form.slides {imageKey, darkImageKey} dizisidir; görseller seçilir seçilmez
+    // yüklenir, kaydetme anında yalnızca key'ler gönderilir.
     let form = null;
     // Telefon önizlemesinde gösterilen slaytın sırası. Admin yayımlamadan önce
     // tüm slaytları görebilsin diye: küçük resme tıklayınca önizleme oraya geçer.
@@ -383,11 +389,12 @@
                 id: story.id,
                 title: story.title,
                 coverKey: story.coverKey,
-                slides: story.slides.map(s => s.imageKey),
+                coverDarkKey: story.coverDarkKey || null,
+                slides: story.slides.map(s => ({ imageKey: s.imageKey, darkImageKey: s.darkImageKey || null })),
                 isActive: story.isActive,
                 expiresAt: story.expiresAt
             }
-            : { id: null, title: '', coverKey: null, slides: [], isActive: true, expiresAt: null };
+            : { id: null, title: '', coverKey: null, coverDarkKey: null, slides: [], isActive: true, expiresAt: null };
 
         $('drawer-title').textContent = story ? 'Hikâyeyi Düzenle' : 'Yeni Hikâye';
         $('story-delete').hidden = !story;
@@ -422,15 +429,27 @@
         cover.classList.toggle('has-image', Boolean(form.coverKey));
         cover.style.backgroundImage = form.coverKey ? `url('${imgUrl(form.coverKey)}')` : '';
 
+        const coverDark = $('cover-dark-preview');
+        coverDark.classList.toggle('has-image', Boolean(form.coverDarkKey));
+        coverDark.style.backgroundImage = form.coverDarkKey ? `url('${imgUrl(form.coverDarkKey)}')` : '';
+        $('cover-dark-remove').hidden = !form.coverDarkKey;
+        $('slide-dark-bulk').hidden = form.slides.length === 0;
+
         // Silinen/eklenen slayttan sonra seçim diziden taşabilir
         if (previewIndex >= form.slides.length) previewIndex = Math.max(0, form.slides.length - 1);
 
-        $('slide-list').innerHTML = form.slides.map((key, i) => `
+        // Küçük resimler de önizlemenin temasını izler: koyuda koyu hâller görünür
+        $('slide-list').innerHTML = form.slides.map((sl, i) => `
           <div class="slide-item ${i === previewIndex ? 'selected' : ''}" draggable="true"
                data-index="${i}" title="Önizlemede göster"
-               style="background-image:url('${esc(imgUrl(key))}')">
+               style="background-image:url('${esc(imgUrl(temadakiKey(sl.imageKey, sl.darkImageKey)))}')">
             <span class="num">${i + 1}</span>
             <button type="button" class="remove" data-remove="${i}" aria-label="Slaytı kaldır">✕</button>
+            <button type="button" class="dark-pick ${sl.darkImageKey ? 'on' : ''}" data-dark="${i}"
+                    title="${sl.darkImageKey ? 'Koyu hâli değiştir' : 'Koyu hâl yükle'}"
+                    aria-label="${sl.darkImageKey ? 'Koyu hâli değiştir' : 'Koyu hâl yükle'}">☾</button>
+            ${sl.darkImageKey ? `<button type="button" class="dark-remove" data-dark-remove="${i}"
+                    title="Koyu hâli kaldır" aria-label="Koyu hâli kaldır">✕</button>` : ''}
           </div>`).join('');
 
         renderPreview();
@@ -438,6 +457,19 @@
 
     // 'home' = anasayfa şeridi bağlamı, 'slide' = hikâyenin gerçek tam ekran hâli
     let previewMode = 'home';
+    // Uygulamanın teması. Panel kapanıp açılınca korunur: koyu hâlleri
+    // dolduran admin her hikâyede yeniden "Koyu"ya basmasın.
+    let previewTheme = 'light';
+
+    // Uygulamanın yaptığının aynısı: koyu temada koyu hâl varsa o, yoksa açık
+    const temadakiKey = (key, darkKey) => (previewTheme === 'dark' && darkKey) || key;
+
+    $('pv-themes').addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-theme]');
+        if (!btn || !form) return;
+        previewTheme = btn.dataset.theme;
+        renderEditor();
+    });
 
     $('pv-modes').addEventListener('click', (e) => {
         const btn = e.target.closest('[data-mode]');
@@ -450,6 +482,10 @@
         for (const btn of $('pv-modes').querySelectorAll('[data-mode]')) {
             btn.setAttribute('aria-pressed', String(btn.dataset.mode === previewMode));
         }
+        for (const btn of $('pv-themes').querySelectorAll('[data-theme]')) {
+            btn.setAttribute('aria-pressed', String(btn.dataset.theme === previewTheme));
+        }
+        $('phone-frame').classList.toggle('app-dark', previewTheme === 'dark');
         $('pv-home').hidden = previewMode !== 'home';
         $('pv-slide').hidden = previewMode !== 'slide';
         $('pv-bars').hidden = previewMode !== 'slide' || form.slides.length < 2;
@@ -457,12 +493,13 @@
         // Şerit: düzenlenen hikâye, ekrandaki gerçek grup sırasına göre
         // sabitlenmişse başta, değilse sabitlenenlerin ardında görünür
         const digerleri = displayOrder().filter(s => s.id !== form.id && s.isActive);
-        const bu = { title: $('story-title').value || 'başlık', coverKey: form.coverKey, seen: false };
+        const bu = { title: $('story-title').value || 'başlık', coverKey: temadakiKey(form.coverKey, form.coverDarkKey), seen: false };
         const kendiSirasi = form.id && pinned.includes(form.id) ? 0 : pinned.length;
+        const diger = s => ({ title: s.title, coverKey: temadakiKey(s.coverKey, s.coverDarkKey), seen: true });
         const strip = [
-            ...digerleri.slice(0, kendiSirasi).map(s => ({ title: s.title, coverKey: s.coverKey, seen: true })),
+            ...digerleri.slice(0, kendiSirasi).map(diger),
             bu,
-            ...digerleri.slice(kendiSirasi).map(s => ({ title: s.title, coverKey: s.coverKey, seen: true }))
+            ...digerleri.slice(kendiSirasi).map(diger)
         ].slice(0, 4);
 
         $('pv-strip').innerHTML = strip.map(s => `
@@ -476,7 +513,8 @@
             .map((_, i) => `<i class="${i === previewIndex ? 'on' : ''}"></i>`).join('');
 
         const slayt = $('pv-slide');
-        const gosterilen = form.slides[previewIndex];
+        const sl = form.slides[previewIndex];
+        const gosterilen = sl && temadakiKey(sl.imageKey, sl.darkImageKey);
         slayt.classList.toggle('has-image', Boolean(gosterilen));
         slayt.style.backgroundImage = gosterilen ? `url('${imgUrl(gosterilen)}')` : '';
         slayt.textContent = gosterilen ? '' : 'Slayt ekleyince burada tam ekran görünecek';
@@ -524,7 +562,7 @@
             // Sıralı yükleme: hem slayt sırası korunur hem sunucudaki yükleme
             // limitine (30/15dk) tek seferde yığılmaz
             for (let i = 0; i < files.length; i++) {
-                form.slides.push(await uploadImage(files[i], 'story'));
+                form.slides.push({ imageKey: await uploadImage(files[i], 'story'), darkImageKey: null });
                 btn.textContent = `Yükleniyor… (${i + 1}/${files.length})`;
                 renderEditor();
             }
@@ -536,7 +574,81 @@
         }
     });
 
+    $('cover-dark-pick').addEventListener('click', () => $('cover-dark-input').click());
+    $('cover-dark-input').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        e.target.value = '';
+        if (!file) return;
+        try {
+            form.coverDarkKey = await uploadImage(file, 'storyCover');
+            previewTheme = 'dark';
+            renderEditor();
+        } catch (ex) {
+            toast(ex.message, true);
+        }
+    });
+    $('cover-dark-remove').addEventListener('click', () => {
+        form.coverDarkKey = null;
+        renderEditor();
+    });
+
+    // ☾ ile seçilen slaytın sırası; dosya penceresi kapanınca buna yazılır
+    let darkTarget = null;
+    $('slide-dark-input').addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        e.target.value = '';
+        const hedef = form && form.slides[darkTarget];
+        if (!file || !hedef) return;
+        try {
+            hedef.darkImageKey = await uploadImage(file, 'story');
+            // Yüklenen koyu hâl hemen görünsün
+            previewIndex = darkTarget;
+            previewMode = 'slide';
+            previewTheme = 'dark';
+            renderEditor();
+        } catch (ex) {
+            toast(ex.message, true);
+        }
+    });
+
+    // Toplu: seçilen dosyalar sırasıyla 1. slayttan itibaren eşlenir. Fazla
+    // dosya yok sayılır — slayt eklemek bu düğmenin işi değil.
+    $('slide-dark-bulk').addEventListener('click', () => $('slide-dark-bulk-input').click());
+    $('slide-dark-bulk-input').addEventListener('change', async (e) => {
+        const files = [...e.target.files].slice(0, form.slides.length);
+        e.target.value = '';
+        if (!files.length) return;
+
+        const btn = $('slide-dark-bulk');
+        btn.disabled = true;
+        try {
+            for (let i = 0; i < files.length; i++) {
+                btn.textContent = `Yükleniyor… (${i}/${files.length})`;
+                form.slides[i].darkImageKey = await uploadImage(files[i], 'story');
+                previewTheme = 'dark';
+                renderEditor();
+            }
+        } catch (ex) {
+            toast(ex.message, true);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '☾ Koyu Hâlleri Yükle';
+        }
+    });
+
     $('slide-list').addEventListener('click', (e) => {
+        const koyu = e.target.closest('[data-dark]');
+        if (koyu) {
+            darkTarget = Number(koyu.dataset.dark);
+            $('slide-dark-input').click();
+            return;
+        }
+        const koyuSil = e.target.closest('[data-dark-remove]');
+        if (koyuSil) {
+            form.slides[Number(koyuSil.dataset.darkRemove)].darkImageKey = null;
+            renderEditor();
+            return;
+        }
         // Silme butonu slaytın İÇİNDE; önce onu ele al, yoksa tıklama
         // "bu slaytı önizle" olarak yorumlanır
         const sil = e.target.closest('[data-remove]');
@@ -575,6 +687,7 @@
         const payload = {
             title,
             coverKey: form.coverKey,
+            coverDarkKey: form.coverDarkKey,
             slides: form.slides,
             isActive: $('story-active').checked,
             expiresAt: expiresInput ? new Date(expiresInput).toISOString() : null

@@ -5015,6 +5015,92 @@ describe('Hikâyeler', () => {
 
         await Story.deleteMany({});
     });
+
+    it('koyu tema: koyu hâli olmayan görselde darkUrl açık olana düşer, panelde null kalır', async () => {
+        const kapak = await gorselYukle('storyCover');
+        const acik1 = await gorselYukle();
+        const acik2 = await gorselYukle();
+        const koyuKapak = await gorselYukle('storyCover');
+        const koyu1 = await gorselYukle();
+
+        const id = await hikayeOlustur({
+            coverKey: kapak,
+            coverDarkKey: koyuKapak,
+            slides: [{ imageKey: acik1, darkImageKey: koyu1 }, acik2]
+        });
+
+        const story = (await api('GET', '/stories', { token: userToken })).json.data.find(s => s.id === id);
+        assert.match(story.coverDarkUrl, new RegExp(koyuKapak + '$'));
+        assert.match(story.slides[0].darkUrl, new RegExp(koyu1 + '$'));
+        assert.equal(story.slides[1].darkUrl, story.slides[1].url,
+            'koyu hâli olmayan slaytta istemci yine bir adres almalı');
+
+        const kart = (await api('GET', '/stories/admin', { token: adminToken })).json.data.find(s => s.id === id);
+        assert.equal(kart.coverDarkKey, koyuKapak);
+        assert.equal(kart.slides[0].darkImageKey, koyu1);
+        assert.equal(kart.slides[1].darkImageKey, null, 'panel eksik koyu hâli görebilmeli');
+        assert.equal(kart.slides[1].darkUrl, null);
+
+        await Story.deleteMany({});
+    });
+
+    it('koyu tema: koyu hâl eklemek "görüldü"yü bozmaz; düz key gönderen istemci koyu hâli silmez', async () => {
+        const acik = await gorselYukle();
+        const id = await hikayeOlustur({ slides: [acik] });
+        await api('POST', `/stories/${id}/seen`, { token: userToken });
+
+        const seenDurumu = async () =>
+            (await api('GET', '/stories', { token: userToken })).json.data.find(s => s.id === id)?.seen;
+
+        await sleep(10);
+        const koyu = await gorselYukle();
+        const koyuKapak = await gorselYukle('storyCover');
+        assert.equal((await api('PUT', `/stories/${id}`, {
+            token: adminToken,
+            body: { coverDarkKey: koyuKapak, slides: [{ imageKey: acik, darkImageKey: koyu }] }
+        })).status, 200);
+        assert.equal(await seenDurumu(), true, 'koyu hâl eklemek halkayı yeniden yakmamalı');
+
+        // Eski biçim (düz key dizisi): aynı slaytın koyu hâli korunmalı
+        await api('PUT', `/stories/${id}`, { token: adminToken, body: { slides: [acik], title: 'X' } });
+        let kart = (await api('GET', '/stories/admin', { token: adminToken })).json.data.find(s => s.id === id);
+        assert.equal(kart.slides[0].darkImageKey, koyu);
+        assert.equal(await dosyaVar(koyu), true);
+
+        // Açıkça null: koyu hâl kalkar ve dosyası temizlenir
+        await api('PUT', `/stories/${id}`, {
+            token: adminToken,
+            body: { coverDarkKey: null, slides: [{ imageKey: acik, darkImageKey: null }] }
+        });
+        kart = (await api('GET', '/stories/admin', { token: adminToken })).json.data.find(s => s.id === id);
+        assert.equal(kart.slides[0].darkImageKey, null);
+        assert.equal(kart.coverDarkKey, null);
+        assert.equal(await dosyaVar(koyu), false, 'kullanılmayan koyu görsel silinmeli');
+        assert.equal(await dosyaVar(koyuKapak), false);
+        assert.equal(await seenDurumu(), true);
+
+        await Story.deleteMany({});
+    });
+
+    it('koyu tema: koyu anahtar doğrulanır; silmede koyu görseller de gider', async () => {
+        const kotu = await api('POST', '/stories', {
+            token: adminToken,
+            body: { title: 'X', coverKey: await gorselYukle('storyCover'), slides: [{ imageKey: await gorselYukle(), darkImageKey: '../../.env' }] }
+        });
+        assert.equal(kotu.status, 400);
+        const kotuKapak = await api('POST', '/stories', {
+            token: adminToken,
+            body: { title: 'X', coverKey: await gorselYukle('storyCover'), coverDarkKey: '/etc/passwd', slides: [await gorselYukle()] }
+        });
+        assert.equal(kotuKapak.status, 400);
+
+        const koyu = await gorselYukle();
+        const koyuKapak = await gorselYukle('storyCover');
+        const id = await hikayeOlustur({ coverDarkKey: koyuKapak, slides: [{ imageKey: await gorselYukle(), darkImageKey: koyu }] });
+        assert.equal((await api('DELETE', `/stories/${id}`, { token: adminToken })).status, 200);
+        assert.equal(await dosyaVar(koyu), false);
+        assert.equal(await dosyaVar(koyuKapak), false);
+    });
 });
 
 describe('Güvenlik regresyonları (26.09.2026 incelemesi)', () => {
