@@ -5724,6 +5724,18 @@ describe('Doğrulama linki durumları (31.10.2026)', () => {
         assert.equal(user.isEmailVerified, false);
     });
 
+    // Chrome "Masaüstü sitesi" modunda Android kendini Linux bilgisayar gibi
+    // tanıtıyor; sayfa uygulamayı açmıyordu (telefonda görüldü)
+    it('uygulama açma: masaüstü modundaki Android (dokunmatik Linux) Android sayılır', () => {
+        const { APP_OPEN_JS } = require('../utils/appOpen');
+        const platform = (userAgent, maxTouchPoints) =>
+            new Function('navigator', `${APP_OPEN_JS}; return musubiPlatform();`)({ userAgent, maxTouchPoints });
+        assert.equal(platform('Mozilla/5.0 (X11; Linux x86_64) Chrome/156.0 Safari/537.36', 5), 'android');
+        assert.equal(platform('Mozilla/5.0 (Linux; Android 10; K) Chrome/156.0 Mobile', 5), 'android');
+        assert.equal(platform('Mozilla/5.0 (X11; Linux x86_64) Chrome/156.0', 0), 'desktop', 'fareli Linux masaüstü kalır');
+        assert.equal(platform('Mozilla/5.0 (X11; CrOS x86_64 14541.0.0) Chrome/156.0', 10), 'desktop', 'Chromebook masaüstü kalır');
+    });
+
     it('iz hash\'leri hiçbir yanıtta görünmez', async () => {
         await kayit('iz-gizli@test.com');
         const res = await dogrula(lastVerificationToken(), 'Pixel 8');
