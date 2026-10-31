@@ -50,6 +50,10 @@ const inlineJson = (value) => JSON.stringify(value).replace(/</g, '\\u003c');
 // Tarayıcı tarafı. openApp(c) mobilde uygulamayı açmayı dener ve true döner;
 // masaüstünde açılacak uygulama olmadığı için hiçbir şey yapmaz, false döner.
 //   Android: intent linki uygulamayı açar ya da yedek adrese gider.
+//            Chrome "Masaüstü sitesi" modunda kendini Linux bilgisayar gibi
+//            tanıtır; dokunmatik Linux (Chromebook hariç) Android sayılır —
+//            iPad'in Mac gibi görünmesine karşı alınan önlemin aynısı (31.10.2026,
+//            telefonda görüldü: sayfa masaüstü metnini gösterip uygulamayı açmıyordu).
 //   iOS:     özel şema denenir (Safari "Musubi'de açılsın mı?" diye sorar);
 //            1,5 sn sonra sayfa hâlâ önplandaysa uygulama yok demektir →
 //            mağaza. Zaman farkı koruması: uygulama açılıp kullanıcı geri
@@ -60,6 +64,7 @@ const inlineJson = (value) => JSON.stringify(value).replace(/</g, '\\u003c');
 const APP_OPEN_JS = `
 function musubiPlatform(){var u=navigator.userAgent||'';
   if(/Android/i.test(u)) return 'android';
+  if(/Linux/.test(u)&&!/CrOS/.test(u)&&navigator.maxTouchPoints>1) return 'android';
   if(/iPhone|iPad|iPod/i.test(u)||(/Macintosh/.test(u)&&navigator.maxTouchPoints>1)) return 'ios';
   return 'desktop';}
 function openApp(c){var p=musubiPlatform();
