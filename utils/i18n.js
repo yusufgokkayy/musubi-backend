@@ -107,6 +107,23 @@ const STRINGS = {
         invalidTitle: 'Bağlantı Geçersiz',
         invalidHeading: 'Bağlantı Geçersiz',
         invalidText: 'Bu bağlantı geçersiz veya süresi dolmuş. Uygulamadan yeni bir bağlantı isteyebilirsin.',
+        // invalidText masaüstünde, invalidApp telefonda (uygulama açılırken)
+        invalidApp: 'Uygulama açılıyor; oradan yeni bir bağlantı isteyebilirsin.',
+
+        // Doğrulama linkinin diğer durumları (bkz. auth.service verifyLinkError)
+        alreadyTitle: 'Zaten Doğrulanmış',
+        alreadyHeading: 'Hesabın Zaten Doğrulanmış',
+        alreadyText: 'Bu e-posta adresi daha önce doğrulandı. Uygulamadan giriş yapabilirsin.',
+        alreadyApp: 'Bu e-posta adresi daha önce doğrulandı. Uygulama açılıyor…',
+        expiredHeading: 'Bağlantının Süresi Dolmuş',
+        expiredLead: 'Doğrulama bağlantıları 24 saat geçerli. Sana yenisini gönderelim.',
+        expiredBtn: 'Yeni Bağlantı Gönder',
+        expiredBtnBusy: 'Gönderiliyor…',
+        expiredLater: 'Şu an yeni bağlantı gönderemiyoruz, biraz sonra tekrar dene.',
+        // Figma › Giriş Ekranları › "E-postanı Doğrulayamadın"
+        resentHeading: 'E-postanı Doğrulayamadın',
+        resentText: 'Tekrar sana bir doğrulama bağlantısı gönderdik. Mail kutunu kontrol et.',
+        resentApp: 'Tekrar sana bir doğrulama bağlantısı gönderdik. Uygulama açılıyor…',
 
         // Sayfa: hukuki metinler
         legalIndexTitle: 'Hukuki Metinler',
@@ -207,6 +224,20 @@ const STRINGS = {
         invalidTitle: 'Invalid Link',
         invalidHeading: 'Invalid Link',
         invalidText: 'This link is invalid or has expired. You can request a new one from the app.',
+        invalidApp: 'Opening the app — you can request a new link there.',
+
+        alreadyTitle: 'Already Verified',
+        alreadyHeading: 'Your Account Is Already Verified',
+        alreadyText: 'This email address has already been verified. You can sign in from the app.',
+        alreadyApp: 'This email address has already been verified. Opening the app…',
+        expiredHeading: 'This Link Has Expired',
+        expiredLead: 'Verification links are valid for 24 hours. Let us send you a new one.',
+        expiredBtn: 'Send a New Link',
+        expiredBtnBusy: 'Sending…',
+        expiredLater: "We can't send a new link right now. Please try again a bit later.",
+        resentHeading: "We Couldn't Verify Your Email",
+        resentText: "We've sent you a new verification link. Please check your inbox.",
+        resentApp: "We've sent you a new verification link. Opening the app…",
 
         legalIndexTitle: 'Legal Documents',
         legalIndexHeading: 'Legal Documents',

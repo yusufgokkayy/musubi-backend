@@ -218,6 +218,21 @@ const UserSchema = new mongoose.Schema({
     },
     emailVerificationToken: String,
     emailVerificationExpire: Date,
+    // Bu hesaba gönderilmiş ÖNCEKİ kayıt doğrulama linklerinin izleri (sha256).
+    // Güncel link emailVerificationToken'da; yenisi gönderilince (Tekrar Gönder,
+    // süresi dolan linkte otomatik gönderim) ya da link kullanılınca buraya
+    // taşınır. İki işe yarar:
+    //  - eski maildeki link de kendi süresi dolana kadar doğrular: kullanıcı
+    //    Tekrar Gönder'den sonra ilk maile tıklıyordu ve "geçersiz" görüyordu
+    //  - kullanılmış / Google-Apple ile sahiplenilmiş linke tekrar tıklanınca
+    //    "zaten doğrulanmış" denebilir; iz olmadan hesabı bulmak imkânsızdı
+    // Yalnızca KAYIT doğrulaması içindir; e-posta değişimi linkleri girmez.
+    // Hash'ler yanıta sızmasın diye seçilmez (/auth/me dokümanı olduğu gibi döner).
+    verificationTrail: {
+        type: [{ hash: String, expiresAt: Date, usedAt: Date, _id: false }],
+        default: undefined,
+        select: false
+    },
     resetPasswordToken: String,
     resetPasswordExpire: Date,
     createdAt: {
@@ -232,6 +247,9 @@ UserSchema.index(
     { provider: 1, providerId: 1 },
     { unique: true, partialFilterExpression: { providerId: { $exists: true } } }
 );
+
+// Eski doğrulama linkinden hesabı bulmak için (bkz. verificationTrail)
+UserSchema.index({ 'verificationTrail.hash': 1 }, { sparse: true });
 
 UserSchema.pre('save', async function () {
     // Şifrenin KALDIRILMASI da bir değişikliktir (ön-kayıt koruması: sosyal

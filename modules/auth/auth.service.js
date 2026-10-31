@@ -14,7 +14,7 @@ const { EMAIL_RE, EMAIL_FORMAT_MESSAGE, normalizeEmail } = require('../../utils/
 const sendEmail = require('../../utils/sendEmail');
 const clientUrl = require('../../utils/clientUrl');
 const ctaEmailHtml = require('../../utils/emailTemplate');
-const { t, DEFAULT_LANG, normalize } = require('../../utils/i18n');
+const { t, DEFAULT_LANG, normalize, maskEmail } = require('../../utils/i18n');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
 const ProgressService = require('../progress/progress.service');
@@ -225,6 +225,104 @@ const socialAccountError = (message, provider) =>
 const linkInvalidError = () =>
     new AppError('Bağlantının süresi dolmuş ya da geçersiz.', 400).withCode(ERR.LINK_INVALID);
 
+// Doğrulama linki başarısız olunca SEBEBİ de söylenir. Sözleşme bilerek
+// değişmedi (Emirhan, 31.10.2026): status 400 ve code LINK_INVALID aynen
+// kalır, sebep details.reason'da gelir — yayındaki uygulama eskisi gibi
+// çalışır, yeni alanı okuyan sürüm tasarımdaki doğru ekranı seçer.
+//   UNKNOWN          link hiçbir hesaba ait değil (bozuk, silinmiş hesap,
+//                    e-posta değişiminin eski linki)
+//   ALREADY_VERIFIED hesap zaten doğrulanmış (link kullanılmış ya da hesap
+//                    Google/Apple ile sahiplenilmiş) → girişe
+//   EXPIRED          süresi dolmuş; kayıt linkiyse yeni link OTOMATİK gider:
+//                    details.resent + maskeli details.email ("E-postanı
+//                    Doğrulayamadın — Tekrar sana bir doğrulama bağlantısı
+//                    gönderdik"). Mail kısıtına takılırsa resent:false +
+//                    retryAfterSeconds.
+const LINK_FAILURE_MESSAGES = {
+    UNKNOWN: 'Bağlantının süresi dolmuş ya da geçersiz.',
+    ALREADY_VERIFIED: 'E-posta adresin zaten doğrulanmış, giriş yapabilirsin.',
+    EXPIRED: 'Bağlantının süresi dolmuş.',
+    EXPIRED_RESENT: 'Bağlantının süresi dolmuş; sana yeni bir doğrulama bağlantısı gönderdik.'
+};
+const verifyLinkError = (reason, details = {}) =>
+    new AppError(
+        LINK_FAILURE_MESSAGES[details.resent ? 'EXPIRED_RESENT' : reason],
+        400,
+        { reason, ...details }
+    ).withCode(ERR.LINK_INVALID);
+
+const VERIFY_LINK_TTL_MS = 24 * 60 * 60 * 1000;
+// Günde en fazla 5 doğrulama maili gidiyor (mailThrottle); birkaç günlük iz yeter
+const VERIFICATION_TRAIL_MAX = 10;
+
+// Güncel kayıt doğrulama linkini ize taşır (bkz. User.verificationTrail).
+// Yeni link yazılmadan ya da güncel link temizlenmeden ÖNCE çağrılır; kullanıcı
+// '+verificationTrail' ile okunmuş olmalı, yoksa save() mevcut izi ezer.
+// E-posta değişimi linki (pendingEmail) ize girmez: o akışın eski linki
+// "zaten doğrulanmış" sanılmamalı.
+const archiveVerificationLink = (user, { used = false } = {}) => {
+    if (!user.emailVerificationToken || user.pendingEmail) return;
+    const trail = [...(user.verificationTrail || []), {
+        hash: user.emailVerificationToken,
+        expiresAt: user.emailVerificationExpire,
+        ...(used && { usedAt: new Date() })
+    }];
+    user.verificationTrail = trail.slice(-VERIFICATION_TRAIL_MAX);
+};
+
+// Linkin hangi hesaba ait olduğunu ve durumunu bulur — YAN ETKİSİZ (web
+// sayfası GET'te de kullanır; mail tarayıcılarının ön yüklemesi bir şey
+// değiştirmemeli). state: valid | expired | already_verified | unknown
+const lookupVerificationLink = async (verificationToken) => {
+    const hash = hashToken(verificationToken);
+    const user = await User.findOne({
+        $or: [{ emailVerificationToken: hash }, { 'verificationTrail.hash': hash }]
+    }).select('+verificationTrail');
+    if (!user) return { state: 'unknown' };
+
+    const current = user.emailVerificationToken === hash;
+    const entry = current ? null : user.verificationTrail.find(e => e.hash === hash);
+    // Doğrulanmış hesapta kayıt linki artık iş görmez. Güncel link de bu
+    // duruma düşebilir: şifre sıfırlama hesabı doğrular ama linki silmez.
+    // E-posta değişimi linki (pendingEmail) bunun dışında — hesap zaten
+    // doğrulanmışken yeni adresi onaylar.
+    const alreadyVerified = current
+        ? user.isEmailVerified && !user.pendingEmail
+        : entry.usedAt || user.isEmailVerified;
+    if (alreadyVerified) return { state: 'already_verified', user, current, entry };
+    const expiresAt = current ? user.emailVerificationExpire : entry.expiresAt;
+    if (!expiresAt || new Date(expiresAt).getTime() <= Date.now()) {
+        return { state: 'expired', user, current, entry };
+    }
+    return { state: 'valid', user, current, entry };
+};
+
+// Yeni kayıt doğrulama linki üretir ve gönderir (Tekrar Gönder ve süresi dolan
+// linkte otomatik gönderim ortak). Kısıt aşılırsa 429 atar; gönderim
+// patlarsa sayaç geri alınır ve 500 atar.
+const sendFreshVerificationLink = async (user) => {
+    assertMailAllowed(user, 'verification');
+
+    archiveVerificationLink(user);
+    const verificationToken = crypto.randomBytes(20).toString('hex');
+    user.emailVerificationToken = hashToken(verificationToken);
+    user.emailVerificationExpire = Date.now() + VERIFY_LINK_TTL_MS;
+    markMailSent(user, 'verification');
+    await user.save();
+
+    try {
+        await sendEmail({
+            to: user.email,
+            ...buildMail(userLang(user), 'verify', { path: `/verify-email/${verificationToken}`, email: user.email })
+        });
+    } catch (err) {
+        // Gelmeyen mail yüzünden kullanıcı bir dakika boyunca kilitlenmesin
+        rollbackMailSent(user, 'verification');
+        await user.save();
+        throw new AppError('Email gönderilemedi, tekrar deneyin', 500);
+    }
+};
+
 const accountNotFoundError = () =>
     new AppError('Bu e-postayla kayıtlı bir hesap yok', 404).withCode(ERR.ACCOUNT_NOT_FOUND);
 
@@ -381,7 +479,9 @@ const AuthService = {
         let isNewUser = false;
 
         if (!user) {
-            user = await User.findOne({ email: profile.email });
+            // İz alanı seçilir: sahiplenmede güncel link ize "kullanıldı" diye
+            // eklenir; seçilmeseydi save() önceki izi silerdi
+            user = await User.findOne({ email: profile.email }).select('+verificationTrail');
             if (user) {
                 // ÖN-KAYIT KORUMASI. Doğrulanmamış bir local hesap, e-postanın
                 // sahibi tarafından açılmış olmak zorunda değil: saldırgan
@@ -399,6 +499,8 @@ const AuthService = {
                     user.password = undefined;
                     user.name = name || profile.name || user.name;
                     user.surname = surname || profile.surname || '';
+                    // Maildeki link sonradan tıklanırsa "zaten doğrulanmış" desin
+                    archiveVerificationLink(user, { used: true });
                     user.emailVerificationToken = undefined;
                     user.emailVerificationExpire = undefined;
                     user.resetPasswordToken = undefined;
@@ -750,19 +852,36 @@ const AuthService = {
     },
 
     async verifyEmail(verificationToken, deviceName) {
-        if (!verificationToken) throw linkInvalidError();
+        if (!verificationToken || typeof verificationToken !== 'string') throw verifyLinkError('UNKNOWN');
 
-        const hashedToken = crypto
-            .createHash('sha256')
-            .update(verificationToken)
-            .digest('hex');
+        const { state, user, current, entry } = await lookupVerificationLink(verificationToken);
 
-        const user = await User.findOne({
-            emailVerificationToken: hashedToken,
-            emailVerificationExpire: { $gt: Date.now() }
-        });
+        if (state === 'unknown') throw verifyLinkError('UNKNOWN');
+        if (state === 'already_verified') throw verifyLinkError('ALREADY_VERIFIED');
 
-        if (!user) throw linkInvalidError();
+        if (state === 'expired') {
+            // E-posta değişimi linki otomatik yenilenmez: değişim şifre onayıyla
+            // başlar, kullanıcı Ayarlar'dan yeniden başlatmalı
+            if (user.pendingEmail || user.isEmailVerified) {
+                throw verifyLinkError('EXPIRED', { resent: false });
+            }
+            const email = maskEmail(user.email);
+            try {
+                await sendFreshVerificationLink(user);
+            } catch (err) {
+                if (err.statusCode === 429) {
+                    throw verifyLinkError('EXPIRED', { resent: false, email, retryAfterSeconds: err.retryAfterSeconds });
+                }
+                throw verifyLinkError('EXPIRED', { resent: false, email });
+            }
+            throw verifyLinkError('EXPIRED', { resent: true, email });
+        }
+
+        // Geçerli link: güncel link ya da süresi dolmamış, kullanılmamış eski link.
+        // Hangisi tıklanırsa tıklansın ikisi de "kullanıldı" olarak ize geçer —
+        // sonraki tıklamalar "zaten doğrulanmış" alır.
+        if (!current) entry.usedAt = new Date();
+        archiveVerificationLink(user, { used: true });
 
         // E-posta değişiminin onayı: bekleyen adres ancak şimdi geçerli olur.
         // Talep ile onay arasında adresi başka bir hesap almış olabilir.
@@ -797,17 +916,18 @@ const AuthService = {
         return { accessToken, refreshToken };
     },
 
-    // Landing sayfalarının yan etkisiz ön kontrolü: sayfa, geçersiz/süresi
-    // dolmuş linke form göstermek yerine doğrudan hata ekranı basar.
+    // Landing sayfasının yan etkisiz ön kontrolü: sayfa linkin durumuna göre
+    // ekran seçer (geçerliyse doğrulama butonu, değilse sebebine göre mesaj).
     // E-posta döner ki sayfa hangi hesabın işlendiğini MASKELİ gösterebilsin
-    // (bkz. utils/i18n.js maskEmail) — geçersizse null.
-    async findVerificationTokenOwner(verificationToken) {
-        const user = await User.findOne({
-            emailVerificationToken: hashToken(verificationToken),
-            emailVerificationExpire: { $gt: Date.now() }
-        }).select('email pendingEmail');
+    // (bkz. utils/i18n.js maskEmail). state: valid | expired | already_verified | unknown
+    async inspectVerificationLink(verificationToken) {
+        const { state, user } = await lookupVerificationLink(verificationToken);
         // Değişim linkinde sayfa doğrulanacak YENİ adresi göstermeli
-        return user ? (user.pendingEmail || user.email) : null;
+        return {
+            state,
+            email: user ? (user.pendingEmail || user.email) : null,
+            change: Boolean(user?.pendingEmail)
+        };
     },
 
     async findResetTokenOwner(resetToken) {
@@ -819,7 +939,7 @@ const AuthService = {
     },
 
     async resendVerificationEmail(email) {
-        const user = await User.findOne({ email });
+        const user = await User.findOne({ email }).select('+verificationTrail');
         // Enumeration politikası her uçta aynı: dürüst cevap (bkz. forgotPassword)
         if (!user) throw accountNotFoundError();
         // İstemci bu kodla kullanıcıyı doğrudan girişe yönlendirebilir: başka
@@ -827,29 +947,10 @@ const AuthService = {
         if (user.isEmailVerified) throw new AppError('E-posta zaten doğrulanmış', 400).withCode(ERR.ALREADY_VERIFIED);
 
         // "Tekrar Gönder" butonu bir kurbanın gelen kutusunu doldurmaya
-        // dönüşmesin diye adres bazlı kısıt
-        assertMailAllowed(user, 'verification');
-
-        const verificationToken = crypto.randomBytes(20).toString('hex');
-        user.emailVerificationToken = crypto
-            .createHash('sha256')
-            .update(verificationToken)
-            .digest('hex');
-        user.emailVerificationExpire = Date.now() + 24 * 60 * 60 * 1000;
-        markMailSent(user, 'verification');
-        await user.save();
-
-        try {
-            await sendEmail({
-                to: user.email,
-                ...buildMail(userLang(user), 'verify', { path: `/verify-email/${verificationToken}`, email: user.email })
-            });
-        } catch (err) {
-            // Gelmeyen mail yüzünden kullanıcı bir dakika boyunca kilitlenmesin
-            rollbackMailSent(user, 'verification');
-            await user.save();
-            throw new AppError('Email gönderilemedi, tekrar deneyin', 500);
-        }
+        // dönüşmesin diye adres bazlı kısıt (sendFreshVerificationLink içinde).
+        // Önceki link geçersizleşmez, ize taşınır: kullanıcı ilk maile tıklasa
+        // da doğrulanır.
+        await sendFreshVerificationLink(user);
     },
 
     // Ayarlardaki adım adım şifre değiştirme akışının ilk ekranı: mevcut şifre

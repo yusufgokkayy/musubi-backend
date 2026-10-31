@@ -5450,7 +5450,7 @@ describe('Uygulamaya dönüş ve /indir (27.10.2026)', () => {
         assert.match(html, /intent:\/\/open#Intent;scheme=musubi;package=com\.alpsoy\.musubi;/);
         assert.match(html, /S\.browser_fallback_url=http%3A%2F%2F127\.0\.0\.1%3A\d+%2Findir%3Flang%3Dtr/,
             'Android uygulama yoksa yer tutucuya gider');
-        assert.match(html, /goToApp\(L\.okApp,L\.okText\)/, 'başarıdan hemen sonra yönlendirir, buton yok');
+        assert.match(html, /done\(L\.ok,true,L\.okTitle,L\.okApp,L\.okText\)/, 'başarıdan hemen sonra yönlendirir, buton yok');
         assert.match(html, /id="again-link"/, 'engellenirse yedek bağlantı');
         assert.doesNotMatch(html, /verify-email\/[a-f0-9]{40}[^"]*musubi:/, 'şemada token yok');
     });
@@ -5560,5 +5560,178 @@ describe('Mail tasarımı (29.10.2026)', () => {
         assert.equal(mail.subject, 'Reset your Musubi password');
         assert.match(mail.html, /Musubi · Alpsoy Yazılım · <a [^>]*>Privacy<\/a>/);
         assert.match(mail.html, /reset-password\/[a-f0-9]{40}\?lang=en/);
+    });
+});
+
+// 31.10.2026 — maildeki doğrulama linki başarısız olunca SEBEBİ söylenir.
+// Sözleşme değişmedi (Emirhan): status 400 + code LINK_INVALID aynen kalır,
+// sebep details.reason'da. Süresi dolan kayıt linkinde yeni link kendiliğinden
+// gider; Tekrar Gönder eski linki geçersiz kılmaz.
+describe('Doğrulama linki durumları (31.10.2026)', () => {
+    const crypto = require('node:crypto');
+    const jwt = require('jsonwebtoken');
+    const kayit = (email) => api('POST', '/auth/register', {
+        body: { name: 'Link', surname: 'Test', email, password: 'Testsifre123!', deviceName: 'test-suite' }
+    });
+    const dogrula = (token, deviceName) => api('POST', '/auth/verify-email', {
+        body: { token, ...(deviceName && { deviceName }) }
+    });
+    const sayfa = async (path) => {
+        const res = await fetch(BASE.replace(/\/api$/, '') + path);
+        return { status: res.status, text: await res.text() };
+    };
+    const linkiEskit = (email) => User.updateOne({ email }, { emailVerificationExpire: new Date(Date.now() - 1000) });
+    const sozlesmeAyni = (res) => {
+        assert.equal(res.status, 400, 'status değişmemeli');
+        assert.equal(res.json.code, 'LINK_INVALID', 'code değişmemeli (yayındaki uygulama buna bakıyor)');
+    };
+
+    it('Tekrar Gönder eski linki geçersiz kılmaz; kullanılan linkler sonra ALREADY_VERIFIED', async () => {
+        await kayit('iki-link@test.com');
+        const ilk = lastVerificationToken();
+        await expireMailCooldown('iki-link@test.com');
+        await api('POST', '/auth/resend-verification-email', { body: { email: 'iki-link@test.com' } });
+        const ikinci = lastVerificationToken();
+        assert.notEqual(ilk, ikinci);
+
+        const res = await dogrula(ilk, 'Pixel 8');
+        assert.equal(res.status, 200, 'ilk maildeki link de doğrulamalı');
+        assert.ok(res.json.data.accessToken, 'uygulama akışında oturum döner');
+
+        for (const t of [ikinci, ilk]) {
+            const tekrar = await dogrula(t);
+            sozlesmeAyni(tekrar);
+            assert.equal(tekrar.json.details.reason, 'ALREADY_VERIFIED');
+            assert.match(tekrar.json.message, /zaten doğrulanmış/);
+        }
+    });
+
+    it('süresi dolan kayıt linki: yeni link kendiliğinden gider (maskeli adres), yenisi doğrular', async () => {
+        await kayit('suresi-doldu@test.com');
+        const eski = lastVerificationToken();
+        await expireMailCooldown('suresi-doldu@test.com');
+        await linkiEskit('suresi-doldu@test.com');
+        const once = sendEmail.outbox.length;
+
+        const res = await dogrula(eski, 'Pixel 8');
+        sozlesmeAyni(res);
+        assert.deepEqual(res.json.details, { reason: 'EXPIRED', resent: true, email: 'sur***@test.com' });
+        assert.match(res.json.message, /yeni bir doğrulama bağlantısı gönderdik/);
+        assert.equal(sendEmail.outbox.length, once + 1, 'yeni doğrulama maili gitmeli');
+        assert.equal(sendEmail.outbox.at(-1).to, 'suresi-doldu@test.com');
+
+        const yeni = lastVerificationToken();
+        assert.notEqual(yeni, eski);
+        assert.equal((await dogrula(yeni)).status, 200, 'otomatik giden link çalışmalı');
+        assert.equal((await dogrula(eski)).json.details.reason, 'ALREADY_VERIFIED',
+            'süresi dolmuş eski link artık "zaten doğrulanmış" demeli, yeniden mail atmamalı');
+    });
+
+    it('süresi dolan linkte mail kısıtı: resent false + kalan süre, mail gitmez', async () => {
+        await kayit('kisitli-link@test.com'); // kayıt maili 60 sn'lik bekleme başlattı
+        const eski = lastVerificationToken();
+        await linkiEskit('kisitli-link@test.com');
+        const once = sendEmail.outbox.length;
+
+        const res = await dogrula(eski);
+        sozlesmeAyni(res);
+        assert.equal(res.json.details.reason, 'EXPIRED');
+        assert.equal(res.json.details.resent, false);
+        assert.ok(res.json.details.retryAfterSeconds > 0, 'ne kadar bekleneceği söylenmeli');
+        assert.equal(sendEmail.outbox.length, once, 'kısıt aşılmamalı');
+    });
+
+    it('bilinmeyen link UNKNOWN; mesaj eskisiyle aynı', async () => {
+        const res = await dogrula('c'.repeat(40));
+        sozlesmeAyni(res);
+        assert.equal(res.json.details.reason, 'UNKNOWN');
+        assert.match(res.json.message, /süresi dolmuş ya da geçersiz/);
+    });
+
+    it('Google/Apple ile sahiplenilen hesabın maildeki linki ALREADY_VERIFIED', async () => {
+        await kayit('sahiplenilen@test.com');
+        const link = lastVerificationToken();
+        const idToken = jwt.sign({
+            sub: 'google-sahiplenilen', email: 'sahiplenilen@test.com', email_verified: true,
+            given_name: 'Sahip', family_name: 'Gercek'
+        }, 'sahte-imza');
+        assert.equal((await api('POST', '/auth/social', { body: { provider: 'google', idToken, deviceName: 'test-suite' } })).status, 200);
+
+        const res = await dogrula(link);
+        sozlesmeAyni(res);
+        assert.equal(res.json.details.reason, 'ALREADY_VERIFIED');
+    });
+
+    it('şifre sıfırlamayla doğrulanmış hesabın linki ALREADY_VERIFIED (süresi dolmuş olsa da)', async () => {
+        await kayit('sifreyle-dogru@test.com');
+        const link = lastVerificationToken();
+        await User.updateOne({ email: 'sifreyle-dogru@test.com' }, { isEmailVerified: true });
+        await linkiEskit('sifreyle-dogru@test.com');
+        const once = sendEmail.outbox.length;
+
+        const res = await dogrula(link);
+        assert.equal(res.json.details.reason, 'ALREADY_VERIFIED');
+        assert.equal(sendEmail.outbox.length, once, 'doğrulanmış hesaba yeni link gitmemeli');
+    });
+
+    it('e-posta değişikliğinin süresi dolan linki yenilenmez; sayfası geçersiz der', async () => {
+        await createVerifiedUser('degisim-eski@test.com');
+        const token = 'd'.repeat(40);
+        await User.updateOne({ email: 'degisim-eski@test.com' }, {
+            pendingEmail: 'degisim-yeni@test.com',
+            emailVerificationToken: crypto.createHash('sha256').update(token).digest('hex'),
+            emailVerificationExpire: new Date(Date.now() - 1000)
+        });
+        const once = sendEmail.outbox.length;
+
+        const res = await dogrula(token);
+        sozlesmeAyni(res);
+        assert.deepEqual(res.json.details, { reason: 'EXPIRED', resent: false });
+        assert.equal(sendEmail.outbox.length, once);
+
+        const page = await sayfa(`/verify-email/${token}`);
+        assert.ok(page.text.includes('Bağlantı Geçersiz'));
+    });
+
+    it('web: geçersiz ve zaten doğrulanmış sayfası uygulamayı durumuyla açar, token taşımaz', async () => {
+        const gecersiz = await sayfa(`/verify-email/${'e'.repeat(40)}`);
+        assert.ok(gecersiz.text.includes('Bağlantı Geçersiz'));
+        assert.match(gecersiz.text, /goToApp\([^)]*"invalid"\)/, 'açılır açılmaz uygulamaya invalid durumuyla');
+        assert.match(gecersiz.text, /'\?verify='\+v/, 'durum parametresi şemaya eklenir');
+        assert.ok(!/musubi:\/\/(?!open["'])/.test(gecersiz.text), 'şemada token yok');
+
+        await kayit('web-zaten@test.com');
+        const link = lastVerificationToken();
+        assert.equal((await dogrula(link)).status, 200);
+        const zaten = await sayfa(`/verify-email/${link}`);
+        assert.ok(zaten.text.includes('Hesabın Zaten Doğrulanmış'));
+        assert.match(zaten.text, /goToApp\([^)]*"already_verified"\)/);
+    });
+
+    it('web: süresi dolmuş linkte "Yeni Bağlantı Gönder"; sayfayı açmak mail göndermez', async () => {
+        await kayit('web-eski@test.com');
+        const link = lastVerificationToken();
+        await expireMailCooldown('web-eski@test.com');
+        await linkiEskit('web-eski@test.com');
+        const once = sendEmail.outbox.length;
+
+        const page = await sayfa(`/verify-email/${link}`);
+        assert.ok(page.text.includes('Bağlantının Süresi Dolmuş'));
+        assert.ok(page.text.includes('Yeni Bağlantı Gönder'));
+        assert.ok(page.text.includes('E-postanı Doğrulayamadın'), 'gönderim sonrası tasarımdaki başlık hazır');
+        assert.equal(sendEmail.outbox.length, once, 'GET yan etkisiz: mail tarayıcısı ön yüklese de mail gitmez');
+        const user = await User.findOne({ email: 'web-eski@test.com' });
+        assert.equal(user.isEmailVerified, false);
+    });
+
+    it('iz hash\'leri hiçbir yanıtta görünmez', async () => {
+        await kayit('iz-gizli@test.com');
+        const res = await dogrula(lastVerificationToken(), 'Pixel 8');
+        const me = await api('GET', '/auth/me', { token: res.json.data.accessToken });
+        assert.equal(me.status, 200);
+        assert.equal(me.json.data.verificationTrail, undefined);
+        const user = await User.findOne({ email: 'iz-gizli@test.com' }).select('+verificationTrail');
+        assert.equal(user.verificationTrail.length, 1, 'kullanılan link ize "kullanıldı" diye geçer');
+        assert.ok(user.verificationTrail[0].usedAt);
     });
 });
