@@ -132,14 +132,47 @@ const invalidLinkPage = (req, res, lang) => {
 const againLink = (s) =>
     `<p class="again hidden" id="again">${esc(s.appNotOpened)} <a href="#" id="again-link">${esc(s.openApp)}</a></p>`;
 
+//
+// Doğrulama linki başarısız olunca da uygulama açılır ve durumu öğrenir:
+// musubi://open?verify=<durum> (invalid | already_verified | resent). Token
+// TAŞIMAZ; uygulama tasarımdaki ekranı seçmek için okur. Parametreyi
+// tanımayan uygulama normal açılır — zararsız.
 const returnScript = (req, lang) => `${APP_OPEN_JS}
 var C=${inlineJson(appOpenConfig(req, lang))};
-function goToApp(appText,deskText){
-  var lead=document.getElementById('lead');
-  if(openApp(C)){lead.textContent=appText;document.getElementById('again').classList.remove('hidden');}
+function withState(v){if(!v)return C;
+  return{scheme:C.scheme+'?verify='+v,
+    androidIntent:C.androidIntent.replace('intent://open#','intent://open?verify='+v+'#'),
+    iosStore:C.iosStore};}
+var lastC=C;
+function goToApp(appText,deskText,v){
+  var lead=document.getElementById('lead');lastC=withState(v);
+  if(openApp(lastC)){lead.textContent=appText;document.getElementById('again').classList.remove('hidden');}
   else{lead.textContent=deskText;}
 }
-document.getElementById('again-link').addEventListener('click',function(e){e.preventDefault();openApp(C);});`;
+document.getElementById('again-link').addEventListener('click',function(e){e.preventDefault();openApp(lastC);});`;
+
+// Doğrulama linkinin butonsuz sonuç sayfaları: link kimseye ait değil
+// (invalid) ya da hesap zaten doğrulanmış. İkisi de açılır açılmaz uygulamayı
+// durumuyla açar; masaüstünde yalnızca mesaj kalır.
+const verifyStatePage = (req, res, lang, kind) => {
+    const s = t(lang);
+    const k = kind === 'already'
+        ? { title: s.alreadyTitle, heading: s.alreadyHeading, text: s.alreadyText, app: s.alreadyApp,
+            halo: 'halo ok', icon: ICON.check, state: 'already_verified' }
+        : { title: s.invalidTitle, heading: s.invalidHeading, text: s.invalidText, app: s.invalidApp,
+            halo: 'halo', icon: ICON.mailX, state: 'invalid' };
+    return sendCard(req, res, {
+        lang,
+        title: k.title,
+        body: `
+  <div class="${k.halo}">${k.icon}</div>
+  <h1>${esc(k.heading)}</h1>
+  <p class="lead" id="lead">${esc(k.text)}</p>
+  ${againLink(s)}`,
+        script: `${returnScript(req, lang)}
+goToApp(${inlineJson(k.app)},${inlineJson(k.text)},${inlineJson(k.state)});`
+    });
+};
 
 /* --------------------------------------------------------------- sayfalar */
 router.get('/verify-email/:token', async (req, res, next) => {
@@ -148,36 +181,69 @@ router.get('/verify-email/:token', async (req, res, next) => {
         const s = t(lang);
         const { token } = req.params;
 
-        const email = TOKEN_RE.test(token)
-            ? await AuthService.findVerificationTokenOwner(token)
-            : null;
-        if (!email) return invalidLinkPage(req, res, lang);
+        const link = TOKEN_RE.test(token)
+            ? await AuthService.inspectVerificationLink(token)
+            : { state: 'unknown' };
 
+        if (link.state === 'already_verified') return verifyStatePage(req, res, lang, 'already');
+        // Süresi dolan e-posta DEĞİŞİMİ linki yenilenmez (Ayarlar'dan yeniden
+        // başlatılır); o da "geçersiz" sayfasına düşer
+        if (link.state === 'unknown' || (link.state === 'expired' && link.change)) {
+            return verifyStatePage(req, res, lang, 'invalid');
+        }
+
+        // Geçerli link: "E-postamı Doğrula". Süresi dolmuş kayıt linki: aynı
+        // buton "Yeni Bağlantı Gönder" olur — POST sunucuda yeni maili
+        // gönderir (GET yan etkisiz kalmalı, mail tarayıcıları linki ön yükler).
+        const expired = link.state === 'expired';
         sendCard(req, res, {
             lang,
             title: s.verifyPageTitle,
             body: `
-  <div class="halo" id="icon">${ICON.mail}</div>
-  <h1 id="title">${esc(s.verifyHeading)}</h1>
-  <p class="lead" id="lead">${esc(s.verifyLead)}</p>
-  <div class="mail-chip" id="chip">${esc(maskEmail(email))}</div>
+  <div class="halo" id="icon">${expired ? ICON.mailX : ICON.mail}</div>
+  <h1 id="title">${esc(expired ? s.expiredHeading : s.verifyHeading)}</h1>
+  <p class="lead" id="lead">${esc(expired ? s.expiredLead : s.verifyLead)}</p>
+  <div class="mail-chip" id="chip">${esc(maskEmail(link.email))}</div>
   <div class="stack">
-    <button class="btn" id="verify-btn">${esc(s.verifyBtn)}</button>
+    <button class="btn" id="verify-btn">${esc(expired ? s.expiredBtn : s.verifyBtn)}</button>
   </div>
   <div id="msg"></div>
   ${againLink(s)}`,
             script: `${returnScript(req, lang)}
 var btn=document.getElementById('verify-btn'),msg=document.getElementById('msg');
-var L=${JSON.stringify({
-                busy: s.verifyBtnBusy, label: s.verifyBtn, err: s.verifyErr, net: s.netErr,
+var L=${inlineJson({
+                busy: expired ? s.expiredBtnBusy : s.verifyBtnBusy,
+                label: expired ? s.expiredBtn : s.verifyBtn,
+                err: s.verifyErr, net: s.netErr,
                 okTitle: s.verifyOkHeading, okText: s.verifyOkText, okApp: s.verifyOkApp,
-                ok: ICON.check, invalid: s.invalidText
+                ok: ICON.check, x: ICON.mailX,
+                invalidTitle: s.invalidHeading, invalid: s.invalidText, invalidApp: s.invalidApp,
+                alreadyTitle: s.alreadyHeading, alreadyText: s.alreadyText, alreadyApp: s.alreadyApp,
+                resentTitle: s.resentHeading, resentText: s.resentText, resentApp: s.resentApp,
+                later: s.expiredLater
             })};
-// Link sayfa açıkken geçersizleşebilir (süre doldu, yenisi istendi). API
-// mesajı yalnız Türkçe; sayfanın kendi dilindeki metin koddan seçilir.
-function apiError(j){return j.code==='LINK_INVALID'?L.invalid:(j.message||L.err);}
 function fail(m){btn.disabled=false;btn.innerHTML='';btn.textContent=L.label;
   msg.className='msg err';msg.textContent=m;}
+// Sonuç ekranı: ikon + başlık değişir, buton ve adres gizlenir, uygulama açılır
+function done(iconHtml,okIcon,title,appText,deskText,state){
+  var icon=document.getElementById('icon');
+  icon.className=okIcon?'halo ok':'halo';icon.innerHTML=iconHtml;
+  document.getElementById('title').textContent=title;
+  document.getElementById('chip').classList.add('hidden');
+  btn.parentNode.classList.add('hidden');
+  document.querySelector('.card').classList.remove('fade');
+  void document.querySelector('.card').offsetWidth;
+  document.querySelector('.card').classList.add('fade');
+  goToApp(appText,deskText,state);
+}
+// Başarısızlığın sebebi details.reason'da (status/code hep 400 LINK_INVALID).
+// API mesajı yalnız Türkçe; sayfanın kendi dilindeki metin koddan seçilir.
+function onFail(j){var d=j.details||{};
+  if(d.reason==='ALREADY_VERIFIED')return done(L.ok,true,L.alreadyTitle,L.alreadyApp,L.alreadyText,'already_verified');
+  if(d.reason==='EXPIRED'&&d.resent)return done(L.x,false,L.resentTitle,L.resentApp,L.resentText,'resent');
+  if(d.reason==='EXPIRED')return fail(L.later);
+  if(d.reason==='UNKNOWN'||j.code==='LINK_INVALID')return done(L.x,false,L.invalidTitle,L.invalidApp,L.invalid,'invalid');
+  fail(j.message||L.err);}
 btn.addEventListener('click',function(){
   btn.disabled=true;msg.className='';msg.textContent='';
   btn.innerHTML='<span class="spinner"></span>'+L.busy;
@@ -185,17 +251,8 @@ btn.addEventListener('click',function(){
     headers:{'Content-Type':'application/json'},
     body:JSON.stringify({token:'${token}'})})
    .then(function(r){return r.json().catch(function(){return{};}).then(function(j){
-     if(r.ok){
-       document.getElementById('icon').className='halo ok';
-       document.getElementById('icon').innerHTML=L.ok;
-       document.getElementById('title').textContent=L.okTitle;
-       document.getElementById('chip').classList.add('hidden');
-       btn.parentNode.classList.add('hidden');
-       document.querySelector('.card').classList.remove('fade');
-       void document.querySelector('.card').offsetWidth;
-       document.querySelector('.card').classList.add('fade');
-       goToApp(L.okApp,L.okText);
-     } else { fail(apiError(j)); }
+     if(r.ok){ done(L.ok,true,L.okTitle,L.okApp,L.okText); }
+     else { onFail(j); }
    });})
    .catch(function(){fail(L.net);});
 });`

@@ -35,7 +35,7 @@ Kapsam: giriş, kayıt ve oturum. İstemci hatayı **mesaj metnine bakarak deği
 | `ACCOUNT_NOT_FOUND` | 404 | `login`, `forgot-password`, `resend-verification-email` | "Kayıt ol" öner |
 | `LOGIN_LOCKED` | 429 | `login` | `details.retryAfterSeconds` kadar geri sayım |
 | `MAIL_RATE_LIMITED` | 429 | mail gönderen uçlar | `details.retryAfterSeconds` kadar geri sayım |
-| `LINK_INVALID` | 400 | `verify-email`, `reset-password` | "Bağlantı geçersiz", yeni link iste |
+| `LINK_INVALID` | 400 | `verify-email`, `reset-password` | "Bağlantı geçersiz", yeni link iste. `verify-email`'de sebep `details.reason`'da (aşağıda) |
 | `ALREADY_VERIFIED` | 400 | `resend-verification-email` | Girişe yönlendir |
 | `EMAIL_INVALID` | 400 | `check-email`, `register`, `update-info` | Mesajı e-posta alanında göster |
 | `EMAIL_TAKEN` | 400 / 409 | `register`, `update-info`, `verify-email` | Mesajı göster |
@@ -599,7 +599,25 @@ Başarılı sıfırlamadan sonra hesabın adresine **"Musubi şifren değiştiri
 // deviceName gönderilmediyse (web landing sayfası) yalnızca doğrulama yapılır
 { "success": true, "data": {} }
 ```
-Hata: `400 "Bağlantının süresi dolmuş ya da geçersiz."` · `LINK_INVALID` (link 24 saat geçerli), `409 "Bu e-posta adresi artık başka bir hesapta kullanılıyor"` · `EMAIL_TAKEN` (e-posta değişimi onayı: talep ile onay arasında adresi başka hesap aldıysa — bekleyen değişim iptal edilir, eski adres geçerli kalır).
+Hata: `400` · `LINK_INVALID` (link 24 saat geçerli), `409 "Bu e-posta adresi artık başka bir hesapta kullanılıyor"` · `EMAIL_TAKEN` (e-posta değişimi onayı: talep ile onay arasında adresi başka hesap aldıysa — bekleyen değişim iptal edilir, eski adres geçerli kalır).
+
+**Başarısızlığın sebebi (31.10.2026):** status ve `code` değişmedi (hep `400` + `LINK_INVALID`); sebep `details.reason`'da:
+
+| `details.reason` | Ne zaman | Ek alanlar | Mesaj |
+|---|---|---|---|
+| `ALREADY_VERIFIED` | Hesap zaten doğrulanmış: link kullanılmış, hesap Google/Apple ile sahiplenilmiş ya da şifre sıfırlamayla doğrulanmış | — | "E-posta adresin zaten doğrulanmış, giriş yapabilirsin." |
+| `EXPIRED` | Kayıt linkinin süresi dolmuş → **yeni link kendiliğinden gönderilir** | `resent: true`, `email` (maskeli, `sur***@test.com`) | "Bağlantının süresi dolmuş; sana yeni bir doğrulama bağlantısı gönderdik." |
+| `EXPIRED` | Aynısı ama mail kısıtı dolu (60 sn / günde 5) | `resent: false`, `email`, `retryAfterSeconds` | "Bağlantının süresi dolmuş." |
+| `EXPIRED` | E-posta **değişimi** linkinin süresi dolmuş — yenilenmez, Ayarlar'dan yeniden başlatılır | `resent: false` | "Bağlantının süresi dolmuş." |
+| `UNKNOWN` | Link hiçbir hesaba ait değil (bozuk, silinmiş hesap, değişimin eski linki) | — | "Bağlantının süresi dolmuş ya da geçersiz." |
+
+```jsonc
+// 400 — süresi dolmuş kayıt linki
+{ "success": false, "message": "Bağlantının süresi dolmuş; sana yeni bir doğrulama bağlantısı gönderdik.",
+  "code": "LINK_INVALID", "details": { "reason": "EXPIRED", "resent": true, "email": "sur***@test.com" } }
+```
+
+**Tekrar Gönder eski linki geçersiz kılmaz:** son linkler (en fazla 10) kendi 24 saatleri boyunca birlikte geçerlidir; kullanıcı ilk maile tıklasa da doğrulanır. Doğrulamada kullanılan ve önceki linkler `User.verificationTrail`'de iz olarak kalır (hash, yanıtlarda görünmez); sonraki tıklamalar `ALREADY_VERIFIED` alır.
 
 ### GET /auth/verify-email/:token
 POST varyantının eski GET biçimi (geriye uyumluluk). `User-Agent` cihaz adı sayılır,
@@ -616,7 +634,19 @@ bir alttaki bölüm):
   (`POST /api/auth/reset-password` çağırır, oturum açılmaz).
 
 Sayfalar yan etkisizdir (mail istemcilerinin link tarayıcıları GET'i takip
-edebilir); geçersiz/süresi dolmuş tokende hata ekranı basar.
+edebilir). Doğrulama sayfası linkin durumuna göre (31.10.2026):
+
+| Link | Sayfa |
+|---|---|
+| Geçerli | "E-postanı Doğrula" + **E-postamı Doğrula** |
+| Süresi dolmuş (kayıt) | "Bağlantının Süresi Dolmuş" + **Yeni Bağlantı Gönder** → POST yeni maili gönderir → "E-postanı Doğrulayamadın — Tekrar sana bir doğrulama bağlantısı gönderdik" |
+| Zaten doğrulanmış | "Hesabın Zaten Doğrulanmış", butonsuz |
+| Geçersiz / süresi dolan değişim linki | "Bağlantı Geçersiz", butonsuz |
+
+Başarı dışındaki sonuçlarda da uygulama açılır ve durumu öğrenir:
+`musubi://open?verify=<durum>` (Android: `intent://open?verify=<durum>#Intent;…`),
+`<durum>` = `invalid` · `already_verified` · `resent`. Token taşımaz; tanımayan
+uygulama normal açılır.
 
 **İşlem bitince uygulamaya dönüş (27.10.2026):** doğrulama ya da şifre
 değişikliği başarılı olunca sayfa **kendiliğinden** uygulamayı açar — buton yok
