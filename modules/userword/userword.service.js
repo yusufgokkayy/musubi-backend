@@ -5,6 +5,7 @@ const User = require('../../models/User');
 const AppError = require('../../utils/AppError');
 const DailyWordPool = require('../../models/DailyWordPool');
 const StudySession = require('../../models/StudySession');
+const ReviewLog = require('../../models/ReviewLog');
 const StreakService = require('../streak/streak.service');
 const ProgressService = require('../progress/progress.service');
 const StudySessionService = require('../studysession/studysession.service');
@@ -24,6 +25,20 @@ const qualityMap = {
     correct: 4,
     empty: 2,
     wrong: 1
+};
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+// Tekrar geçmişine satır yazar (bkz. models/ReviewLog.js). Await EDİLİR ama
+// ASLA fırlatmaz: buraya gelindiğinde cevap UserWord'e işlenmiştir. Hata
+// yukarı çıksaydı istemci yeniden dener, cevap "bugün zaten verildi" dalına
+// düşer ve günün sayaçları hiç işlemezdi.
+const writeReviewLog = async (doc) => {
+    try {
+        await ReviewLog.create(doc);
+    } catch (err) {
+        console.error(`[reviewlog] yazılamadı (user ${doc.user}, word ${doc.word}):`, err.message);
+    }
 };
 
 // Günün NİHAİ cevabı bunlardan biridir; 'empty' ("Şimdilik Geç") erteleme
@@ -777,6 +792,7 @@ const UserWordService = {
         if (result == null && answer == null) {
             throw new AppError('result veya answer gönderilmeli', 400);
         }
+        const answerMode = result == null ? 'typed' : 'reported';
         if (result == null) {
             // "Doğru cevap" satırı kullanıcının dilinde gösterilir; kabul
             // listesi iki dili de içerir (bkz. answer.util.js)
@@ -974,12 +990,25 @@ const UserWordService = {
                 // 3) Günün nihai cevabı (ilk gerçek cevap — doğrudan ya da
                 // ertelenmişin yükseltmesi): SM-2 + sayaçlar + streak burada,
                 // günde bir kez işler
+                //
+                // Tekrar geçmişi için cevaptan ÖNCEKİ durum: aşağıda üzerine
+                // yazılıyor, sonradan hiçbir yerden geri kurulamaz.
+                const now = new Date();
+                const before = {
+                    interval: userWord.interval,
+                    easeFactor: userWord.easeFactor,
+                    repetitions: userWord.repetitions,
+                    masteryLevel: userWord.masteryLevel || 1,
+                    dueAt: userWord.nextReviewDate
+                };
+                const firstReview = userWord.correctCount + userWord.wrongCount === 0;
+
                 const { easeFactor, interval, repetitions, nextReviewDate } = sm2(userWord, quality);
                 userWord.easeFactor = easeFactor;
                 userWord.interval = interval;
                 userWord.repetitions = repetitions;
                 userWord.nextReviewDate = nextReviewDate;
-                userWord.lastReviewDate = new Date();
+                userWord.lastReviewDate = now;
                 userWord.lastResult = result;
 
                 const previousLevel = userWord.masteryLevel || 1;
@@ -1008,6 +1037,35 @@ const UserWordService = {
                 }
 
                 await userWord.save();
+
+                // save()'in HEMEN ardından: eşzamanlı iki istekten yalnızca
+                // kazanan buraya ulaşır, kaybeden VersionError ile dönmüştür.
+                //
+                // Önceki tekrarın anı vade − aralık'tır (SM-2 vadeyi "cevap anı
+                // + aralık" olarak yazar). lastReviewDate kullanılamaz:
+                // "Şimdilik Geç" de onu tazeliyor.
+                const wordPool = poolOfWord(pools, wordId, userWord._id);
+                await writeReviewLog({
+                    user: userId,
+                    word: wordId,
+                    reviewedAt: now,
+                    day: today,
+                    result,
+                    afterPostpone: emptyToday,
+                    answerMode,
+                    firstReview,
+                    elapsedDays: firstReview || !before.dueAt
+                        ? null
+                        : Math.max(0, Math.round(
+                            ((now - before.dueAt) / DAY_MS + before.interval) * 100
+                        ) / 100),
+                    before,
+                    after: { interval, easeFactor, repetitions, masteryLevel: userWord.masteryLevel },
+                    wordLevel: wordExists.jlptLevel,
+                    lessonLevel: activeLevel,
+                    poolNo: wordPool?.poolNo,
+                    ...(validDuration(durationMs) && { durationMs })
+                });
 
                 // levelDropped için BİLEREK bildirim atılmıyor: kullanıcı cevabı
                 // verirken zaten uygulamanın içinde ve düşüş bilgisi bu çağrının

@@ -946,8 +946,8 @@ noktaya istek atarak sınırsız/rastgele kelime cevaplama girişimini kapatır.
 
 // ÖNERİLİR — iki biçimde de eklenebilir: sorunun ekranda kaldığı süre (ms,
 // 0–600000 arası tam sayı). Puanlamayı ETKİLEMEZ; bitiş ekranındaki "Süre"
-// bu sürelerin toplamıdır. Geçersiz değer cevabı reddettirmez, yok sayılır —
-// o zaman süreyi sunucu kendisi ölçer.
+// bu sürelerin toplamıdır ve tekrar geçmişine de yazılır. Geçersiz değer
+// cevabı reddettirmez, yok sayılır — o zaman süreyi sunucu kendisi ölçer.
 { "wordId": "665f2b...", "result": "correct", "durationMs": 4200 }
 
 // İkisinden de yoksa 400: `result` yok + `answer` yok/null belirsiz bir

@@ -7,6 +7,7 @@
     "seed": "node seeds/seed-veri-seti.js",
     "make-admin": "node scripts/make-admin.js",
     "check-data": "node scripts/check-data.js",
+    "review-report": "node scripts/review-report.js",
     "test": "node --test",
     "dev": "nodemon server.js",
     "start": "node server.js"

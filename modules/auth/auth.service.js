@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const User = require('../../models/User');
 const UserWord = require('../../models/UserWord');
 const Progress = require('../../models/Progress');
@@ -28,6 +29,7 @@ const { CONSENT_DOCS, CURRENT_CONSENT_VERSIONS } = require('../../config/consent
 const { DOC_KEYS, docSummary } = require('../../config/legal/texts');
 const { safeTimezone } = require('../../utils/date.util');
 const Event = require('../../models/Event');
+const ReviewLog = require('../../models/ReviewLog');
 const logEvent = require('../../utils/event.util');
 const { revokeAppleTokens } = require('../../utils/appleRevoke');
 
@@ -142,9 +144,18 @@ const recordConsents = (user, { consents, ip, userAgent } = {}) => {
 // 7 gün fazlasıyla cömert bir pencere.
 const UNVERIFIED_ACCOUNT_TTL_DAYS = 7;
 
-// Kullanıcıya ait TÜM veriyi siler (KVKK). deleteAccount ve doğrulanmamış
-// hesap temizliği aynı listeyi kullanır — ikisi ayrışırsa biri yetim
-// doküman bırakır, o yüzden tek yerde durur.
+// Kullanıcıya ait TÜM kişisel veriyi siler (KVKK). deleteAccount ve
+// doğrulanmamış hesap temizliği aynı listeyi kullanır — ikisi ayrışırsa biri
+// yetim doküman bırakır, o yüzden tek yerde durur.
+//
+// Tekrar geçmişi (ReviewLog) SİLİNMEZ, ANONİMLEŞTİRİLİR (Yusuf, 01.11.2026):
+// zamanlama algoritmasının (FSRS) ayarı ve hatırlama ölçümü bu veriye dayanır.
+// `user` alanı hesaba özgü, hiçbir yerde saklanmayan rastgele bir kimlikle
+// değiştirilir: aynı kişinin satırları kendi içinde sıralı kalır (algoritma
+// bunu ister) ama User silindikten sonra kimseye geri bağlanamaz. Satırda ad,
+// e-posta, cihaz gibi alan YOKTUR — eklenirse bu karar yeniden düşünülmeli.
+// KVKK anonimleştirmeyi silmenin bir yolu sayar; gizlilik metnindeki "kişisel
+// verileriniz silinir" taahhüdüyle çelişmez.
 const purgeUserData = async (userId) => {
     await Promise.all([
         UserWord.deleteMany({ user: userId }),
@@ -156,7 +167,8 @@ const purgeUserData = async (userId) => {
         QuizAttempt.deleteMany({ user: userId }),
         DeviceSession.deleteMany({ user: userId }),
         StoryView.deleteMany({ user: userId }),
-        Event.deleteMany({ user: userId })
+        Event.deleteMany({ user: userId }),
+        ReviewLog.updateMany({ user: userId }, { $set: { user: new mongoose.Types.ObjectId() } })
     ]);
     await User.findByIdAndDelete(userId);
 };
