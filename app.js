@@ -71,7 +71,12 @@ if (storage.servesLocally) {
         immutable: true,
         index: false,
         dotfiles: 'ignore',
-        fallthrough: false
+        fallthrough: false,
+        // URL'ler CLIENT_URL (özel alan adı) üzerinden kurulur; railway.app'ten
+        // açılan simülatör/panel için bu farklı bir origin'dir ve helmet'in
+        // same-origin CORP'u görselleri sessizce engelliyordu (01.11.2026).
+        // İçerik zaten herkese açık ve auth'suz — /assets ile aynı gerekçe.
+        setHeaders: (res) => res.set('Cross-Origin-Resource-Policy', 'cross-origin')
     }));
 }
 

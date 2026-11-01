@@ -416,7 +416,7 @@ select.select {
 .stories::-webkit-scrollbar { display: none; }
 .story { flex: none; width: 66px; background: none; border: 0; padding: 0; cursor: pointer; }
 .story .ring {
-  width: 66px; height: 66px; border-radius: 50%; padding: 2.5px;
+  display: block; width: 66px; height: 66px; border-radius: 50%; padding: 2.5px;
   background: var(--brand);
   transition: transform .16s var(--ease);
 }
