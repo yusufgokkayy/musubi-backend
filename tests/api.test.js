@@ -4563,6 +4563,7 @@ describe('Hesap silme (KVKK)', () => {
             token: tokens.accessToken, body: { wordId: ders.queue[0], result: 'correct' }
         });
         assert.equal(await ReviewLog.countDocuments({ user: user._id }), 1);
+        const logId = (await ReviewLog.findOne({ user: user._id }).lean())._id;
 
         const del = await api('DELETE', '/auth/delete-account', {
             token: tokens.accessToken,
@@ -4581,6 +4582,13 @@ describe('Hesap silme (KVKK)', () => {
             ReviewLog.countDocuments({ user: user._id })
         ]);
         assert.deepEqual(leftovers, [0, 0, 0, 0, 0, 0, 0]);
+
+        // Tekrar geçmişi silinmez, anonimleşir: satır durur ama hiçbir
+        // kullanıcıya bağlanmaz (FSRS ayarı ve hatırlama ölçümü için)
+        const anon = await ReviewLog.findById(logId).lean();
+        assert.ok(anon, 'satır korunmalı');
+        assert.notEqual(String(anon.user), String(user._id));
+        assert.equal(await User.countDocuments({ _id: anon.user }), 0, 'yeni kimlik bir kullanıcıya ait olmamalı');
     });
 });
 
