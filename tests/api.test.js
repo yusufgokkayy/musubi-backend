@@ -4469,6 +4469,8 @@ describe('Görsel yükleme', () => {
         assert.equal(served.headers.get('content-type'), 'image/webp');
         assert.match(served.headers.get('cache-control') || '', /immutable/,
             'içerik hash\'li dosya sonsuza dek cache\'lenebilmeli');
+        assert.equal(served.headers.get('cross-origin-resource-policy'), 'cross-origin',
+            'url CLIENT_URL alan adıyla kurulur; railway.app\'teki simülatör farklı origin');
 
         const meta = await sharp(Buffer.from(await served.arrayBuffer())).metadata();
         assert.equal(meta.format, 'webp');

@@ -948,7 +948,7 @@ async function showHome() {
 
       ${stories.length ? `<div class="stories">${stories.map(s => `
         <button class="story" data-story="${esc(s.id)}">
-          <span class="ring ${s.seen ? 'seen' : ''}"><img src="${esc(s.coverUrl)}" alt=""></span>
+          <span class="ring ${s.seen ? 'seen' : ''}"><img src="${esc(storyCover(s))}" alt=""></span>
           <span class="nm">${esc(s.title)}</span>
         </button>`).join('')}</div>` : ''}
 
@@ -1057,6 +1057,11 @@ function wireWordRows() {
 }
 
 // ─────────────────── Hikâyeler ───────────────────
+// Koyu hâli seçmek istemcinin işi (tema "system" olabilir); backend koyu hâl
+// yoksa darkUrl'i açık olana düşürür, burada null kontrolü gerekmez
+function isDark() { return $('#phone').dataset.theme === 'dark'; }
+function storyCover(s) { return isDark() ? s.coverDarkUrl : s.coverUrl; }
+
 function openStory(stories, startIndex) {
   if (startIndex < 0) return;
   let si = startIndex, sl = 0;
@@ -1070,9 +1075,9 @@ function openStory(stories, startIndex) {
     const s = stories[si];
     host.innerHTML = `
       <div class="bars">${s.slides.map((_, i) => `<i><b style="width:${i < sl ? 100 : 0}%"></b></i>`).join('')}</div>
-      <div class="hd"><img src="${esc(s.coverUrl)}" alt=""><b>${esc(s.title)}</b>
+      <div class="hd"><img src="${esc(storyCover(s))}" alt=""><b>${esc(s.title)}</b>
         <button id="sv-close">${I.close}</button></div>
-      <div class="slide"><img src="${esc(s.slides[sl].url)}" alt=""></div>
+      <div class="slide"><img src="${esc(isDark() ? s.slides[sl].darkUrl : s.slides[sl].url)}" alt=""></div>
       <div class="nav"><button id="sv-prev"></button><button id="sv-next"></button></div>`;
     $('#sv-close', host).addEventListener('click', close);
     $('#sv-prev', host).addEventListener('click', prev);
