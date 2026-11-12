@@ -82,6 +82,14 @@ const WordSchema = new mongoose.Schema({
     exampleTr: {
         type: String
     },
+    // example'ın İngilizce çevirisi. Hedef kelimenin İngilizce karşılığı ** ile
+    // işaretlidir ("**I** get up at seven every morning.") — client ya vurgular
+    // ya da işareti temizler. Ayrılabilen fiillerde iki parça olabilir
+    // ("I'll **show** you **around**"). Veri: ~/Belgeler/musubi-veri,
+    // DB'ye scripts/import-example-en.js ile yazılır (yalnız bu alan).
+    exampleEn: {
+        type: String
+    },
     // Örnek cümlenin ses dosyası — "ÖRNEK KULLANIM" başlığındaki hoparlör.
     // audioKey ile aynı kural: anahtar saklanır, `exampleAudioUrl` olarak çıkar.
     exampleAudioKey: {

@@ -759,6 +759,7 @@ Hata: `401 "Şifreniz yanlış. Lütfen tekrar deneyin."` / `401 "Kimlik doğrul
   "example": "東京**駅**で会いましょう。",
   "exampleFurigana": "東京[とうきょう]**駅[えき]**で会[あ]いましょう。",
   "exampleTr": "Tokyo istasyonunda buluşalım.",
+  "exampleEn": "Let's meet at Tokyo **Station**.",
   "audioUrl": "https://musubi.alpsoysoft.com/uploads/audio/9f2c…e1.mp3",         // kelimenin okunuşu — "Dinle"
   "exampleAudioUrl": "https://musubi.alpsoysoft.com/uploads/audio/41ab…07.mp3",  // örnek cümle — başlıktaki hoparlör
   "isKana": false,         // kanji alanında hiç ideograf yok (それから, いつも)
@@ -796,6 +797,20 @@ birden taşır: `meaning` İngilizce, `meaningTr` Türkçe. Sunucu dile göre se
 - `**...**` cümledeki **hedef kelimeyi** işaretler → tasarımdaki kırmızı vurgu.
 - Okunuşu olmayan (tamamı kana) cümlelerde `exampleFurigana` yalnızca `**` taşır; hiç
   örnek cümlesi olmayan kelimede alan gelmez.
+
+**Örnek cümlenin çevirileri — `exampleTr` ve `exampleEn`.** Anlam alanlarındaki kuralın
+aynısı: yanıt ikisini birden taşır, uygulamanın diline göre client seçer (Türkçe →
+`exampleTr`, İngilizce → `exampleEn`). Biri yoksa diğerine düşülebilir.
+
+- `exampleEn` hedef kelimenin İngilizce karşılığını **her zaman** `**` ile işaretler:
+  `"**I** get up at seven every morning."` → ya vurgulanır (Japonca cümledeki kırmızı
+  vurgunun karşılığı) ya da `**` temizlenip düz metin gösterilir; işaret ekranda
+  ham görünmemeli.
+- Ayrılabilen fiillerde iki parça olabilir: `"I'll **show** you **around** the town."`
+  → tek bir `**…**` varsaymayın, tüm eşleşmeleri işleyin (`/\*\*(.+?)\*\*/g`).
+- `exampleTr`'de `**` tutarsız (N5–N3'te yok, N1'in çoğunda var) — aynı temizleme
+  `exampleTr`'ye de uygulanmalı.
+- Durum (12.11.2026): N5–N2'de dolu; N1'de henüz yok → alan gelmez.
 
 ### GET /words 🔒✉️
 Kütüphane listesi **ve** araması bu uçtan gelir.

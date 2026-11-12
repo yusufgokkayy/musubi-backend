@@ -3968,7 +3968,9 @@ describe('Kütüphane (liste, arama, sayfalama)', () => {
                 kanji: '電車', kana: 'でんしゃ', romaji: 'densha', meaning: 'train', meaningTr: 'tren',
                 type: 'isim', jlptLevel: 'N5', isCore: true, frequencyRank: 501,
                 example: '毎朝**電車**で学校へ行きます。',
-                exampleFurigana: '毎朝[まいあさ]**電車[でんしゃ]**で学校[がっこう]へ行[い]きます。'
+                exampleFurigana: '毎朝[まいあさ]**電車[でんしゃ]**で学校[がっこう]へ行[い]きます。',
+                exampleTr: 'Her sabah okula trenle giderim.',
+                exampleEn: 'I go to school by **train** every morning.'
             },
             {
                 kanji: '駅', kana: 'えき', romaji: 'eki', meaning: 'station', meaningTr: 'istasyon',
@@ -4104,6 +4106,62 @@ describe('Kütüphane (liste, arama, sayfalama)', () => {
         assert.equal(res.json.data.meaningTr, 'tren');
         assert.equal(res.json.data.exampleFurigana, '毎朝[まいあさ]**電車[でんしゃ]**で学校[がっこう]へ行[い]きます。');
         assert.equal(res.json.data.example, '毎朝**電車**で学校へ行きます。', 'example furigana taşımaz, yalnızca ** vurgusu');
+        assert.equal(res.json.data.exampleTr, 'Her sabah okula trenle giderim.');
+        assert.equal(res.json.data.exampleEn, 'I go to school by **train** every morning.', 'cümlenin iki çevirisi de döner — dili istemci seçer');
+    });
+
+    it('çevirisi olmayan kelimede exampleEn alanı hiç gelmez (null değil)', async () => {
+        const liste = await api('GET', '/words?q=eki', { token });
+        const eki = liste.json.data.words.find(w => w.kanji === '駅');
+        const res = await api('GET', `/words/${eki._id}`, { token });
+        assert.equal(res.status, 200);
+        assert.ok(!('exampleEn' in res.json.data));
+    });
+});
+
+describe('exampleEn içe aktarma betiği (scripts/import-example-en.js)', () => {
+    it('yalnız exampleEn yazar: deneme modunda dokunmaz, eşleşmeyeni sayar, başka alanı ve var olanı ezmez', async () => {
+        const { readEntries, importExampleEn } = require('../scripts/import-example-en');
+        const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'exen-'));
+        await fs.writeFile(path.join(dir, 'musubi_n5.json'), JSON.stringify([
+            { order: 1, word: '試験犬', exampleEn: 'The **dog** is sleeping.', exampleTr: 'DOSYADAKİ TR' },
+            { order: 2, word: '試験猫', exampleEn: '  ' },                       // boş → atlanır
+            { order: 3, word: '試験鳥' },                                        // alan yok → atlanır
+            { order: 4, word: 'DBde-yok', exampleEn: 'Missing.' }
+        ]));
+        await fs.writeFile(path.join(dir, 'musubi_n4.json'), JSON.stringify([
+            { order: 1, word: '試験馬', exampleEn: 'Same **horse**.' }
+        ]));
+
+        const entries = readEntries(dir);
+        assert.deepEqual(entries.map(e => `${e.jlptLevel} ${e.kanji}`).sort(), ['N4 試験馬', 'N5 DBde-yok', 'N5 試験犬']);
+
+        const base = { romaji: 'x', meaning: 'x', type: 'isim', isCore: true };
+        await Word.insertMany([
+            { ...base, kanji: '試験犬', jlptLevel: 'N5', exampleTr: 'DB TR', meaningTr: 'köpek' },
+            { ...base, kanji: '試験猫', jlptLevel: 'N5', exampleEn: 'Old **cat**.' },
+            { ...base, kanji: '試験馬', jlptLevel: 'N4', exampleEn: 'Same **horse**.' },
+            { ...base, kanji: '試験犬', jlptLevel: 'N3' }   // aynı kanji başka seviyede: dokunulmamalı
+        ]);
+
+        const deneme = await importExampleEn(entries);
+        assert.equal(deneme.yazilacak, 1);
+        assert.equal(deneme.ayni, 1);
+        assert.deepEqual(deneme.eslesmeyen, ['N5 DBde-yok']);
+        assert.equal((await Word.findOne({ kanji: '試験犬', jlptLevel: 'N5' }).lean()).exampleEn, undefined, 'deneme modu yazmaz');
+
+        const yaz = await importExampleEn(entries, { write: true });
+        assert.equal(yaz.yazilan, 1);
+        const kopek = await Word.findOne({ kanji: '試験犬', jlptLevel: 'N5' }).lean();
+        assert.equal(kopek.exampleEn, 'The **dog** is sleeping.');
+        assert.equal(kopek.exampleTr, 'DB TR', 'dosyadaki diğer alanlar DB\'ye taşınmaz');
+        assert.equal(kopek.meaningTr, 'köpek');
+        assert.equal((await Word.findOne({ kanji: '試験猫' }).lean()).exampleEn, 'Old **cat**.', 'boş değer var olanı ezmez');
+        assert.equal((await Word.findOne({ kanji: '試験犬', jlptLevel: 'N3' }).lean()).exampleEn, undefined, 'eşleşme seviyeye bağlı');
+
+        const tekrar = await importExampleEn(entries, { write: true });
+        assert.equal(tekrar.yazilacak, 0, 'ikinci çalıştırma bir şey yazmaz');
+        await Word.deleteMany({ kanji: /^試験/ });
     });
 });
 
