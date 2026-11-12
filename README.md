@@ -104,7 +104,8 @@ Push bildirimleri için ayrıca `config/firebase-service-account.json` konur (gi
 ### 4. Veriyi hazırlama
 
 ```bash
-npm run seed    # veri-seti/'nden 5816 kelimeyi DB'ye yazar (idempotent, tekrar çalıştırılabilir)
+npm run seed    # veri-seti/'nden kelimeleri BOŞ bir DB'ye yazar (idempotent)
+node scripts/sync-words.js --kaynak ~/Belgeler/musubi-veri   # VAR OLAN DB'yi günceller (deneme; --yaz ile yazar)
 ```
 
 ### 5. Çalıştırma
@@ -217,7 +218,7 @@ Uzun süre tekrar edilmeyen kelimelerin **görünen** seviyesi kademeli düşer 
 
 ### Kelime havuzu ve seviye ilerlemesi
 
-Seed **5816 kelimelik omurga müfredatı** yazar (N5→N1, hepsi `isCore: true`): ders kitabı kökenli, `meaningTr` / örnek cümle / eş anlamlı kabul edilen cevap dizileriyle zenginleştirilmiş veri. Kütüphane, günlük havuz, quiz ve ilerleme yüzdesi çekirdek set üzerinden çalışır; `GET /api/words?includeAll=true` filtreyi tamamen kaldırır (çekirdek dışı kelime sonradan eklenirse diye).
+Seed **omurga müfredatı** yazar (13.11.2026: 6263 kelime; kaynak ve değişiklik günlüğü `~/Belgeler/musubi-veri/DEGISIKLIKLER.md`) (N5→N1, hepsi `isCore: true`): ders kitabı kökenli, `meaningTr` / örnek cümle / eş anlamlı kabul edilen cevap dizileriyle zenginleştirilmiş veri. Kütüphane, günlük havuz, quiz ve ilerleme yüzdesi çekirdek set üzerinden çalışır; `GET /api/words?includeAll=true` filtreyi tamamen kaldırır (çekirdek dışı kelime sonradan eklenirse diye).
 
 Bir sonraki JLPT seviyesinin kilidi **iki yoldan** açılır:
 
@@ -462,7 +463,7 @@ Test ortamında `sendEmail` gerçek gönderim yapmaz; mailler bellek içi bir ou
 
 ## Veri Kaynakları ve Atıflar
 
-- **Omurga müfredat (`veri-seti/`):** ders kitabı kökenli, `meaningTr` / örnek cümle / furigana ile zenginleştirilmiş 5816 kelimelik derleme.
+- **Omurga müfredat (`veri-seti/`):** ders kitabı kökenli, `meaningTr` / örnek cümle / furigana ile zenginleştirilmiş derleme (22.07.2026'da 5816 kelime; 13.11.2026'da Tanos N5/N4 eksikleri eklenerek 6263). Var olan DB'ye `scripts/sync-words.js` ile aktarılır.
 - **JLPT kelime listeleri (geçmiş sürümlerde):** [elzup/jlpt-word-list](https://github.com/elzup/jlpt-word-list) — temeli [Jonathan Waller (tanos.co.uk/jlpt)](http://www.tanos.co.uk/jlpt/) listeleri, **CC BY** lisanslı. Resmî bir JLPT kelime listesi yoktur; bunlar topluluk derlemesidir.
 - **Frekans sıralaması:** [hingston/japanese](https://github.com/hingston/japanese) — Wikipedia korpusundan türetilmiş ~44k kelimelik liste.
 - **Kana→romaji dönüşümü:** [wanakana](https://github.com/WaniKani/WanaKana).

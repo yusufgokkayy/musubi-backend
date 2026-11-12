@@ -726,7 +726,7 @@ Hata: `401 "Şifreniz yanlış. Lütfen tekrar deneyin."` / `401 "Kimlik doğrul
 (varsa "Dinle" butonu; "Yavaş" client'ta oynatma hızıyla) ve `imageUrl` yok — ikisi de
 bugün her kelimede boş. Client `x === null` değil, **alanın varlığını** kontrol etmeli.
 
-Veri setindeki 5816 kelimenin tamamı çekirdektir (`isCore: true`), yani `includeAll`
+Veri setindeki kelimelerin tamamı çekirdektir (13.11.2026: 6263; sayıyı sabit kodlamayın, `/levels` ve `/words` toplamlarını kullanın) (`isCore: true`), yani `includeAll`
 bugün bir fark yaratmaz; parametre ileride çekirdek dışı kelime eklenirse diye duruyor.
 
 **Anlam alanları — hangisini göstereceğine client karar verir.** Yanıt her zaman ikisini
