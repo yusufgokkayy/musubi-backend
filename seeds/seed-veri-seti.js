@@ -67,6 +67,8 @@ async function seed() {
             example: e.exampleJp,
             exampleFurigana: mergeFurigana(e.exampleJp, furiganaByKey.get(`${e.order}|${e.word}`)),
             exampleTr: e.exampleTr,
+            // Henüz çevrilmemiş seviyede alan yok → undefined, $set'ten düşer.
+            exampleEn: e.exampleEn,
             // Müfredat sırası: seviye içi 'order' (küçük = önce öğretilir)
             frequencyRank: e.order,
             isCore: true
