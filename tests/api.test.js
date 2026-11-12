@@ -4119,6 +4119,56 @@ describe('Kütüphane (liste, arama, sayfalama)', () => {
     });
 });
 
+describe('Kelime verisi senkronu (scripts/sync-words.js)', () => {
+    it('deneme yazmaz; yeniden adlandırma _id korur, yeni ekler, yalnız değişen alanı yazar, fazlayı silmez, ikinci tur boş', async () => {
+        const { syncWords } = require('../scripts/sync-words');
+        const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'sync-'));
+        const rec = (order, word, kana, extra = {}) => ({
+            order, word, kana, type: 'isim', meaningTr: 'tr-' + word, meaningEn: 'en-' + word,
+            exampleJp: `これは**${word}**です。`, exampleTr: 'Bu.', meaningTrAccepted: ['tr'], meaningEnAccepted: ['en'], ...extra
+        });
+        const main = [rec(1, '試新語', 'しんご'), rec(2, '試改名後', 'かいめい'), rec(3, '試同じ', 'おなじ'), rec(4, '試変わる', 'かわる', { exampleEn: 'It **changed**.' })];
+        await fs.writeFile(path.join(dir, 'musubi_n5.json'), JSON.stringify(main));
+        await fs.writeFile(path.join(dir, 'musubi_n5_furigana.json'), JSON.stringify(main.map(m => ({ ...m, exampleJp: m.exampleJp.replaceAll('**', '') }))));
+        await fs.writeFile(path.join(dir, 'yeniden_adlandirma.json'), JSON.stringify([{ seviye: 'N5', eski: '試改名前', yeni: '試改名後' }]));
+
+        const { buildLevel } = require('../seeds/build-words');
+        const built = Object.fromEntries(buildLevel(dir, 'N5').map(d => [d.kanji, d]));
+        const renamed = await Word.create({ ...built['試改名後'], kanji: '試改名前', imageUrl: 'gorsel.png' });
+        await Word.create({ ...built['試同じ'] });
+        await Word.create({ ...built['試変わる'], frequencyRank: 99, exampleEn: undefined, imageUrl: 'kalsin.png' });
+        await Word.create({ kanji: '試fazla', romaji: 'x', meaning: 'x', type: 'isim', jlptLevel: 'N5', isCore: true });
+
+        const deneme = await syncWords(dir, { levels: ['N5'] });
+        assert.deepEqual(deneme.yenidenAdlandirma, ['N5 試改名前 → 試改名後']);
+        const s = deneme.seviyeler.N5;
+        assert.equal(s.eklenecek, 1);
+        assert.equal(s.guncellenecek, 1, 'yalnız 試変わる değişti');
+        assert.deepEqual(s.alanlar, { exampleEn: 1, frequencyRank: 1 });
+        assert.ok(s.dosyadaYok.includes('試fazla'));
+        assert.ok(!s.dosyadaYok.includes('試改名前'), 'adı değişecek kelime fazla sayılmaz');
+        assert.equal(await Word.countDocuments({ kanji: '試新語' }), 0, 'deneme yazmaz');
+        assert.ok(await Word.findOne({ kanji: '試改名前' }), 'deneme adlandırmayı uygulamaz');
+
+        await syncWords(dir, { levels: ['N5'], write: true });
+        const r2 = await Word.findOne({ kanji: '試改名後', jlptLevel: 'N5' }).lean();
+        assert.equal(String(r2._id), String(renamed._id), 'yeniden adlandırma aynı belge üzerinde');
+        assert.equal(r2.imageUrl, 'gorsel.png');
+        assert.equal((await Word.findOne({ kanji: '試新語' }).lean()).frequencyRank, 1);
+        const deg = await Word.findOne({ kanji: '試変わる' }).lean();
+        assert.equal(deg.exampleEn, 'It **changed**.');
+        assert.equal(deg.frequencyRank, 4);
+        assert.equal(deg.imageUrl, 'kalsin.png', 'dosyada olmayan alana dokunulmaz');
+        assert.ok(deg.exampleFurigana.includes('**'), 'furigana birleştirmesi seed ile aynı');
+        assert.ok(await Word.findOne({ kanji: '試fazla' }), 'fazla kelime silinmez');
+
+        const tekrar = await syncWords(dir, { levels: ['N5'], write: true });
+        assert.equal(tekrar.seviyeler.N5.eklenecek + tekrar.seviyeler.N5.guncellenecek, 0, 'ikinci tur bir şey yazmaz');
+        assert.equal(tekrar.yenidenAdlandirma.length, 0);
+        await Word.deleteMany({ kanji: /^試/ });
+    });
+});
+
 describe('exampleEn içe aktarma betiği (scripts/import-example-en.js)', () => {
     it('yalnız exampleEn yazar: deneme modunda dokunmaz, eşleşmeyeni sayar, başka alanı ve var olanı ezmez', async () => {
         const { readEntries, importExampleEn } = require('../scripts/import-example-en');
