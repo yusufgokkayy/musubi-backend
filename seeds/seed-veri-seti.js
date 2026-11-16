@@ -30,7 +30,8 @@ async function seed() {
 
         const ops = words.map(w => ({
             updateOne: {
-                filter: { kanji: w.kanji, jlptLevel: w.jlptLevel },
+                // Anahtar yazılış + okunuş + seviye: aynı yazılıp farklı okunan kelimeler ayrı kayıt
+                filter: { kanji: w.kanji, kana: w.kana, jlptLevel: w.jlptLevel },
                 update: { $set: w },
                 upsert: true
             }
