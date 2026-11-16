@@ -12,6 +12,7 @@
 //   - DB'de olup dosyada olmayan kelime varsayılan olarak SİLİNMEZ, yalnızca raporlanır. --sil ile
 //     silinir; ama kelimeye bağlı kullanıcı kaydı (UserWord, ReviewLog, quiz sorusu, günlük havuz)
 //     varsa yine silinmez, raporlanır.
+//   - Seviyesi değişen kelime (dosyada başka seviyede) DB'de taşınır: _id ve ilerleme korunur.
 //   - Varsayılan DENEME: hiçbir şey yazılmaz, ne olacağı raporlanır. Yazmak için --yaz.
 //
 // Kullanım:
@@ -69,11 +70,40 @@ async function syncWords(dir, { write = false, remove = false, levels = Object.k
         return [`${lv}|${yeni}`, `${lv}|${eski}`];
     }));
 
-    // 2) Seviye seviye karşılaştır
+    // 2) Seviye değişikliği (16.11.2026): kelime dosyada BAŞKA bir seviyeye taşınmışsa DB belgesinin jlptLevel'ı
+    //    güncellenir — _id ve kullanıcı ilerlemesi korunur (sil + ekle yapılmaz). Yalnız tüm seviyeler birlikte
+    //    eşitlenirken çalışır; anahtar yazılış+okunuş, hedef seviyede o anahtar DB'de yoksa ve dosyada tek seviyedeyse.
+    const fileDocs = Object.fromEntries(levels.map(l => [l, buildLevel(dir, l)]));
+    report.seviyeDegisikligi = [];
+    const moves = [];
+    if (levels.length === Object.keys(LEVEL_FILES).length) {
+        const fileLevels = new Map(); // yazılış|okunuş → [seviye]
+        for (const [l, docs] of Object.entries(fileDocs)) for (const d of docs || []) {
+            const k = `${d.kanji}|${d.kana}`; fileLevels.set(k, [...(fileLevels.get(k) || []), l]);
+        }
+        const all = await Word.find({}).select('_id kanji kana jlptLevel').lean();
+        const dbKeys = new Set(all.map(w => `${w.jlptLevel}|${w.kanji}|${w.kana}`));
+        for (const w of all) {
+            const fl = fileLevels.get(`${w.kanji}|${w.kana}`) || [];
+            if (fl.includes(w.jlptLevel) || fl.length !== 1) continue;
+            const to = fl[0];
+            if (dbKeys.has(`${to}|${w.kanji}|${w.kana}`)) continue; // hedefte zaten var: normal akış
+            dbKeys.add(`${to}|${w.kanji}|${w.kana}`);
+            moves.push({ id: String(w._id), from: w.jlptLevel, to });
+            report.seviyeDegisikligi.push(`${w.kanji}(${w.kana}) ${w.jlptLevel}→${to}`);
+            if (write) await Word.updateOne({ _id: w._id }, { $set: { jlptLevel: to } });
+        }
+    }
+
+    // 3) Seviye seviye karşılaştır
     for (const level of levels) {
-        const docs = buildLevel(dir, level);
+        const docs = fileDocs[level];
         if (!docs) continue;
-        const db = await Word.find({ jlptLevel: level }).select(['kanji', ...SYNC_FIELDS].join(' ')).lean();
+        // deneme modunda taşıma henüz yazılmadı → taşınanları hedef seviyede say, kaynak seviyeden düş
+        const movedIn = moves.filter(m => m.to === level).map(m => m.id);
+        const movedOut = new Set(moves.filter(m => m.from === level).map(m => m.id));
+        const db = (await Word.find({ $or: [{ jlptLevel: level }, { _id: { $in: movedIn } }] })
+            .select(['kanji', ...SYNC_FIELDS].join(' ')).lean()).filter(w => !movedOut.has(String(w._id)));
         const byFull = new Map();   // yazılış|okunuş → belge
         const byKanji = new Map();  // yazılış → [belge]
         for (const w of db) {
@@ -143,6 +173,7 @@ async function main() {
     const r = await syncWords(dir, { write, remove, levels });
     if (r.yenidenAdlandirma.length) console.log('Yeniden adlandırma:', r.yenidenAdlandirma.join('; '));
     if (r.cakisma.length) console.log('ÇAKIŞMA (atlandı):', r.cakisma.join('; '));
+    if (r.seviyeDegisikligi.length) console.log(`Seviye değişikliği (_id korunur): ${r.seviyeDegisikligi.length} → ${r.seviyeDegisikligi.slice(0, 15).join(', ')}${r.seviyeDegisikligi.length > 15 ? ', …' : ''}`);
     for (const [lv, s] of Object.entries(r.seviyeler)) {
         console.log(`${lv}: dosya ${s.dosya}, DB ${s.db} → eklenecek ${s.eklenecek}, güncellenecek ${s.guncellenecek}, aynı ${s.ayni}`);
         if (Object.keys(s.alanlar).length) console.log('   değişen alanlar:', JSON.stringify(s.alanlar));

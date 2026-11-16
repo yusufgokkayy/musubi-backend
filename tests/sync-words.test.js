@@ -85,4 +85,41 @@ describe('sync-words', () => {
         assert.strictEqual(again.seviyeler.N5.eklenecek, 0);
         assert.strictEqual(again.seviyeler.N5.guncellenecek, 0);
     });
+
+    it('seviye değişikliği: kelime başka seviyeye taşınınca _id korunur, deneme yazmaz', async () => {
+        await Word.deleteMany({});
+        const writeLevel = (dir, file, entries) => {
+            fs.mkdirSync(dir, { recursive: true });
+            fs.writeFileSync(path.join(dir, file), JSON.stringify(entries));
+        };
+        const v1 = path.join(tmp, 'm1');
+        writeLevel(v1, 'musubi_n5.json', [entry(1, '橋', 'はし', 'köprü')]);
+        writeLevel(v1, 'musubi_n4.json', [entry(1, '困る', 'こまる', 'zor durumda kalmak'), entry(2, '閉まる', 'しまる', 'kapanmak')]);
+        await syncWords(v1, { write: true });
+        const komaru = await Word.findOne({ kanji: '困る' }).lean();
+        assert.strictEqual(komaru.jlptLevel, 'N4');
+        await UserWord.collection.insertOne({ word: komaru._id, user: new mongoose.Types.ObjectId() });
+
+        // 困る N4 → N5 taşınır
+        const v2 = path.join(tmp, 'm2');
+        writeLevel(v2, 'musubi_n5.json', [entry(1, '橋', 'はし', 'köprü'), entry(2, '困る', 'こまる', 'zor durumda kalmak')]);
+        writeLevel(v2, 'musubi_n4.json', [entry(1, '閉まる', 'しまる', 'kapanmak')]);
+
+        const dry = await syncWords(v2, { write: false, remove: true });
+        assert.deepStrictEqual(dry.seviyeDegisikligi, ['困る(こまる) N4→N5']);
+        assert.strictEqual(dry.seviyeler.N5.eklenecek, 0);       // taşınan, eklenmiş sayılmaz
+        assert.deepStrictEqual(dry.seviyeler.N4.silinecek, []);  // ne silinir ne bağlı kayıt raporlanır
+        assert.strictEqual((await Word.findById(komaru._id).lean()).jlptLevel, 'N4'); // deneme yazmadı
+
+        const r = await syncWords(v2, { write: true, remove: true });
+        assert.strictEqual(r.seviyeler.N5.eklenecek, 0);
+        const after = await Word.find({ kanji: '困る' }).lean();
+        assert.strictEqual(after.length, 1);
+        assert.strictEqual(String(after[0]._id), String(komaru._id));
+        assert.strictEqual(after[0].jlptLevel, 'N5');
+
+        const again = await syncWords(v2, { write: false, remove: true });
+        assert.strictEqual(again.seviyeDegisikligi.length, 0);
+        assert.strictEqual(again.seviyeler.N5.eklenecek + again.seviyeler.N5.guncellenecek, 0);
+    });
 });
